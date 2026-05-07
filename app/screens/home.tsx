@@ -31,7 +31,7 @@ const ORBS = [
   { b:   40, l:  60,  w: 240, c: '#ff0040', o: 0.50 },
 ] as const;
 
-export function HomeScreen({ onNavigate }: { onNavigate?: (s: string) => void }) {
+export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brain'|'me'|'focus') => void }) {
   const [waterCount, setWater] = useState(3);
   const [habits, setHabits] = useState([true, true, false, false]);
   const [mood, setMood] = useState<MoodId | null>(null);
