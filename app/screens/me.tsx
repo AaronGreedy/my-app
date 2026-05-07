@@ -5,8 +5,9 @@ import { p } from '@/lib/design';
 import { NeonGlass, SectionLabel } from '@/components/neon-glass';
 import { MarkerDiamond, MarkerStar4 } from '@/components/markers';
 import { MoodFace } from '@/components/mood-face';
+import { useAuth } from '@/lib/auth-context';
+import { useDayStore, MoodId, DayData } from '@/lib/day-store';
 
-type MoodId = 'awful' | 'bad' | 'meh' | 'good' | 'great';
 const MOODS: { id: MoodId; c: string; l: string }[] = [
   {id:'awful',c:p.red,l:'GIÙ'},{id:'bad',c:p.orange,l:'STANCO'},
   {id:'meh',c:'#ffd400',l:'OK'},{id:'good',c:p.green,l:'BENE'},{id:'great',c:p.cyan,l:'TOP'},
@@ -15,15 +16,15 @@ const MC: Record<MoodId, string> = {awful:p.red,bad:p.orange,meh:'#ffd400',good:
 
 function CiboTab() {
   const [mode, setMode] = useState<'bulk'|'cut'|'mantenimento'>('cut');
-  const [caffeine, setCaffeine] = useState(1);
-  const kcalEaten = 1840, kcalTarget = 2050;
+  const [caffeine, setCaffeine] = useState(0);
+  const kcalEaten = 0, kcalTarget = 2050;
   const kcalLeft = kcalTarget - kcalEaten;
   const pct = Math.min(100, Math.round((kcalEaten / kcalTarget) * 100));
   const meals = [
-    {name:'COLAZIONE',kcal:520,pr:42,c:68,g:12,done:true},
-    {name:'PRANZO',kcal:620,pr:58,c:74,g:18,done:true},
-    {name:'MERENDA',kcal:240,pr:28,c:18,g:8,done:false},
-    {name:'CENA',kcal:460,pr:52,c:38,g:14,done:false},
+    {name:'COLAZIONE',kcal:0,pr:0,c:0,g:0,done:false},
+    {name:'PRANZO',kcal:0,pr:0,c:0,g:0,done:false},
+    {name:'MERENDA',kcal:0,pr:0,c:0,g:0,done:false},
+    {name:'CENA',kcal:0,pr:0,c:0,g:0,done:false},
   ];
   return (
     <div>
@@ -44,9 +45,9 @@ function CiboTab() {
             <div style={{ height:'100%',width:`${pct}%`,borderRadius:99,background:'linear-gradient(90deg,#ffd400,#ff6a00,#ff0040)',boxShadow:'0 0 10px #ff6a00' }}/>
           </div>
           <div style={{ display:'flex',justifyContent:'space-between',marginTop:10,fontFamily:p.monoFont,fontSize:10 }}>
-            <span style={{ color:p.fg }}>P <strong>142g</strong></span>
-            <span style={{ color:p.fg }}>C <strong>198g</strong></span>
-            <span style={{ color:p.fg }}>G <strong>62g</strong></span>
+            <span style={{ color:p.fg }}>P <strong>0g</strong></span>
+            <span style={{ color:p.fg }}>C <strong>0g</strong></span>
+            <span style={{ color:p.fg }}>G <strong>0g</strong></span>
             <span style={{ color:kcalLeft>0?p.green:p.red }}>{kcalLeft>0?`−${kcalLeft}`:`+${Math.abs(kcalLeft)}`} kcal</span>
           </div>
         </div>
@@ -118,16 +119,18 @@ function FitnessTab() {
   );
 }
 
-function MoodTab() {
-  const [morning, setMorning] = useState<MoodId|null>(null);
-  const [evening, setEvening] = useState<MoodId|null>(null);
-  const [note, setNote] = useState('');
+function MoodTab({ data, save }: { data: DayData; save: (p: Partial<DayData>) => void }) {
+  const morning = data.moodMorning;
+  const evening = data.moodEvening;
+  const note    = data.moodNote;
+
   const heatmap: (MoodId|null)[][] = [
     ['great','good','great','meh','great','good','bad'],
     ['great','good','meh','good','great','great','good'],
     ['meh','bad','good','great','good','good','good'],
     ['good','great','great','good','meh',null,null],
   ];
+
   const MoodPicker = ({ value, onChange, label }: { value: MoodId|null; onChange: (v: MoodId) => void; label: string }) => (
     <div>
       <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim,textTransform:'uppercase',letterSpacing:0.15,marginBottom:8 }}>{label}</div>
@@ -144,15 +147,16 @@ function MoodTab() {
       </div>
     </div>
   );
+
   return (
     <div>
       <SectionLabel num="01" title="LOG OGGI" hint=""/>
       <NeonGlass style={{ marginTop:8 }} tint="rgba(255,255,255,0.04)" radius={22}>
         <div style={{ padding:'16px' }}>
-          <MoodPicker value={morning} onChange={setMorning} label="MATTINA"/>
+          <MoodPicker value={morning} onChange={v => save({ moodMorning: v })} label="MATTINA"/>
           <div style={{ height:1,background:p.border,margin:'14px 0' }}/>
-          <MoodPicker value={evening} onChange={setEvening} label="SERA"/>
-          <textarea value={note} onChange={e => setNote(e.target.value)} placeholder="Cosa ha influenzato il tuo umore?" rows={3}
+          <MoodPicker value={evening} onChange={v => save({ moodEvening: v })} label="SERA"/>
+          <textarea value={note} onChange={e => save({ moodNote: e.target.value })} placeholder="Cosa ha influenzato il tuo umore?" rows={3}
             style={{ width:'100%',resize:'none',border:`1px solid ${p.border}`,outline:'none',borderRadius:14,marginTop:14,padding:'10px 14px',background:'rgba(255,255,255,0.04)',color:p.fg,fontFamily:p.bodyFont,fontSize:14 }}/>
         </div>
       </NeonGlass>
@@ -175,11 +179,11 @@ function MoodTab() {
   );
 }
 
-function HabitsTab() {
-  const [habits, setHabits] = useState([true,true,false,false,false,false]);
+function HabitsTab({ data, save }: { data: DayData; save: (p: Partial<DayData>) => void }) {
+  const habits = data.meHabits;
   const goodH = [{n:'Stretching',s:28,xp:15},{n:'No scroll a letto',s:14,xp:20},{n:'Luci rosse sera',s:6,xp:10},{n:'Candle prima dormire',s:3,xp:10}];
   const badH = [{n:'Fumo',xp:50},{n:'Junk food',xp:30}];
-  const toggle = (i: number) => setHabits(prev => prev.map((v, ix) => ix === i ? !v : v));
+  const toggle = (i: number) => save({ meHabits: habits.map((v, ix) => ix === i ? !v : v) });
   const totalXP = habits.reduce((acc,v,i) => {
     if (!v) return acc;
     const h = i < goodH.length ? goodH[i] : badH[i - goodH.length];
@@ -190,7 +194,7 @@ function HabitsTab() {
       <SectionLabel num="01" title="GOOD HABITS" hint={`+${totalXP} XP oggi`}/>
       <div style={{ display:'flex', flexDirection:'column', gap:6, marginTop:8 }}>
         {goodH.map((h,i) => {
-          const on = habits[i];
+          const on = !!habits[i];
           return (
             <NeonGlass key={h.n} onClick={() => toggle(i)} tint={on?'rgba(166,255,0,0.1)':'rgba(255,255,255,0.03)'} edge={on?'rgba(166,255,0,0.4)':undefined} radius={18}>
               <div style={{ padding:'12px 14px', display:'flex', alignItems:'center', gap:10 }}>
@@ -207,7 +211,7 @@ function HabitsTab() {
       <div style={{ display:'flex', flexDirection:'column', gap:6, marginTop:8 }}>
         {badH.map((h,i) => {
           const idx = goodH.length + i;
-          const avoided = habits[idx];
+          const avoided = !!habits[idx];
           return (
             <NeonGlass key={h.n} onClick={() => toggle(idx)} tint={avoided?'rgba(166,255,0,0.08)':'rgba(255,0,64,0.08)'} edge={avoided?'rgba(166,255,0,0.3)':'rgba(255,0,64,0.3)'} radius={18}>
               <div style={{ padding:'12px 14px', display:'flex', alignItems:'center', gap:10 }}>
@@ -226,6 +230,8 @@ function HabitsTab() {
 
 export function MeScreen() {
   const [tab, setTab] = useState<'cibo'|'fitness'|'mood'|'habits'>('cibo');
+  const { user } = useAuth();
+  const { data, save } = useDayStore(user?.uid ?? null);
   const tabs = [{id:'cibo',l:'CIBO'},{id:'fitness',l:'FIT'},{id:'mood',l:'MOOD'},{id:'habits',l:'HABIT'}] as const;
   return (
     <div style={{ position:'absolute', inset:0, overflow:'auto', background:p.bg, color:p.fg, fontFamily:p.bodyFont }}>
@@ -246,10 +252,10 @@ export function MeScreen() {
             <button key={t.id} onClick={() => setTab(t.id)} style={{ flex:1,padding:'9px 4px',borderRadius:14,border:`1px solid ${tab===t.id?p.magenta:'rgba(255,255,255,0.1)'}`,background:tab===t.id?'rgba(255,20,184,0.18)':'transparent',color:tab===t.id?p.fg:p.muted,cursor:'pointer',fontFamily:p.monoFont,fontSize:9,letterSpacing:0.12,textTransform:'uppercase' }}>{t.l}</button>
           ))}
         </div>
-        {tab==='cibo' && <CiboTab/>}
+        {tab==='cibo'    && <CiboTab/>}
         {tab==='fitness' && <FitnessTab/>}
-        {tab==='mood' && <MoodTab/>}
-        {tab==='habits' && <HabitsTab/>}
+        {tab==='mood'    && <MoodTab    data={data} save={save}/>}
+        {tab==='habits'  && <HabitsTab  data={data} save={save}/>}
       </div>
     </div>
   );

@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useCallback, CSSProperties } from 'react';
+import { CSSProperties } from 'react';
 import { p, NOISE_SVG } from '@/lib/design';
 import { NeonGlass, SectionLabel, MetricHead } from '@/components/neon-glass';
 import { MoodFace } from '@/components/mood-face';
 import { MarkerTarget, MarkerDiamond, MarkerStar4, MarkerTriangle, MarkerHex } from '@/components/markers';
-
-type MoodId = 'awful' | 'bad' | 'meh' | 'good' | 'great';
+import { useAuth } from '@/lib/auth-context';
+import { useDayStore, MoodId } from '@/lib/day-store';
 
 const MOODS = [
   { id: 'awful' as MoodId, c: '#ff0040', label: 'GIÙ' },
@@ -32,12 +32,16 @@ const ORBS = [
 ] as const;
 
 export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brain'|'me'|'focus') => void }) {
-  const [waterCount, setWater] = useState(3);
-  const [habits, setHabits] = useState([true, true, false, false]);
-  const [mood, setMood] = useState<MoodId | null>(null);
+  const { user } = useAuth();
+  const { data, save } = useDayStore(user?.uid ?? null);
 
-  const addWater = useCallback(() => setWater(v => Math.min(8, v + 1)), []);
-  const toggleHabit = useCallback((i: number) => setHabits(prev => prev.map((v, ix) => ix === i ? !v : v)), []);
+  const waterCount = data.water;
+  const habits     = data.habits;
+  const mood       = data.mood;
+
+  const addWater    = () => save({ water: Math.min(8, waterCount + 1) });
+  const toggleHabit = (i: number) => save({ habits: habits.map((v, ix) => ix === i ? !v : v) });
+  const chooseMood  = (m: MoodId) => save({ mood: m });
 
   const now = new Date();
   const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
@@ -109,7 +113,7 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
               {MOODS.map(m => {
                 const active = mood === m.id;
                 return (
-                  <button key={m.id} onClick={() => setMood(m.id)} style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, opacity: active ? 1 : (mood ? 0.38 : 0.92), transform: active ? 'scale(1.2) translateY(-3px)' : 'scale(1)', transition: 'all .22s cubic-bezier(.2,.8,.3,1.2)', filter: active ? `drop-shadow(0 6px 16px ${m.c}aa) drop-shadow(0 0 4px ${m.c}66)` : 'none' }}>
+                  <button key={m.id} onClick={() => chooseMood(m.id)} style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, opacity: active ? 1 : (mood ? 0.38 : 0.92), transform: active ? 'scale(1.2) translateY(-3px)' : 'scale(1)', transition: 'all .22s cubic-bezier(.2,.8,.3,1.2)', filter: active ? `drop-shadow(0 6px 16px ${m.c}aa) drop-shadow(0 0 4px ${m.c}66)` : 'none' }}>
                     <MoodFace mood={m.id} bg={m.c} color="#0a0a0a" size={42} />
                     <div style={{ fontFamily: p.monoFont, fontSize: 8.5, letterSpacing: 0.22, color: active ? m.c : p.dim, fontWeight: 700 }}>{m.label}</div>
                   </button>
@@ -156,7 +160,7 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
               <MetricHead icon={<MarkerStar4 size={10} color={p.orange} />} label="HABITS" right={`${habits.filter(Boolean).length}/4 · +50 XP`} />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 8 }}>
                 {HABITS.map(([label, streak], i) => {
-                  const on = habits[i];
+                  const on = !!habits[i];
                   return (
                     <button key={label} onClick={() => toggleHabit(i)} style={{ padding: '10px 11px', borderRadius: 14, cursor: 'pointer', textAlign: 'left', border: `1px solid ${on ? 'rgba(166,255,0,0.75)' : 'rgba(255,255,255,0.10)'}`, background: on ? 'rgba(166,255,0,0.16)' : 'rgba(255,255,255,0.02)', boxShadow: on ? 'inset 0 1px 0 rgba(255,255,255,0.18), 0 0 22px rgba(166,255,0,0.4)' : 'inset 0 1px 0 rgba(255,255,255,0.04)', display: 'flex', flexDirection: 'column', gap: 4 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
