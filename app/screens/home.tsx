@@ -31,7 +31,7 @@ const ORBS = [
   { b:   40, l:  60,  w: 240, c: '#ff0040', o: 0.50 },
 ] as const;
 
-export function HomeScreen() {
+export function HomeScreen({ onNavigate }: { onNavigate?: (s: string) => void }) {
   const [waterCount, setWater] = useState(3);
   const [habits, setHabits] = useState([true, true, false, false]);
   const [mood, setMood] = useState<MoodId | null>(null);
@@ -41,6 +41,7 @@ export function HomeScreen() {
 
   const now = new Date();
   const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  const isMorning = now.getHours() < 14;
 
   return (
     <div style={{ position: 'absolute', inset: 0, overflow: 'auto', background: p.bg, color: p.fg, fontFamily: p.bodyFont }}>
@@ -66,10 +67,10 @@ export function HomeScreen() {
           <div>
             <div style={{ fontFamily: p.monoFont, fontSize: 10, letterSpacing: 0.2, color: p.orange, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
               <MarkerDiamond size={8} color={p.orange} />
-              MATTINA · {timeStr}
+              {isMorning ? 'MATTINA' : 'SERA'} · {timeStr}
             </div>
             <div style={{ fontFamily: p.displayFont, fontWeight: 700, fontSize: 44, lineHeight: 0.92, letterSpacing: -1.2, marginTop: 6, textTransform: 'uppercase' }}>
-              BUONGIORNO<br/>
+              {isMorning ? 'BUONGIORNO' : 'BUONASERA'}<br/>
               <span style={{ background: 'linear-gradient(120deg, #ffd400 0%, #ff6a00 35%, #ff0040 70%, #ff14b8 100%)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>AARON.</span>
             </div>
           </div>
@@ -90,7 +91,7 @@ export function HomeScreen() {
               Finire deck<br/>progetto Q2
             </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-              <NeonGlass style={{ flex: 1 }} tint="linear-gradient(90deg, rgba(255,0,64,0.45), rgba(255,20,184,0.4))" edge="rgba(255,0,64,0.7)" radius={14}>
+              <NeonGlass style={{ flex: 1 }} tint="linear-gradient(90deg, rgba(255,0,64,0.45), rgba(255,20,184,0.4))" edge="rgba(255,0,64,0.7)" radius={14} onClick={() => onNavigate?.('focus')}>
                 <div style={{ padding: '11px 12px', textAlign: 'center', fontFamily: p.monoFont, fontSize: 10.5, letterSpacing: 0.2, fontWeight: 700, color: p.fg, textTransform: 'uppercase' }}>→ Avvia Focus</div>
               </NeonGlass>
               <NeonGlass style={{ width: 96 }} radius={14}>
