@@ -7,6 +7,8 @@ import { MarkerDiamond, MarkerStar4 } from '@/components/markers';
 import { MoodFace } from '@/components/mood-face';
 import { useAuth } from '@/lib/auth-context';
 import { useDayStore, MoodId, DayData } from '@/lib/day-store';
+import { useUserProfile, DEFAULT_PRS } from '@/lib/user-store';
+import { MEALS, getMealTotals } from '@/lib/meals';
 
 const MOODS: { id: MoodId; c: string; l: string }[] = [
   {id:'awful',c:p.red,l:'GIÙ'},{id:'bad',c:p.orange,l:'STANCO'},
@@ -14,26 +16,24 @@ const MOODS: { id: MoodId; c: string; l: string }[] = [
 ];
 const MC: Record<MoodId, string> = {awful:p.red,bad:p.orange,meh:'#ffd400',good:p.green,great:p.cyan};
 
-const MEAL_TEMPLATES = [
-  {name:'COLAZIONE', kcal:520, pr:42, c:68, g:12},
-  {name:'PRANZO',    kcal:620, pr:58, c:74, g:18},
-  {name:'MERENDA',   kcal:240, pr:28, c:18, g:8},
-  {name:'CENA',      kcal:460, pr:52, c:38, g:14},
-];
+// ─── Cibo ──────────────────────────────────────────────────────────────────────
 
 function CiboTab({ data, save }: { data: DayData; save: (p: Partial<DayData>) => void }) {
-  const mode     = data.dietMode;
-  const caffeine = data.caffeine;
-  const done     = data.mealsDone;
+  const mode         = data.dietMode;
+  const caffeine     = data.caffeine;
+  const mealSelected = data.mealSelected;
 
-  const meals = MEAL_TEMPLATES.map((t, i) => ({ ...t, done: !!done[i] }));
-  const kcalEaten  = meals.filter(m => m.done).reduce((s, m) => s + m.kcal, 0);
-  const kcalTarget = 2050;
-  const kcalLeft   = kcalTarget - kcalEaten;
-  const pct        = Math.min(100, Math.round((kcalEaten / kcalTarget) * 100));
-  const totalPr    = meals.filter(m => m.done).reduce((s, m) => s + m.pr, 0);
-  const totalC     = meals.filter(m => m.done).reduce((s, m) => s + m.c,  0);
-  const totalG     = meals.filter(m => m.done).reduce((s, m) => s + m.g,  0);
+  const { kcal: kcalEaten, pr: totalPr, c: totalC, g: totalG } = getMealTotals(mealSelected);
+  const KCAL_TARGET = 2050;
+  const kcalLeft    = KCAL_TARGET - kcalEaten;
+  const pct         = Math.min(100, Math.round((kcalEaten / KCAL_TARGET) * 100));
+
+  const selectMeal = (mealIdx: number, optIdx: number) => {
+    const next = [...mealSelected];
+    next[mealIdx] = next[mealIdx] === String(optIdx) ? null : String(optIdx);
+    save({ mealSelected: next });
+  };
+
   return (
     <div>
       <SectionLabel num="01" title="MODALITÀ" hint=""/>
@@ -42,12 +42,13 @@ function CiboTab({ data, save }: { data: DayData; save: (p: Partial<DayData>) =>
           <button key={m} onClick={() => save({ dietMode: m })} style={{ flex:1,padding:'9px 4px',borderRadius:14,border:`1px solid ${mode===m?p.orange:'rgba(255,255,255,0.1)'}`,background:mode===m?'rgba(255,106,0,0.2)':'transparent',color:mode===m?p.orange:p.muted,cursor:'pointer',fontFamily:p.monoFont,fontSize:8.5,letterSpacing:0.1,textTransform:'uppercase' }}>{m}</button>
         ))}
       </div>
-      <SectionLabel num="02" title="KCAL" hint={`target ${kcalTarget}`}/>
+
+      <SectionLabel num="02" title="KCAL" hint={`target ${KCAL_TARGET}`}/>
       <NeonGlass style={{ marginTop:8 }} tint="linear-gradient(135deg,rgba(255,106,0,0.28),rgba(255,212,0,0.1))" edge="rgba(255,106,0,0.5)" glow="#ff6a00" radius={22}>
         <div style={{ padding:'16px' }}>
           <div style={{ display:'flex', alignItems:'flex-end', gap:12 }}>
             <div style={{ fontFamily:p.displayFont, fontSize:52, fontWeight:800, letterSpacing:-2, lineHeight:0.88 }}>{kcalEaten}</div>
-            <div style={{ fontFamily:p.monoFont, fontSize:11, color:p.muted, paddingBottom:6 }}>/ {kcalTarget} kcal</div>
+            <div style={{ fontFamily:p.monoFont, fontSize:11, color:p.muted, paddingBottom:6 }}>/ {KCAL_TARGET} kcal</div>
           </div>
           <div style={{ height:6,marginTop:14,borderRadius:99,background:'rgba(255,255,255,0.08)',overflow:'hidden' }}>
             <div style={{ height:'100%',width:`${pct}%`,borderRadius:99,background:'linear-gradient(90deg,#ffd400,#ff6a00,#ff0040)',boxShadow:'0 0 10px #ff6a00' }}/>
@@ -60,7 +61,35 @@ function CiboTab({ data, save }: { data: DayData; save: (p: Partial<DayData>) =>
           </div>
         </div>
       </NeonGlass>
-      <SectionLabel num="03" title="CAFFEINA" hint="max 3"/>
+
+      <SectionLabel num="03" title="PASTI" hint="oggi"/>
+      <div style={{ display:'flex', flexDirection:'column', gap:8, marginTop:8 }}>
+        {MEALS.map((meal, mi) => (
+          <NeonGlass key={meal.name} tint="rgba(255,255,255,0.04)" radius={20}>
+            <div style={{ padding:'12px 14px' }}>
+              <div style={{ fontFamily:p.monoFont, fontSize:10, letterSpacing:0.15, color:mealSelected[mi]!==null?p.fg:p.muted, textTransform:'uppercase', marginBottom:8 }}>
+                {meal.name} {mealSelected[mi]!==null && <span style={{ color:p.green }}>✓</span>}
+              </div>
+              <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+                {meal.options.map((opt, oi) => {
+                  const active = mealSelected[mi] === String(oi);
+                  return (
+                    <button key={oi} onClick={() => selectMeal(mi, oi)} style={{ padding:'10px 12px',borderRadius:12,border:`1px solid ${active?p.green:'rgba(255,255,255,0.1)'}`,background:active?'rgba(166,255,0,0.12)':'transparent',cursor:'pointer',textAlign:'left',boxShadow:active?`0 0 16px rgba(166,255,0,0.3)`:'none' }}>
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                        <span style={{ fontFamily:p.monoFont, fontSize:9, color:active?p.green:p.muted, textTransform:'uppercase', fontWeight:700 }}>{opt.label}</span>
+                        <span style={{ fontFamily:p.monoFont, fontSize:9, color:active?p.fg:p.dim }}>{opt.kcal} kcal · P{opt.pr} C{opt.c} G{opt.g}</span>
+                      </div>
+                      <div style={{ fontFamily:p.bodyFont, fontSize:11, color:p.dim, marginTop:3 }}>{opt.desc}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </NeonGlass>
+        ))}
+      </div>
+
+      <SectionLabel num="04" title="CAFFEINA" hint="max 3"/>
       <NeonGlass style={{ marginTop:8 }} tint="rgba(255,255,255,0.04)" radius={18}>
         <div style={{ padding:'12px 16px', display:'flex', gap:8, alignItems:'center' }}>
           {['☕ Caffè','🍵 Tè','⚡ Monster'].map(label => (
@@ -69,17 +98,95 @@ function CiboTab({ data, save }: { data: DayData; save: (p: Partial<DayData>) =>
           <div style={{ fontFamily:p.displayFont,fontSize:26,fontWeight:800,color:caffeine>=3?p.red:p.fg,minWidth:28,textAlign:'center' }}>{caffeine}</div>
         </div>
       </NeonGlass>
-      <SectionLabel num="04" title="PASTI" hint="oggi"/>
-      <div style={{ display:'flex', flexDirection:'column', gap:6, marginTop:8 }}>
-        {meals.map((meal, i) => (
-          <NeonGlass key={meal.name} onClick={() => save({ mealsDone: done.map((v, ix) => ix === i ? !v : v) })} tint={meal.done?'rgba(166,255,0,0.08)':'rgba(255,255,255,0.03)'} edge={meal.done?'rgba(166,255,0,0.3)':undefined} radius={18}>
-            <div style={{ padding:'12px 14px', display:'flex', alignItems:'center', gap:10 }}>
-              <div style={{ width:12,height:12,borderRadius:4,border:`1.5px solid ${meal.done?p.green:p.muted}`,background:meal.done?p.green:'transparent',flexShrink:0 }}/>
-              <div style={{ flex:1 }}>
-                <div style={{ fontFamily:p.monoFont,fontSize:10,letterSpacing:0.15,color:meal.done?p.fg:p.muted,textTransform:'uppercase' }}>{meal.name}</div>
-                <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim,marginTop:2 }}>P {meal.pr}g · C {meal.c}g · G {meal.g}g</div>
+    </div>
+  );
+}
+
+// ─── Fitness ───────────────────────────────────────────────────────────────────
+
+const WORKOUT_TYPES = ['PUSH','PULL','LEGS','CARDIO'] as const;
+
+function FitnessTab({
+  data, save,
+  prs, savePr,
+}: {
+  data: DayData; save: (p: Partial<DayData>) => void;
+  prs: Record<string, string>; savePr: (name: string, val: string) => void;
+}) {
+  const workouts = data.workouts;
+  const [cardioSlope, setCardioSlope] = useState('3');
+  const [cardioSpeed, setCardioSpeed] = useState('6.5');
+  const [editingPR, setEditingPR] = useState<string|null>(null);
+  const [editVal, setEditVal] = useState('');
+
+  const toggleWorkout = (w: string) => {
+    const next = workouts.includes(w) ? workouts.filter(x => x !== w) : [...workouts, w];
+    save({ workouts: next });
+  };
+
+  const cardioKcal = Math.round(parseFloat(cardioSpeed||'0') * parseFloat(cardioSlope||'0') * 0.85 + parseFloat(cardioSpeed||'0') * 4.5);
+
+  const prNames = Object.keys(DEFAULT_PRS);
+
+  return (
+    <div>
+      <SectionLabel num="01" title="ALLENAMENTO OGGI" hint="multi-select"/>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginTop:8 }}>
+        {WORKOUT_TYPES.map(w => {
+          const on = workouts.includes(w);
+          return (
+            <NeonGlass key={w} onClick={() => toggleWorkout(w)} tint={on?'rgba(255,106,0,0.22)':'rgba(255,255,255,0.04)'} edge={on?'rgba(255,106,0,0.6)':undefined} radius={18}>
+              <div style={{ padding:'16px',textAlign:'center',fontFamily:p.displayFont,fontWeight:700,fontSize:20,textTransform:'uppercase',color:on?p.orange:p.muted,display:'flex',alignItems:'center',justifyContent:'center',gap:6 }}>
+                {on && <span style={{ fontSize:14 }}>✓</span>} {w}
               </div>
-              <div style={{ fontFamily:p.displayFont,fontSize:20,fontWeight:700,color:meal.done?p.fg:p.muted }}>{meal.kcal}</div>
+            </NeonGlass>
+          );
+        })}
+      </div>
+
+      {workouts.includes('CARDIO') && (
+        <>
+          <SectionLabel num="02" title="CARDIO" hint="pendenza · velocità · kcal"/>
+          <NeonGlass style={{ marginTop:8 }} tint="rgba(255,255,255,0.04)" radius={18}>
+            <div style={{ padding:'14px 16px' }}>
+              <div style={{ display:'flex', gap:10 }}>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim,textTransform:'uppercase',marginBottom:4 }}>PENDENZA %</div>
+                  <input type="number" value={cardioSlope} onChange={e=>setCardioSlope(e.target.value)} style={{ width:'100%',background:'rgba(255,255,255,0.06)',border:`1px solid ${p.border}`,borderRadius:10,padding:'8px 12px',color:p.fg,fontFamily:p.displayFont,fontSize:22,fontWeight:700,outline:'none' }}/>
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim,textTransform:'uppercase',marginBottom:4 }}>VELOCITÀ km/h</div>
+                  <input type="number" step="0.5" value={cardioSpeed} onChange={e=>setCardioSpeed(e.target.value)} style={{ width:'100%',background:'rgba(255,255,255,0.06)',border:`1px solid ${p.border}`,borderRadius:10,padding:'8px 12px',color:p.fg,fontFamily:p.displayFont,fontSize:22,fontWeight:700,outline:'none' }}/>
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim,textTransform:'uppercase',marginBottom:4 }}>KCAL EST.</div>
+                  <div style={{ fontFamily:p.displayFont,fontSize:22,fontWeight:700,color:p.orange,paddingTop:8 }}>{cardioKcal}</div>
+                </div>
+              </div>
+            </div>
+          </NeonGlass>
+        </>
+      )}
+
+      <SectionLabel num={workouts.includes('CARDIO')?'03':'02'} title="PERSONAL RECORDS" hint="tap per modificare"/>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginTop:8 }}>
+        {prNames.map(name => (
+          <NeonGlass key={name} tint="rgba(255,255,255,0.04)" radius={18} onClick={() => { setEditingPR(name); setEditVal(prs[name]??DEFAULT_PRS[name]); }}>
+            <div style={{ padding:'12px 14px' }}>
+              <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim,textTransform:'uppercase',letterSpacing:0.15 }}>{name}</div>
+              {editingPR === name ? (
+                <input
+                  autoFocus
+                  type="number"
+                  value={editVal}
+                  onChange={e=>setEditVal(e.target.value)}
+                  onBlur={() => { savePr(name, editVal); setEditingPR(null); }}
+                  onKeyDown={e => { if(e.key==='Enter'){ savePr(name, editVal); setEditingPR(null); } }}
+                  style={{ width:'100%',background:'transparent',border:'none',borderBottom:`1px solid ${p.orange}`,outline:'none',color:p.orange,fontFamily:p.displayFont,fontSize:28,fontWeight:800,padding:'4px 0' }}
+                />
+              ) : (
+                <div style={{ fontFamily:p.displayFont,fontSize:30,fontWeight:800,color:p.fg,marginTop:4 }}>{prs[name]??DEFAULT_PRS[name]}<span style={{ fontSize:12,color:p.muted }}>kg</span></div>
+              )}
             </div>
           </NeonGlass>
         ))}
@@ -88,44 +195,7 @@ function CiboTab({ data, save }: { data: DayData; save: (p: Partial<DayData>) =>
   );
 }
 
-function FitnessTab({ data, save }: { data: DayData; save: (p: Partial<DayData>) => void }) {
-  const workout = data.workout;
-  const prs = [{n:'Panca Piana',v:'95',u:'kg'},{n:'Squat',v:'120',u:'kg'},{n:'Pressa',v:'200',u:'kg'},{n:'Stacco',v:'140',u:'kg'}];
-  return (
-    <div>
-      <SectionLabel num="01" title="ALLENAMENTO OGGI" hint=""/>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginTop:8 }}>
-        {['PUSH','PULL','LEGS','CARDIO'].map(w => (
-          <NeonGlass key={w} onClick={() => save({ workout: workout===w?null:w })} tint={workout===w?'rgba(255,106,0,0.22)':'rgba(255,255,255,0.04)'} edge={workout===w?'rgba(255,106,0,0.6)':undefined} radius={18}>
-            <div style={{ padding:'16px',textAlign:'center',fontFamily:p.displayFont,fontWeight:700,fontSize:20,textTransform:'uppercase',color:workout===w?p.orange:p.muted }}>{w}</div>
-          </NeonGlass>
-        ))}
-      </div>
-      <SectionLabel num="02" title="PERSONAL RECORDS" hint="aggiorna"/>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginTop:8 }}>
-        {prs.map(pr => (
-          <NeonGlass key={pr.n} tint="rgba(255,255,255,0.04)" radius={18}>
-            <div style={{ padding:'12px 14px' }}>
-              <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim,textTransform:'uppercase',letterSpacing:0.15 }}>{pr.n}</div>
-              <div style={{ fontFamily:p.displayFont,fontSize:30,fontWeight:800,color:p.fg,marginTop:4 }}>{pr.v}<span style={{ fontSize:12,color:p.muted }}>{pr.u}</span></div>
-            </div>
-          </NeonGlass>
-        ))}
-      </div>
-      <SectionLabel num="03" title="CARDIO" hint="stima kcal"/>
-      <NeonGlass style={{ marginTop:8 }} tint="rgba(255,255,255,0.04)" radius={18}>
-        <div style={{ padding:'14px 16px', display:'flex', gap:10 }}>
-          {([['PENDENZA','3%'],['VELOCITÀ','6.5 km/h'],['KCAL EST.','285']] as [string,string][]).map(([l,v],i) => (
-            <div key={l} style={{ flex:1 }}>
-              <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim,textTransform:'uppercase' }}>{l}</div>
-              <div style={{ fontFamily:p.displayFont,fontSize:26,fontWeight:700,color:i===2?p.orange:p.fg,marginTop:4 }}>{v}</div>
-            </div>
-          ))}
-        </div>
-      </NeonGlass>
-    </div>
-  );
-}
+// ─── Mood ──────────────────────────────────────────────────────────────────────
 
 function MoodTab({ data, save }: { data: DayData; save: (p: Partial<DayData>) => void }) {
   const morning = data.moodMorning;
@@ -133,10 +203,10 @@ function MoodTab({ data, save }: { data: DayData; save: (p: Partial<DayData>) =>
   const note    = data.moodNote;
 
   const heatmap: (MoodId|null)[][] = [
-    ['great','good','great','meh','great','good','bad'],
-    ['great','good','meh','good','great','great','good'],
-    ['meh','bad','good','great','good','good','good'],
-    ['good','great','great','good','meh',null,null],
+    [null,null,null,null,null,null,null],
+    [null,null,null,null,null,null,null],
+    [null,null,null,null,null,null,null],
+    [null,null,null,null,null,null,null],
   ];
 
   const MoodPicker = ({ value, onChange, label }: { value: MoodId|null; onChange: (v: MoodId) => void; label: string }) => (
@@ -187,6 +257,8 @@ function MoodTab({ data, save }: { data: DayData; save: (p: Partial<DayData>) =>
   );
 }
 
+// ─── Habits ────────────────────────────────────────────────────────────────────
+
 function HabitsTab({ data, save }: { data: DayData; save: (p: Partial<DayData>) => void }) {
   const habits = data.meHabits;
   const goodH = [{n:'Stretching',s:28,xp:15},{n:'No scroll a letto',s:14,xp:20},{n:'Luci rosse sera',s:6,xp:10},{n:'Candle prima dormire',s:3,xp:10}];
@@ -236,11 +308,15 @@ function HabitsTab({ data, save }: { data: DayData; save: (p: Partial<DayData>) 
   );
 }
 
+// ─── MeScreen ──────────────────────────────────────────────────────────────────
+
 export function MeScreen() {
   const [tab, setTab] = useState<'cibo'|'fitness'|'mood'|'habits'>('cibo');
   const { user } = useAuth();
   const { data, save } = useDayStore(user?.uid ?? null);
+  const { prs, savePr } = useUserProfile(user?.uid ?? null);
   const tabs = [{id:'cibo',l:'CIBO'},{id:'fitness',l:'FIT'},{id:'mood',l:'MOOD'},{id:'habits',l:'HABIT'}] as const;
+
   return (
     <div style={{ position:'absolute', inset:0, overflow:'auto', background:p.bg, color:p.fg, fontFamily:p.bodyFont }}>
       {[{t:-80,r:-80,w:280,c:'#ff14b8',o:0.55},{t:350,l:-80,w:260,c:'#ff6a00',o:0.4}].map((orb,i) => (
@@ -261,7 +337,7 @@ export function MeScreen() {
           ))}
         </div>
         {tab==='cibo'    && <CiboTab    data={data} save={save}/>}
-        {tab==='fitness' && <FitnessTab data={data} save={save}/>}
+        {tab==='fitness' && <FitnessTab data={data} save={save} prs={prs} savePr={savePr}/>}
         {tab==='mood'    && <MoodTab    data={data} save={save}/>}
         {tab==='habits'  && <HabitsTab  data={data} save={save}/>}
       </div>
