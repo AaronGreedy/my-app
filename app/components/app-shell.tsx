@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, ReactNode } from 'react';
 import { p } from '@/lib/design';
 import { HomeScreen } from '@/screens/home';
 import { CalendarScreen } from '@/screens/calendar';
@@ -14,7 +14,7 @@ type Screen = 'home' | 'cal' | 'brain' | 'me' | 'focus';
 export function AppShell() {
   const [screen, setScreen] = useState<Screen>('home');
 
-  const content: Record<Screen, React.ReactNode> = {
+  const content: Record<Screen, ReactNode> = {
     home:  <HomeScreen onNavigate={setScreen} />,
     cal:   <CalendarScreen />,
     brain: <BrainScreen />,
