@@ -4,11 +4,11 @@ import { useState } from 'react';
 import { p } from '@/lib/design';
 import { NeonGlass, SectionLabel } from '@/components/neon-glass';
 import { MarkerDiamond, MarkerStar4 } from '@/components/markers';
+import { useAuth } from '@/lib/auth-context';
+import { useMonthData, MoodId } from '@/lib/day-store';
 
 const M_NAMES = ['GEN','FEB','MAR','APR','MAG','GIU','LUG','AGO','SET','OTT','NOV','DIC'];
 const D_NAMES = ['LU','MA','ME','GI','VE','SA','DO'];
-const WORKOUT_DAYS = [1,3,5,8,10,12,15,17,19,22,24,26,29];
-const MOOD_MAP: Record<number, 'awful'|'bad'|'meh'|'good'|'great'> = {1:'great',2:'good',3:'great',4:'meh',5:'great',6:'good',7:'bad',8:'great',9:'good',10:'meh',11:'good',12:'great'};
 const MC: Record<string, string> = { awful:p.red, bad:p.orange, meh:'#ffd400', good:p.green, great:p.cyan };
 
 export function CalendarScreen() {
@@ -17,9 +17,25 @@ export function CalendarScreen() {
   const [vm, setVm] = useState(today.getMonth());
   const [vy, setVy] = useState(today.getFullYear());
 
-  const dim = new Date(vy, vm + 1, 0).getDate();
-  const fd = new Date(vy, vm, 1).getDay();
+  const { user } = useAuth();
+  const monthData = useMonthData(user?.uid ?? null, vy, vm);
+
+  const dim    = new Date(vy, vm + 1, 0).getDate();
+  const fd     = new Date(vy, vm, 1).getDay();
   const offset = fd === 0 ? 6 : fd - 1;
+
+  const dayKey = (d: number) => `${vy}-${String(vm + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+
+  // Streak: consecutive days from today (current month only) with workout logged
+  const streak = (() => {
+    if (vm !== today.getMonth() || vy !== today.getFullYear()) return 0;
+    let s = 0;
+    for (let d = today.getDate(); d >= 1; d--) {
+      if (monthData[dayKey(d)]?.workout) s++;
+      else break;
+    }
+    return s;
+  })();
 
   const prevM = () => { const d = new Date(vy, vm - 1); setVm(d.getMonth()); setVy(d.getFullYear()); };
   const nextM = () => { const d = new Date(vy, vm + 1); setVm(d.getMonth()); setVy(d.getFullYear()); };
@@ -50,7 +66,7 @@ export function CalendarScreen() {
             <MarkerStar4 size={14} color={p.orange}/>
             <span style={{ fontFamily:p.monoFont, fontSize:11, color:p.fg, letterSpacing:0.1 }}>STREAK ALLENAMENTO</span>
             <span style={{ flex:1 }}/>
-            <span style={{ fontFamily:p.displayFont, fontSize:26, fontWeight:800, color:p.orange }}>7</span>
+            <span style={{ fontFamily:p.displayFont, fontSize:26, fontWeight:800, color:p.orange }}>{streak}</span>
             <span style={{ fontFamily:p.monoFont, fontSize:9, color:p.muted }}>GIORNI</span>
           </div>
         </NeonGlass>
@@ -62,10 +78,11 @@ export function CalendarScreen() {
           {Array.from({length:offset}).map((_,i) => <div key={`e${i}`}/>)}
           {Array.from({length:dim}).map((_,i) => {
             const day = i + 1;
+            const k = dayKey(day);
             const isToday = day === today.getDate() && vm === today.getMonth() && vy === today.getFullYear();
-            const isSel = day === selDay;
-            const hasFit = WORKOUT_DAYS.includes(day);
-            const mood = MOOD_MAP[day];
+            const isSel   = day === selDay;
+            const hasFit  = !!monthData[k]?.workout;
+            const mood    = (monthData[k]?.mood ?? null) as MoodId | null;
             return (
               <button key={day} onClick={() => setSelDay(day)} style={{
                 border:`1px solid ${isToday ? 'rgba(166,255,0,0.6)' : isSel ? 'rgba(255,106,0,0.6)' : 'transparent'}`,
@@ -76,7 +93,7 @@ export function CalendarScreen() {
                 <span style={{ fontFamily:p.monoFont, fontSize:12, fontWeight:isToday||isSel?700:400, color:isToday?p.green:isSel?p.orange:p.fg }}>{day}</span>
                 <div style={{ display:'flex', gap:2 }}>
                   {hasFit && <div style={{ width:4,height:4,borderRadius:'50%',background:p.orange }}/>}
-                  {mood && <div style={{ width:4,height:4,borderRadius:'50%',background:MC[mood] }}/>}
+                  {mood   && <div style={{ width:4,height:4,borderRadius:'50%',background:MC[mood] }}/>}
                 </div>
               </button>
             );
@@ -96,10 +113,14 @@ export function CalendarScreen() {
           <NeonGlass style={{ marginTop:14 }} tint="rgba(255,255,255,0.04)" radius={20}>
             <div style={{ padding:'14px 16px' }}>
               <div style={{ fontFamily:p.monoFont, fontSize:10, color:p.orange, textTransform:'uppercase' }}>{selDay} {M_NAMES[vm]}</div>
-              <div style={{ marginTop:6, fontFamily:p.bodyFont, fontSize:14, color:WORKOUT_DAYS.includes(selDay)?p.orange:p.muted }}>
-                {WORKOUT_DAYS.includes(selDay) ? '⚡ Allenamento completato' : 'Nessun allenamento'}
+              <div style={{ marginTop:6, fontFamily:p.bodyFont, fontSize:14, color:monthData[dayKey(selDay)]?.workout ? p.orange : p.muted }}>
+                {monthData[dayKey(selDay)]?.workout ? `⚡ ${monthData[dayKey(selDay)]?.workout}` : 'Nessun allenamento'}
               </div>
-              {MOOD_MAP[selDay] && <div style={{ marginTop:4, fontFamily:p.monoFont, fontSize:10, color:MC[MOOD_MAP[selDay]] }}>MOOD: {MOOD_MAP[selDay].toUpperCase()}</div>}
+              {monthData[dayKey(selDay)]?.mood && (
+                <div style={{ marginTop:4, fontFamily:p.monoFont, fontSize:10, color:MC[monthData[dayKey(selDay)]?.mood as string] }}>
+                  MOOD: {(monthData[dayKey(selDay)]?.mood as string).toUpperCase()}
+                </div>
+              )}
             </div>
           </NeonGlass>
         )}

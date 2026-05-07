@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { collection, doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 
 export type MoodId = 'awful' | 'bad' | 'meh' | 'good' | 'great';
@@ -14,6 +14,10 @@ export interface DayData {
   moodEvening: MoodId | null;
   moodNote: string;
   meHabits: boolean[];     // 6 habits in me screen (4 good + 2 bad)
+  mealsDone: boolean[];    // 4 meals done state
+  caffeine: number;
+  dietMode: 'bulk' | 'cut' | 'mantenimento';
+  workout: string | null;
 }
 
 const EMPTY: DayData = {
@@ -24,6 +28,10 @@ const EMPTY: DayData = {
   moodEvening: null,
   moodNote: '',
   meHabits: [false, false, false, false, false, false],
+  mealsDone: [false, false, false, false],
+  caffeine: 0,
+  dietMode: 'cut',
+  workout: null,
 };
 
 function todayKey(): string {
@@ -47,6 +55,10 @@ export function useDayStore(uid: string | null) {
           moodEvening: (d.moodEvening ?? null)         as MoodId | null,
           moodNote:    typeof d.moodNote === 'string'  ? d.moodNote    : '',
           meHabits:    Array.isArray(d.meHabits)       ? d.meHabits    : [false,false,false,false,false,false],
+          mealsDone:   Array.isArray(d.mealsDone)      ? d.mealsDone   : [false,false,false,false],
+          caffeine:    typeof d.caffeine === 'number'  ? d.caffeine    : 0,
+          dietMode:    d.dietMode ?? 'cut',
+          workout:     d.workout  ?? null,
         });
       } else {
         setData(EMPTY);
@@ -63,4 +75,24 @@ export function useDayStore(uid: string | null) {
   };
 
   return { data, save };
+}
+
+export function useMonthData(uid: string | null, year: number, month: number) {
+  const [days, setDays] = useState<Record<string, Partial<DayData>>>({});
+
+  useEffect(() => {
+    if (!uid || !db) return;
+    const col = collection(db, 'users', uid, 'days');
+    const prefix = `${year}-${String(month + 1).padStart(2, '0')}`;
+    const unsub = onSnapshot(col, snap => {
+      const result: Record<string, Partial<DayData>> = {};
+      snap.docs.forEach(d => {
+        if (d.id.startsWith(prefix)) result[d.id] = d.data() as Partial<DayData>;
+      });
+      setDays(result);
+    });
+    return unsub;
+  }, [uid, year, month]);
+
+  return days;
 }

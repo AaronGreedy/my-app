@@ -39,7 +39,8 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
   const habits     = data.habits;
   const mood       = data.mood;
 
-  const addWater    = () => save({ water: Math.min(8, waterCount + 1) });
+  const addGlass  = () => save({ water: Math.min(8, waterCount + 1) });
+  const addBottle = () => save({ water: Math.min(8, waterCount + 3) });
   const toggleHabit = (i: number) => save({ habits: habits.map((v, ix) => ix === i ? !v : v) });
   const chooseMood  = (m: MoodId) => save({ mood: m });
 
@@ -140,18 +141,21 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
             </div>
           </NeonGlass>
 
-          <NeonGlass tint="linear-gradient(135deg, rgba(166,255,0,0.28), rgba(0,240,255,0.18))" edge="rgba(166,255,0,0.55)" glow="#a6ff00" radius={22} onClick={addWater}>
+          <NeonGlass tint="linear-gradient(135deg, rgba(166,255,0,0.28), rgba(0,240,255,0.18))" edge="rgba(166,255,0,0.55)" glow="#a6ff00" radius={22}>
             <div style={{ padding: '13px 13px 12px' }}>
-              <MetricHead icon={<MarkerHex size={9} color={p.green} />} label="ACQUA" right={`${waterCount}/8`} />
+              <MetricHead icon={<MarkerHex size={9} color={p.green} />} label="ACQUA" right={`${waterCount * 250}ml / 2000ml`} />
               <div style={{ fontFamily: p.displayFont, fontSize: 36, fontWeight: 800, letterSpacing: -1.2, lineHeight: 0.95, marginTop: 4 }}>
-                {(waterCount * 0.75).toFixed(2)}<span style={{ fontSize: 14, color: p.muted }}>l</span>
+                {(waterCount * 0.25).toFixed(2)}<span style={{ fontSize: 14, color: p.muted }}>l</span>
               </div>
               <div style={{ display: 'flex', gap: 3, marginTop: 12 }}>
                 {Array.from({ length: 8 }).map((_, i) => (
                   <div key={i} style={{ flex: 1, height: 16, borderRadius: 4, background: i < waterCount ? 'linear-gradient(180deg, #a6ff00, #00f0ff)' : 'rgba(255,255,255,0.08)', boxShadow: i < waterCount ? 'inset 0 1px 0 rgba(255,255,255,0.5), 0 0 12px rgba(166,255,0,0.7)' : 'none' }} />
                 ))}
               </div>
-              <div style={{ marginTop: 8, fontFamily: p.monoFont, fontSize: 9, color: p.green }}>+750ml borraccia · tap</div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+                <button onClick={addGlass} style={{ flex: 1, padding: '8px 4px', borderRadius: 10, border: `1px solid rgba(166,255,0,0.4)`, background: 'rgba(166,255,0,0.08)', color: p.green, cursor: 'pointer', fontFamily: p.monoFont, fontSize: 9, textTransform: 'uppercase' }}>+250ml bicchiere</button>
+                <button onClick={addBottle} style={{ flex: 1, padding: '8px 4px', borderRadius: 10, border: `1px solid rgba(0,240,255,0.4)`, background: 'rgba(0,240,255,0.08)', color: p.cyan, cursor: 'pointer', fontFamily: p.monoFont, fontSize: 9, textTransform: 'uppercase' }}>+750ml borraccia</button>
+              </div>
             </div>
           </NeonGlass>
 
