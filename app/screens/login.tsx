@@ -33,8 +33,15 @@ export function LoginScreen() {
     setError(null);
     try {
       await signInGoogle();
-    } catch {
-      setError('Login fallito. Riprova.');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : '';
+      if (msg === 'Firebase non configurato') {
+        setError('Firebase non configurato — aggiungi le env vars su Vercel.');
+      } else if (msg.includes('popup-closed') || msg.includes('cancelled')) {
+        setError(null);
+      } else {
+        setError('Login fallito. Riprova.');
+      }
       setLoading(false);
     }
   };
@@ -69,11 +76,14 @@ export function LoginScreen() {
         </div>
 
         {/* Title */}
-        <div style={{ fontFamily: p.displayFont, fontWeight: 700, fontSize: 52, letterSpacing: -2, lineHeight: 0.88, textTransform: 'uppercase', textAlign: 'center', marginBottom: 8 }}>
-          BENVE<br/>
-          <span style={{ background: 'linear-gradient(120deg, #ffd400 0%, #ff6a00 35%, #ff0040 70%, #ff14b8 100%)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>
-            NUTO.
-          </span>
+        <div style={{
+          fontFamily: p.displayFont, fontWeight: 700, fontSize: 64,
+          letterSpacing: -3, lineHeight: 0.88, textTransform: 'uppercase',
+          textAlign: 'center', marginBottom: 8,
+          background: 'linear-gradient(120deg, #ffd400 0%, #ff6a00 35%, #ff0040 70%, #ff14b8 100%)',
+          WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent',
+        }}>
+          BENVE<br/>NUTO.
         </div>
 
         <div style={{ fontFamily: p.monoFont, fontSize: 10, color: p.dim, letterSpacing: 0.2, textAlign: 'center', marginBottom: 48 }}>
