@@ -1,0 +1,1329 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#040404" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Aaron" />
+<title>Personal Growth — Aaron</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=Archivo+Narrow:wght@400;500;600;700&family=Geist:wght@300;400;500;600;700;800;900&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { background: #040404; height: 100%; }
+  body {
+    background: #040404;
+    color: #f6f2e8;
+    font-family: 'Archivo', system-ui, sans-serif;
+    height: 100%;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  #root { width: 100%; height: 100svh; overflow: hidden; position: relative; }
+
+  /* Desktop: center as phone */
+  @media (min-width: 600px) {
+    body { display: flex; align-items: center; justify-content: center; }
+    #root {
+      width: 402px;
+      height: 874px;
+      border-radius: 48px;
+      overflow: hidden;
+      box-shadow: 0 40px 120px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.08);
+    }
+  }
+
+  /* Hide all scrollbars */
+  ::-webkit-scrollbar { display: none; }
+  * { scrollbar-width: none; }
+
+  /* Safe area for iPhone notch */
+  .safe-top { padding-top: max(48px, env(safe-area-inset-top, 48px)); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin></script>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+// ─── Palette ────────────────────────────────────────────────────────────────
+const p = {
+  bg: '#040404',
+  fg: '#f6f2e8',
+  muted: 'rgba(246,242,232,0.62)',
+  dim: 'rgba(246,242,232,0.36)',
+  orange: '#ff6a00',
+  green: '#a6ff00',
+  red: '#ff0040',
+  magenta: '#ff14b8',
+  cyan: '#00f0ff',
+  border: 'rgba(244,241,235,0.14)',
+  bodyFont: '"Archivo", system-ui',
+  displayFont: '"Archivo Narrow", system-ui',
+  monoFont: '"Geist Mono", monospace',
+  navBg: 'rgba(15,12,10,0.55)',
+  navBorder: '1px solid rgba(255,255,255,0.16)',
+  navShadow: '0 18px 48px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.18)',
+  navActive: 'rgba(255,106,0,0.22)',
+  fabBg: 'linear-gradient(135deg, #ffd400 0%, #ff6a00 45%, #ff0040 100%)',
+  fabShadow: '0 14px 40px rgba(255,106,0,0.85), 0 0 20px rgba(255,212,0,0.6), inset 0 1px 0 rgba(255,255,255,0.6)',
+  captureBg: 'rgba(10,8,6,0.92)',
+};
+
+// ─── Noise SVG ──────────────────────────────────────────────────────────────
+const NOISE_SVG = `data:image/svg+xml;utf8,${encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200">
+    <filter id="n">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.5 0"/>
+    </filter>
+    <rect width="100%" height="100%" filter="url(#n)" opacity="0.6"/>
+  </svg>`
+)}`;
+
+// ─── Hooks ──────────────────────────────────────────────────────────────────
+function useCounter(initial, max) {
+  const [v, setV] = useState(initial);
+  return [v, () => setV(x => Math.min(max, x + 1))];
+}
+
+// ─── Geometric markers ───────────────────────────────────────────────────────
+const Marker = {
+  Target: ({ size = 14, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="9" stroke={color} strokeWidth="1.5"/>
+      <circle cx="12" cy="12" r="2" fill={color}/>
+      <path d="M12 1v5M12 18v5M1 12h5M18 12h5" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  ),
+  Diamond: ({ size = 14, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24">
+      <path d="M12 2 L22 12 L12 22 L2 12 Z" fill={color}/>
+    </svg>
+  ),
+  Star4: ({ size = 14, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24">
+      <path d="M12 1 Q12 12 23 12 Q12 12 12 23 Q12 12 1 12 Q12 12 12 1Z" fill={color}/>
+    </svg>
+  ),
+  Triangle: ({ size = 14, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24">
+      <path d="M12 3 L22 20 L2 20 Z" fill="none" stroke={color} strokeWidth="2"/>
+    </svg>
+  ),
+  Hex: ({ size = 14, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24">
+      <path d="M12 2 L21 7 L21 17 L12 22 L3 17 L3 7 Z" fill="none" stroke={color} strokeWidth="1.8"/>
+    </svg>
+  ),
+  Plus: ({ size = 14, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24">
+      <path d="M12 3 V21 M3 12 H21" stroke={color} strokeWidth="2.2" strokeLinecap="round"/>
+    </svg>
+  ),
+};
+
+// ─── Mood face ───────────────────────────────────────────────────────────────
+function MoodFace({ mood, size = 48, color, bg }) {
+  const m = {
+    awful: { mouth: 'M-9 4 Q0 -4 9 4',   eyes: 'x' },
+    bad:   { mouth: 'M-9 4 Q0 0 9 4',    eyes: 'flat' },
+    meh:   { mouth: 'M-9 2 L9 2',        eyes: 'flat' },
+    good:  { mouth: 'M-9 -1 Q0 7 9 -1',  eyes: 'open' },
+    great: { mouth: 'M-9 -2 Q0 9 9 -2',  eyes: 'happy' },
+  }[mood] || { mouth: 'M-9 2 L9 2', eyes: 'flat' };
+  const s = color || '#0a0a0a';
+  return (
+    <svg width={size} height={size} viewBox="-25 -25 50 50" style={{ display: 'block' }}>
+      <circle cx="0" cy="0" r="22" fill={bg} />
+      {m.eyes === 'open' && (<>
+        <circle cx="-7" cy="-5" r="2.2" fill={s} />
+        <circle cx="7" cy="-5" r="2.2" fill={s} />
+      </>)}
+      {m.eyes === 'flat' && (<>
+        <rect x="-9" y="-6" width="4" height="2" rx="1" fill={s} />
+        <rect x="5" y="-6" width="4" height="2" rx="1" fill={s} />
+      </>)}
+      {m.eyes === 'happy' && (<>
+        <path d="M-9 -4 Q-7 -7 -5 -4" stroke={s} strokeWidth="2" fill="none" strokeLinecap="round"/>
+        <path d="M5 -4 Q7 -7 9 -4" stroke={s} strokeWidth="2" fill="none" strokeLinecap="round"/>
+      </>)}
+      {m.eyes === 'x' && (<>
+        <path d="M-9 -7 L-5 -3 M-5 -7 L-9 -3" stroke={s} strokeWidth="2" strokeLinecap="round"/>
+        <path d="M5 -7 L9 -3 M9 -7 L5 -3" stroke={s} strokeWidth="2" strokeLinecap="round"/>
+      </>)}
+      <path d={m.mouth} stroke={s} strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+// ─── NeonGlass card ──────────────────────────────────────────────────────────
+function NeonGlass({ children, style = {}, tint, glow, radius = 24, onClick, edge }) {
+  return (
+    <div onClick={onClick} style={{
+      position: 'relative', borderRadius: radius, overflow: 'hidden',
+      cursor: onClick ? 'pointer' : 'default',
+      ...style,
+    }}>
+      <div style={{
+        position: 'absolute', inset: 0, borderRadius: radius,
+        background: tint || 'rgba(255,255,255,0.04)',
+        backdropFilter: 'blur(28px) saturate(170%)',
+        WebkitBackdropFilter: 'blur(28px) saturate(170%)',
+        border: edge ? `1px solid ${edge}` : `1px solid ${p.border}`,
+        boxShadow: [
+          'inset 1px 1px 0 rgba(255,255,255,0.18)',
+          'inset -1px -1px 0 rgba(255,255,255,0.04)',
+          '0 16px 40px rgba(0,0,0,0.45)',
+          glow ? `0 0 28px ${glow}55` : '',
+        ].filter(Boolean).join(', '),
+      }} />
+      <div style={{
+        position: 'absolute', inset: 0, borderRadius: radius,
+        background: 'linear-gradient(140deg, rgba(255,255,255,0.14) 0%, transparent 32%, transparent 68%, rgba(255,255,255,0.05) 100%)',
+        pointerEvents: 'none',
+      }} />
+      <div style={{ position: 'relative', zIndex: 1 }}>{children}</div>
+    </div>
+  );
+}
+
+// ─── Section label ────────────────────────────────────────────────────────────
+function SectionLabel({ num, title, hint }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 8, marginTop: 22,
+      fontFamily: p.monoFont, fontSize: 9.5, letterSpacing: 0.22, textTransform: 'uppercase',
+    }}>
+      <span style={{ color: p.orange }}>[{num}]</span>
+      <span style={{ color: p.fg, fontWeight: 600 }}>{title}</span>
+      <div style={{ flex: 1, height: 1, background: p.border }} />
+      <span style={{ color: p.dim }}>{hint}</span>
+    </div>
+  );
+}
+
+// ─── Metric head ──────────────────────────────────────────────────────────────
+function MetricHead({ icon, label, right }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+      {icon}
+      <span style={{ fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.2, color: p.muted, textTransform: 'uppercase', fontWeight: 700 }}>{label}</span>
+      <span style={{ flex: 1 }} />
+      <span style={{ fontFamily: p.monoFont, fontSize: 9, color: p.dim }}>{right}</span>
+    </div>
+  );
+}
+
+// ─── Quick capture overlay ────────────────────────────────────────────────────
+function CaptureOverlay({ open, onClose }) {
+  const [text, setText] = useState('');
+  const [route, setRoute] = useState(null);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (open) {
+      setText(''); setRoute(null);
+      setTimeout(() => inputRef.current?.focus(), 80);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    const t = text.toLowerCase().trim();
+    if (!t) return setRoute(null);
+    if (t.includes('ricord') || t.startsWith('fare ') || t.includes('todo') || t.includes('to-do'))
+      setRoute({ k: 'TO-DO', c: p.orange });
+    else if (t.includes('brain') || t.includes('idea'))
+      setRoute({ k: 'BRAIN', c: p.green });
+    else if (t.includes('compr') || t.includes('spesa'))
+      setRoute({ k: 'SPESA', c: p.green });
+    else if (t.includes('problema'))
+      setRoute({ k: 'PROBLEMA', c: p.red });
+    else if (t.includes('regalo'))
+      setRoute({ k: 'REGALO 🔒', c: p.orange });
+    else
+      setRoute({ k: 'NOTA', c: p.muted });
+  }, [text]);
+
+  if (!open) return null;
+  return (
+    <div onClick={onClose} style={{
+      position: 'absolute', inset: 0, zIndex: 100,
+      background: 'rgba(0,0,0,0.65)',
+      backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+      display: 'flex', alignItems: 'flex-end',
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        width: '100%', padding: '24px 20px 110px',
+        background: p.captureBg,
+        borderTop: `1px solid ${p.border}`,
+        borderTopLeftRadius: 28, borderTopRightRadius: 28,
+      }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14,
+          fontFamily: p.monoFont, fontSize: 10, letterSpacing: 0.18,
+          color: p.muted, textTransform: 'uppercase',
+        }}>
+          <Marker.Plus size={11} color={p.orange} />
+          <span>QUICK CAPTURE</span>
+          <span style={{ flex: 1 }} />
+          {route && <span style={{ color: route.c, fontWeight: 700 }}>→ {route.k}</span>}
+        </div>
+        <textarea
+          ref={inputRef}
+          value={text}
+          onChange={e => setText(e.target.value)}
+          placeholder="parla, scrivi, dump…  →  prova: ricordami, brain, regalo"
+          rows={4}
+          style={{
+            width: '100%', resize: 'none', border: 0, outline: 0,
+            background: 'transparent', color: p.fg,
+            fontFamily: p.bodyFont, fontSize: 17, lineHeight: 1.35,
+          }}
+        />
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10 }}>
+          <button onClick={onClose} style={{
+            padding: '12px 18px', borderRadius: 14, border: 0, cursor: 'pointer',
+            background: 'rgba(255,255,255,0.08)', color: p.fg,
+            fontFamily: p.monoFont, fontSize: 11, letterSpacing: 0.1, textTransform: 'uppercase',
+          }}>Esc</button>
+          <div style={{ flex: 1 }} />
+          <button style={{
+            padding: '12px 22px', borderRadius: 14, border: 0, cursor: 'pointer',
+            background: p.orange, color: '#0a0a0a',
+            fontFamily: p.monoFont, fontSize: 11, letterSpacing: 0.1, textTransform: 'uppercase', fontWeight: 800,
+          }}>↵ Salva</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Nav icons ────────────────────────────────────────────────────────────────
+function NavIcon({ kind, color, size = 18 }) {
+  const sw = 1.8;
+  if (kind === 'home') return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path d="M3 11 L12 3 L21 11 V20 H14 V14 H10 V20 H3 Z" stroke={color} strokeWidth={sw} strokeLinejoin="round"/>
+    </svg>
+  );
+  if (kind === 'cal') return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <rect x="3" y="5" width="18" height="16" rx="2" stroke={color} strokeWidth={sw}/>
+      <path d="M3 10 H21 M8 3 V7 M16 3 V7" stroke={color} strokeWidth={sw} strokeLinecap="round"/>
+    </svg>
+  );
+  if (kind === 'brain') return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <circle cx="8" cy="8" r="2" stroke={color} strokeWidth={sw}/>
+      <circle cx="16" cy="8" r="2" stroke={color} strokeWidth={sw}/>
+      <circle cx="12" cy="16" r="2" stroke={color} strokeWidth={sw}/>
+      <path d="M9.5 9 L11 14.5 M14.5 9 L13 14.5 M10 8 H14" stroke={color} strokeWidth={sw}/>
+    </svg>
+  );
+  if (kind === 'me') return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="9" r="3.5" stroke={color} strokeWidth={sw}/>
+      <path d="M5 21 C5 17 8 15 12 15 C16 15 19 17 19 21" stroke={color} strokeWidth={sw} strokeLinecap="round"/>
+    </svg>
+  );
+  return null;
+}
+
+// ─── Bottom nav ───────────────────────────────────────────────────────────────
+function BottomNav({ screen, setScreen, onCapture }) {
+  const tabs = [
+    { id: 'home',  label: 'Home',  icon: 'home'  },
+    { id: 'cal',   label: 'Cal',   icon: 'cal'   },
+    { id: 'fab',   label: '＋',    icon: 'fab'   },
+    { id: 'brain', label: 'Brain', icon: 'brain' },
+    { id: 'me',    label: 'Me',    icon: 'me'    },
+  ];
+  return (
+    <div style={{
+      position: 'absolute', left: 12, right: 12, bottom: 18, zIndex: 30,
+      display: 'flex', alignItems: 'center', gap: 6, padding: '6px',
+      borderRadius: 32,
+      background: p.navBg,
+      backdropFilter: 'blur(24px) saturate(180%)',
+      WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+      border: p.navBorder, boxShadow: p.navShadow,
+    }}>
+      {tabs.map(tab => {
+        const active = screen === tab.id && tab.id !== 'fab';
+        if (tab.id === 'fab') return (
+          <button key="fab" onClick={onCapture} style={{
+            width: 56, height: 56, borderRadius: '50%', border: 0, cursor: 'pointer', flexShrink: 0,
+            background: p.fabBg, color: '#0a0a0a',
+            boxShadow: p.fabShadow,
+            fontWeight: 800, fontSize: 28, lineHeight: 1, marginTop: -22,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>+</button>
+        );
+        return (
+          <button key={tab.id} onClick={() => setScreen(tab.id)} style={{
+            flex: 1, padding: '10px 4px 8px', border: 0, cursor: 'pointer', borderRadius: 22,
+            background: active ? p.navActive : 'transparent',
+            color: active ? p.fg : p.muted,
+            fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.12, textTransform: 'uppercase',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+          }}>
+            <NavIcon kind={tab.icon} color={active ? p.fg : p.muted} />
+            {tab.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Placeholder screen ───────────────────────────────────────────────────────
+function PlaceholderScreen({ title }) {
+  return (
+    <div style={{
+      position: 'absolute', inset: 0,
+      background: p.bg,
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14,
+      color: p.dim, fontFamily: p.monoFont, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.2,
+    }}>
+      <Marker.Diamond size={30} color={p.orange} />
+      <span>{title}</span>
+      <span style={{ fontSize: 9, color: 'rgba(246,242,232,0.2)' }}>— coming soon —</span>
+    </div>
+  );
+}
+
+// ─── Home screen — V5 Grunge × Glass ─────────────────────────────────────────
+function HomeScreen({ onNavigate }) {
+  const [waterCount, addWater] = useCounter(3, 8);
+  const [habits, setHabits] = useState([true, true, false, false]);
+  const [mood, setMood] = useState(null);
+
+  const toggleHabit = useCallback((i) => {
+    setHabits(prev => prev.map((v, ix) => ix === i ? !v : v));
+  }, []);
+
+  const now = new Date();
+  const hh = now.getHours().toString().padStart(2, '0');
+  const mm = now.getMinutes().toString().padStart(2, '0');
+  const timeStr = `${hh}:${mm}`;
+  const isMorning = now.getHours() < 14;
+
+  const moods = [
+    { id: 'awful', c: '#ff0040', label: 'GIÙ' },
+    { id: 'bad',   c: '#ff6a00', label: 'STANCO' },
+    { id: 'meh',   c: '#ffd400', label: 'OK' },
+    { id: 'good',  c: '#a6ff00', label: 'BENE' },
+    { id: 'great', c: '#00f0ff', label: 'TOP' },
+  ];
+
+  const habitList = [
+    ['Stretching',          28],
+    ['No scroll a letto',   14],
+    ['Luci rosse',           6],
+    ['Candle prima dormire', 3],
+  ];
+
+  return (
+    <div style={{
+      position: 'absolute', inset: 0, overflow: 'auto',
+      background: p.bg, color: p.fg, fontFamily: p.bodyFont,
+    }}>
+      {/* Iridescent orbs */}
+      {[
+        { t: -100, l: -80,  w: 380, c: '#ff6a00', o: 0.95 },
+        { t:  200, r: -120, w: 340, c: '#ff14b8', o: 0.70 },
+        { t:  480, l: -80,  w: 340, c: '#a6ff00', o: 0.65 },
+        { t:  720, r: -60,  w: 300, c: '#00f0ff', o: 0.55 },
+        { b:   40, l:  60,  w: 240, c: '#ff0040', o: 0.50 },
+      ].map((orb, i) => (
+        <div key={i} style={{
+          position: 'absolute',
+          top: orb.t, bottom: orb.b, left: orb.l, right: orb.r,
+          width: orb.w, height: orb.w, borderRadius: '50%',
+          background: `radial-gradient(circle, ${orb.c} 0%, transparent 65%)`,
+          filter: 'blur(65px)', opacity: orb.o, zIndex: 0, pointerEvents: 'none',
+        }} />
+      ))}
+
+      {/* Grunge noise */}
+      <div style={{
+        position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1,
+        backgroundImage: `url("${NOISE_SVG}")`, opacity: 0.18, mixBlendMode: 'overlay',
+      }} />
+      {/* Scanlines */}
+      <div style={{
+        position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1, opacity: 0.35,
+        backgroundImage: 'linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px)',
+        backgroundSize: '100% 4px',
+      }} />
+
+      {/* Vertical edge labels */}
+      <div style={{
+        position: 'absolute', left: 5, top: 110, zIndex: 5, pointerEvents: 'none',
+        fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.32, color: p.dim,
+        writingMode: 'vertical-rl', transform: 'rotate(180deg)',
+      }}>SYS::DAY—128 / Q2.W19 / OPS-MORNING</div>
+      <div style={{
+        position: 'absolute', right: 5, top: 110, zIndex: 5, pointerEvents: 'none',
+        fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.32, color: p.dim,
+        writingMode: 'vertical-rl',
+      }}>LV·12 GUERRIERO / XP 4280·6500</div>
+
+      <div style={{ position: 'relative', zIndex: 2, padding: '56px 18px 130px' }}>
+
+        {/* ── Header ── */}
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 8 }}>
+          <div>
+            <div style={{
+              fontFamily: p.monoFont, fontSize: 10, letterSpacing: 0.2,
+              color: p.orange, textTransform: 'uppercase',
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}>
+              <Marker.Diamond size={8} color={p.orange} />
+              {isMorning ? 'MATTINA' : 'SERA'} · {timeStr}
+            </div>
+            <div style={{
+              fontFamily: p.displayFont, fontWeight: 700, fontSize: 44,
+              lineHeight: 0.92, letterSpacing: -1.2, marginTop: 6, textTransform: 'uppercase',
+            }}>
+              {isMorning ? 'BUONGIORNO' : 'BUONASERA'}<br/>
+              <span style={{
+                background: 'linear-gradient(120deg, #ffd400 0%, #ff6a00 35%, #ff0040 70%, #ff14b8 100%)',
+                WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent',
+              }}>AARON.</span>
+            </div>
+          </div>
+          <div style={{
+            fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.22, color: p.dim,
+            textAlign: 'right', lineHeight: 1.5,
+          }}>
+            GIO·07·MAG<br/>26·05·07
+          </div>
+        </div>
+
+        {/* ── La cosa di oggi ── */}
+        <NeonGlass
+          style={{ marginTop: 22 }}
+          tint="linear-gradient(135deg, rgba(255,0,64,0.32), rgba(255,20,184,0.18))"
+          edge="rgba(255,0,64,0.75)"
+          glow="#ff0040"
+          radius={26}
+        >
+          <div style={{ padding: '18px 18px 16px', position: 'relative' }}>
+            <div style={{
+              position: 'absolute', top: 0, right: 0,
+              padding: '5px 10px', background: p.red, color: '#0a0a0a',
+              fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.25, fontWeight: 800,
+              borderBottomLeftRadius: 12,
+            }}>!! WARN</div>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              fontFamily: p.monoFont, fontSize: 10, letterSpacing: 0.2,
+              color: p.red, textTransform: 'uppercase', fontWeight: 700,
+            }}>
+              <Marker.Target size={11} color={p.red} />
+              LA COSA DI OGGI · scad. 18:00
+            </div>
+            <div style={{
+              fontFamily: p.displayFont, fontWeight: 700, fontSize: 26,
+              lineHeight: 1.02, letterSpacing: -0.5, textTransform: 'uppercase', marginTop: 8,
+            }}>
+              Finire deck<br/>progetto Q2
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+              <NeonGlass
+                style={{ flex: 1 }}
+                tint="linear-gradient(90deg, rgba(255,0,64,0.45), rgba(255,20,184,0.4))"
+                edge="rgba(255,0,64,0.7)"
+                radius={14}
+                onClick={() => onNavigate && onNavigate('focus')}
+              >
+                <div style={{
+                  padding: '11px 12px', textAlign: 'center',
+                  fontFamily: p.monoFont, fontSize: 10.5, letterSpacing: 0.2, fontWeight: 700,
+                  color: p.fg, textTransform: 'uppercase',
+                }}>→ Avvia Focus</div>
+              </NeonGlass>
+              <NeonGlass style={{ width: 96 }} radius={14}>
+                <div style={{
+                  padding: '11px 12px', textAlign: 'center',
+                  fontFamily: p.monoFont, fontSize: 10.5, letterSpacing: 0.2,
+                  color: p.muted, textTransform: 'uppercase',
+                }}>RINVIA</div>
+              </NeonGlass>
+            </div>
+          </div>
+        </NeonGlass>
+
+        {/* ── Mood ── */}
+        <SectionLabel num="01" title="MOOD CHECK·MATTINA" hint="seleziona" />
+        <NeonGlass
+          style={{ marginTop: 8 }}
+          tint="linear-gradient(135deg, rgba(255,106,0,0.18), rgba(166,255,0,0.14))"
+          radius={24}
+        >
+          <div style={{ padding: '20px 14px 16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+              {moods.map(m => {
+                const active = mood === m.id;
+                return (
+                  <button key={m.id} onClick={() => setMood(m.id)} style={{
+                    border: 0, background: 'transparent', cursor: 'pointer', padding: 4,
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                    opacity: active ? 1 : (mood ? 0.38 : 0.92),
+                    transform: active ? 'scale(1.2) translateY(-3px)' : 'scale(1)',
+                    transition: 'all .22s cubic-bezier(.2,.8,.3,1.2)',
+                    filter: active ? `drop-shadow(0 6px 16px ${m.c}aa) drop-shadow(0 0 4px ${m.c}66)` : 'none',
+                  }}>
+                    <MoodFace mood={m.id} bg={m.c} color="#0a0a0a" size={42} />
+                    <div style={{
+                      fontFamily: p.monoFont, fontSize: 8.5, letterSpacing: 0.22,
+                      color: active ? m.c : p.dim, fontWeight: 700,
+                    }}>{m.label}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </NeonGlass>
+
+        {/* ── Vitals grid ── */}
+        <SectionLabel num="02" title="VITALS" hint="oggi" />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
+
+          {/* Kcal */}
+          <NeonGlass
+            tint="linear-gradient(135deg, rgba(255,106,0,0.32), rgba(255,212,0,0.10))"
+            edge="rgba(255,106,0,0.55)" glow="#ff6a00" radius={22}
+          >
+            <div style={{ padding: '13px 13px 12px' }}>
+              <MetricHead icon={<Marker.Triangle size={9} color={p.orange} />} label="KCAL" right="−560" />
+              <div style={{ fontFamily: p.displayFont, fontSize: 36, fontWeight: 800, letterSpacing: -1.2, lineHeight: 0.95, marginTop: 4 }}>
+                1840
+              </div>
+              <div style={{ height: 5, marginTop: 10, borderRadius: 99, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: '76%', borderRadius: 99, boxShadow: '0 0 10px #ff6a00',
+                  background: 'linear-gradient(90deg, #ffd400, #ff6a00, #ff0040)' }} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8,
+                fontFamily: p.monoFont, fontSize: 9, color: p.dim }}>
+                <span>P 142</span><span>C 198</span><span>F 62</span>
+              </div>
+            </div>
+          </NeonGlass>
+
+          {/* Acqua */}
+          <NeonGlass
+            tint="linear-gradient(135deg, rgba(166,255,0,0.28), rgba(0,240,255,0.18))"
+            edge="rgba(166,255,0,0.55)" glow="#a6ff00" radius={22} onClick={addWater}
+          >
+            <div style={{ padding: '13px 13px 12px' }}>
+              <MetricHead icon={<Marker.Hex size={9} color={p.green} />} label="ACQUA" right={`${waterCount}/8`} />
+              <div style={{ fontFamily: p.displayFont, fontSize: 36, fontWeight: 800, letterSpacing: -1.2, lineHeight: 0.95, marginTop: 4 }}>
+                {(waterCount * 0.75).toFixed(2)}<span style={{ fontSize: 14, color: p.muted }}>l</span>
+              </div>
+              <div style={{ display: 'flex', gap: 3, marginTop: 12 }}>
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} style={{
+                    flex: 1, height: 16, borderRadius: 4,
+                    background: i < waterCount
+                      ? 'linear-gradient(180deg, #a6ff00, #00f0ff)'
+                      : 'rgba(255,255,255,0.08)',
+                    boxShadow: i < waterCount
+                      ? 'inset 0 1px 0 rgba(255,255,255,0.5), 0 0 12px rgba(166,255,0,0.7)'
+                      : 'none',
+                  }} />
+                ))}
+              </div>
+              <div style={{ marginTop: 8, fontFamily: p.monoFont, fontSize: 9, color: p.green }}>
+                +750ml borraccia · tap
+              </div>
+            </div>
+          </NeonGlass>
+
+          {/* Habits — full width */}
+          <NeonGlass style={{ gridColumn: 'span 2' }} tint="rgba(255,255,255,0.05)" radius={22}>
+            <div style={{ padding: '13px 13px' }}>
+              <MetricHead
+                icon={<Marker.Star4 size={10} color={p.orange} />}
+                label="HABITS"
+                right={`${habits.filter(Boolean).length}/4 · +50 XP`}
+              />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 8 }}>
+                {habitList.map(([label, streak], i) => {
+                  const on = habits[i];
+                  return (
+                    <button key={label} onClick={() => toggleHabit(i)} style={{
+                      padding: '10px 11px', borderRadius: 14, cursor: 'pointer', textAlign: 'left',
+                      border: `1px solid ${on ? 'rgba(166,255,0,0.75)' : 'rgba(255,255,255,0.10)'}`,
+                      background: on ? 'rgba(166,255,0,0.16)' : 'rgba(255,255,255,0.02)',
+                      boxShadow: on
+                        ? 'inset 0 1px 0 rgba(255,255,255,0.18), 0 0 22px rgba(166,255,0,0.4)'
+                        : 'inset 0 1px 0 rgba(255,255,255,0.04)',
+                      display: 'flex', flexDirection: 'column', gap: 4,
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{
+                          width: 14, height: 14, borderRadius: 4,
+                          border: `1.5px solid ${on ? p.green : p.muted}`,
+                          background: on ? p.green : 'transparent',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color: '#0a0a0a', fontSize: 10, fontWeight: 900,
+                          boxShadow: on ? `0 0 12px ${p.green}, 0 0 4px ${p.green}` : 'none',
+                        }}>{on ? '✓' : ''}</div>
+                        <span style={{ flex: 1 }} />
+                        <span style={{ fontFamily: p.monoFont, fontSize: 8.5, color: on ? p.green : p.dim }}>×{streak}</span>
+                      </div>
+                      <div style={{
+                        fontFamily: p.bodyFont, fontWeight: 600, fontSize: 12,
+                        color: on ? p.fg : p.muted, textTransform: 'uppercase', letterSpacing: 0.04, lineHeight: 1.2,
+                      }}>{label}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </NeonGlass>
+        </div>
+
+        {/* ── Countdown ── */}
+        <SectionLabel num="03" title="COUNTDOWN" hint="prossimi" />
+        <NeonGlass
+          style={{ marginTop: 8 }}
+          tint="linear-gradient(135deg, rgba(255,106,0,0.28), rgba(255,20,184,0.12))"
+          edge="rgba(255,106,0,0.55)" glow="#ff6a00" radius={22}
+        >
+          <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{
+              fontFamily: p.displayFont, fontWeight: 800, fontSize: 56, letterSpacing: -2.5, lineHeight: 0.85,
+              background: 'linear-gradient(180deg, #ffd400, #ff6a00 50%, #ff0040)',
+              WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent',
+            }}>
+              14
+              <span style={{
+                fontSize: 14, marginLeft: 2, fontFamily: p.monoFont, fontWeight: 400,
+                WebkitTextFillColor: p.muted, color: p.muted,
+              }}>g</span>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontFamily: p.monoFont, fontSize: 9.5, letterSpacing: 0.2, color: p.dim, textTransform: 'uppercase' }}>giorni a</div>
+              <div style={{ fontFamily: p.displayFont, fontWeight: 700, fontSize: 18, marginTop: 2, textTransform: 'uppercase' }}>
+                Anniversario · 3 anni
+              </div>
+              <div style={{ fontFamily: p.monoFont, fontSize: 10, color: p.muted, marginTop: 2 }}>21 maggio · regalo da pensare</div>
+            </div>
+            <Marker.Diamond size={14} color={p.orange} />
+          </div>
+        </NeonGlass>
+
+        {/* ── XP / Level ── */}
+        <NeonGlass style={{ marginTop: 10 }} tint="rgba(255,255,255,0.05)" radius={22}>
+          <div style={{ padding: '13px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{
+              width: 48, height: 48, borderRadius: 14, flexShrink: 0,
+              background: 'linear-gradient(135deg, #ffd400, #ff6a00 50%, #ff0040)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontFamily: p.displayFont, fontWeight: 800, fontSize: 22, color: '#0a0a0a',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.5), 0 10px 28px rgba(255,106,0,0.65)',
+            }}>12</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontFamily: p.monoFont, fontSize: 9.5, letterSpacing: 0.2, color: p.muted, textTransform: 'uppercase' }}>
+                TIER 04 · GUERRIERO
+              </div>
+              <div style={{ fontFamily: p.displayFont, fontWeight: 700, fontSize: 16, letterSpacing: -0.2, marginTop: 2 }}>
+                +220 XP OGGI
+              </div>
+              <div style={{ height: 4, marginTop: 6, borderRadius: 99, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%', width: '66%',
+                  background: 'linear-gradient(90deg, #ffd400, #ff6a00, #ff0040)',
+                  boxShadow: '0 0 10px #ff6a00',
+                }} />
+              </div>
+            </div>
+          </div>
+        </NeonGlass>
+
+      </div>
+    </div>
+  );
+}
+
+// ─── Calendar Screen ─────────────────────────────────────────────────────────
+function CalendarScreen() {
+  const today = new Date();
+  const [selDay, setSelDay] = useState(today.getDate());
+  const [vm, setVm] = useState(today.getMonth());
+  const [vy, setVy] = useState(today.getFullYear());
+  const mNames = ['GEN','FEB','MAR','APR','MAG','GIU','LUG','AGO','SET','OTT','NOV','DIC'];
+  const dNames = ['LU','MA','ME','GI','VE','SA','DO'];
+  const dim = new Date(vy, vm + 1, 0).getDate();
+  const fd = new Date(vy, vm, 1).getDay();
+  const offset = fd === 0 ? 6 : fd - 1;
+  const workoutDays = [1,3,5,8,10,12,15,17,19,22,24,26,29];
+  const moodMap = {1:'great',2:'good',3:'great',4:'meh',5:'great',6:'good',7:'bad',8:'great',9:'good',10:'meh',11:'good',12:'great'};
+  const mc = { awful:p.red, bad:p.orange, meh:'#ffd400', good:p.green, great:p.cyan };
+  const prevM = () => { const d = new Date(vy, vm-1); setVm(d.getMonth()); setVy(d.getFullYear()); };
+  const nextM = () => { const d = new Date(vy, vm+1); setVm(d.getMonth()); setVy(d.getFullYear()); };
+  return (
+    <div style={{ position:'absolute', inset:0, overflow:'auto', background:p.bg, color:p.fg, fontFamily:p.bodyFont }}>
+      {[{t:-80,l:-80,w:280,c:'#6b00ff',o:0.6},{t:300,r:-100,w:260,c:'#ff6a00',o:0.45}].map((orb,i)=>(
+        <div key={i} style={{ position:'absolute',top:orb.t,left:orb.l,right:orb.r,width:orb.w,height:orb.w,borderRadius:'50%',
+          background:`radial-gradient(circle, ${orb.c} 0%, transparent 65%)`,filter:'blur(65px)',opacity:orb.o,zIndex:0,pointerEvents:'none'}} />
+      ))}
+      <div style={{ position:'relative', zIndex:2, padding:'56px 18px 130px' }}>
+        <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', marginTop:8 }}>
+          <div>
+            <div style={{ fontFamily:p.monoFont, fontSize:10, color:p.orange, textTransform:'uppercase', letterSpacing:0.2, display:'flex', alignItems:'center', gap:6 }}>
+              <Marker.Diamond size={8} color={p.orange}/> CALENDARIO
+            </div>
+            <div style={{ fontFamily:p.displayFont, fontWeight:700, fontSize:36, letterSpacing:-1, textTransform:'uppercase', marginTop:4 }}>
+              {mNames[vm]} {vy}
+            </div>
+          </div>
+          <div style={{ display:'flex', gap:6 }}>
+            <NeonGlass radius={12} onClick={prevM}><div style={{ padding:'8px 14px', fontFamily:p.monoFont, fontSize:14, color:p.muted }}>‹</div></NeonGlass>
+            <NeonGlass radius={12} onClick={nextM}><div style={{ padding:'8px 14px', fontFamily:p.monoFont, fontSize:14, color:p.muted }}>›</div></NeonGlass>
+          </div>
+        </div>
+        <NeonGlass style={{ marginTop:14 }} tint="linear-gradient(90deg,rgba(255,106,0,0.28),rgba(255,212,0,0.12))" edge="rgba(255,106,0,0.5)" glow="#ff6a00" radius={18}>
+          <div style={{ padding:'10px 16px', display:'flex', alignItems:'center', gap:10 }}>
+            <Marker.Star4 size={14} color={p.orange}/>
+            <span style={{ fontFamily:p.monoFont, fontSize:11, color:p.fg, letterSpacing:0.1 }}>STREAK ALLENAMENTO</span>
+            <span style={{ flex:1 }}/>
+            <span style={{ fontFamily:p.displayFont, fontSize:26, fontWeight:800, color:p.orange }}>7</span>
+            <span style={{ fontFamily:p.monoFont, fontSize:9, color:p.muted }}>GIORNI</span>
+          </div>
+        </NeonGlass>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:3, marginTop:16 }}>
+          {dNames.map(d=><div key={d} style={{ textAlign:'center', fontFamily:p.monoFont, fontSize:9, color:p.dim, padding:'4px 0' }}>{d}</div>)}
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:3, marginTop:2 }}>
+          {Array.from({length:offset}).map((_,i)=><div key={`e${i}`}/>)}
+          {Array.from({length:dim}).map((_,i)=>{
+            const day=i+1;
+            const isToday=day===today.getDate()&&vm===today.getMonth()&&vy===today.getFullYear();
+            const isSel=day===selDay;
+            const hasFit=workoutDays.includes(day);
+            const mood=moodMap[day];
+            return (
+              <button key={day} onClick={()=>setSelDay(day)} style={{
+                border:`1px solid ${isToday?'rgba(166,255,0,0.6)':isSel?'rgba(255,106,0,0.6)':'transparent'}`,
+                cursor:'pointer', borderRadius:12, padding:'8px 2px', background:isSel?'rgba(255,106,0,0.22)':isToday?'rgba(166,255,0,0.12)':'transparent',
+                display:'flex', flexDirection:'column', alignItems:'center', gap:3,
+              }}>
+                <span style={{ fontFamily:p.monoFont, fontSize:12, fontWeight:isToday||isSel?700:400, color:isToday?p.green:isSel?p.orange:p.fg }}>{day}</span>
+                <div style={{ display:'flex', gap:2 }}>
+                  {hasFit&&<div style={{ width:4,height:4,borderRadius:'50%',background:p.orange }}/>}
+                  {mood&&<div style={{ width:4,height:4,borderRadius:'50%',background:mc[mood] }}/>}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ display:'flex', gap:12, marginTop:12, flexWrap:'wrap' }}>
+          {[['Allenamento',p.orange],['Mood top',p.cyan],['Mood bene',p.green],['Mood ok','#ffd400']].map(([l,c])=>(
+            <div key={l} style={{ display:'flex', alignItems:'center', gap:5 }}>
+              <div style={{ width:6,height:6,borderRadius:'50%',background:c }}/>
+              <span style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim }}>{l}</span>
+            </div>
+          ))}
+        </div>
+        {selDay && (
+          <NeonGlass style={{ marginTop:14 }} tint="rgba(255,255,255,0.04)" radius={20}>
+            <div style={{ padding:'14px 16px' }}>
+              <div style={{ fontFamily:p.monoFont, fontSize:10, color:p.orange, textTransform:'uppercase' }}>{selDay} {mNames[vm]}</div>
+              <div style={{ marginTop:6, fontFamily:p.bodyFont, fontSize:14, color:workoutDays.includes(selDay)?p.orange:p.muted }}>
+                {workoutDays.includes(selDay)?'⚡ Allenamento completato':'Nessun allenamento'}
+              </div>
+              {moodMap[selDay]&&<div style={{ marginTop:4, fontFamily:p.monoFont, fontSize:10, color:mc[moodMap[selDay]] }}>MOOD: {moodMap[selDay].toUpperCase()}</div>}
+            </div>
+          </NeonGlass>
+        )}
+        <SectionLabel num="01" title="COUNTDOWN" hint="prossimi"/>
+        {[{g:14,l:'Anniversario · 3 anni',s:'21 maggio'},{g:28,l:'Fine cut Q2',s:'obiettivo 82 kg'}].map(({g,l,s})=>(
+          <NeonGlass key={l} style={{ marginTop:8 }} tint="rgba(255,255,255,0.04)" radius={18}>
+            <div style={{ padding:'12px 16px', display:'flex', alignItems:'center', gap:12 }}>
+              <div style={{ fontFamily:p.displayFont, fontSize:36, fontWeight:800, color:p.orange, lineHeight:1, minWidth:52 }}>{g}<span style={{ fontSize:11,color:p.muted,fontFamily:p.monoFont }}>g</span></div>
+              <div><div style={{ fontFamily:p.displayFont, fontWeight:700, fontSize:15, textTransform:'uppercase' }}>{l}</div><div style={{ fontFamily:p.monoFont, fontSize:9.5, color:p.muted, marginTop:2 }}>{s}</div></div>
+            </div>
+          </NeonGlass>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Brain Screen ─────────────────────────────────────────────────────────────
+function BrainScreen() {
+  const [search, setSearch] = useState('');
+  const [activeTag, setActiveTag] = useState(null);
+  const [showNew, setShowNew] = useState(false);
+  const [newNote, setNewNote] = useState('');
+  const tags = ['idea','progetto','fitness','lavoro','personale','mindfulness'];
+  const tc = { idea:p.cyan, progetto:p.orange, fitness:p.green, lavoro:'#ffd400', personale:p.magenta, mindfulness:'#a78bfa' };
+  const notes = [
+    {id:1,title:'Sistema tracking kcal',body:'Usare pasti default pre-impostati nel tracker…',tags:['progetto','fitness'],date:'06 MAG'},
+    {id:2,title:'Idea pitch cliente Y',body:'Landing page + video testimonial + funnel email…',tags:['lavoro','idea'],date:'05 MAG'},
+    {id:3,title:'Mindfulness mattina',body:'Fai caso a come reagisci quando qualcuno ti interrompe…',tags:['mindfulness','personale'],date:'05 MAG'},
+    {id:4,title:'Allenamento PPL split',body:'Push: panca + shoulder press + tricep. Pull: trazioni…',tags:['fitness'],date:'04 MAG'},
+    {id:5,title:'Claude Code workflow',body:'Usare index.html monolitico per prototipare veloce…',tags:['idea','progetto'],date:'03 MAG'},
+  ];
+  const filtered = notes.filter(n => {
+    const ms = !search || n.title.toLowerCase().includes(search.toLowerCase()) || n.body.toLowerCase().includes(search.toLowerCase());
+    const mt = !activeTag || n.tags.includes(activeTag);
+    return ms && mt;
+  });
+  return (
+    <div style={{ position:'absolute', inset:0, overflow:'auto', background:p.bg, color:p.fg, fontFamily:p.bodyFont }}>
+      {[{t:-80,l:-60,w:260,c:'#6b00ff',o:0.55},{t:400,r:-80,w:280,c:'#00f0ff',o:0.4}].map((orb,i)=>(
+        <div key={i} style={{ position:'absolute',top:orb.t,left:orb.l,right:orb.r,width:orb.w,height:orb.w,borderRadius:'50%',
+          background:`radial-gradient(circle, ${orb.c} 0%, transparent 65%)`,filter:'blur(65px)',opacity:orb.o,zIndex:0,pointerEvents:'none'}} />
+      ))}
+      <div style={{ position:'relative', zIndex:2, padding:'56px 18px 130px' }}>
+        <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', marginTop:8 }}>
+          <div>
+            <div style={{ fontFamily:p.monoFont, fontSize:10, color:p.cyan, textTransform:'uppercase', letterSpacing:0.2, display:'flex', alignItems:'center', gap:6 }}>
+              <Marker.Diamond size={8} color={p.cyan}/> SECOND BRAIN
+            </div>
+            <div style={{ fontFamily:p.displayFont, fontWeight:700, fontSize:38, letterSpacing:-1.2, textTransform:'uppercase', lineHeight:0.92, marginTop:6 }}>
+              BRAIN<br/><span style={{ color:p.cyan }}>DUMP.</span>
+            </div>
+          </div>
+          <NeonGlass radius={16} onClick={()=>setShowNew(true)} tint="rgba(0,240,255,0.12)" edge="rgba(0,240,255,0.4)">
+            <div style={{ padding:'10px 16px', fontFamily:p.monoFont, fontSize:10, color:p.cyan, letterSpacing:0.15, textTransform:'uppercase' }}>+ NOTA</div>
+          </NeonGlass>
+        </div>
+        <NeonGlass style={{ marginTop:18 }} tint="linear-gradient(135deg,rgba(107,0,255,0.28),rgba(0,240,255,0.14))" edge="rgba(107,0,255,0.5)" glow="#6b00ff" radius={22}>
+          <div style={{ padding:'14px 16px' }}>
+            <div style={{ fontFamily:p.monoFont, fontSize:9.5, color:'#a78bfa', letterSpacing:0.2, textTransform:'uppercase', marginBottom:8, display:'flex', alignItems:'center', gap:6 }}>
+              <Marker.Star4 size={10} color="#a78bfa"/> MINDFULNESS DI OGGI
+            </div>
+            <div style={{ fontFamily:p.bodyFont, fontSize:14, color:p.fg, lineHeight:1.4, fontStyle:'italic' }}>
+              "Fai caso a come risponde il tuo corpo dopo il primo caffè mattutino."
+            </div>
+            <NeonGlass style={{ marginTop:12 }} radius={12} tint="rgba(107,0,255,0.2)" edge="rgba(107,0,255,0.4)">
+              <div style={{ padding:'9px 14px', fontFamily:p.monoFont, fontSize:10, color:'#a78bfa', textAlign:'center', textTransform:'uppercase' }}>↵ Rispondi nel brain</div>
+            </NeonGlass>
+          </div>
+        </NeonGlass>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Cerca nel brain…"
+          style={{ width:'100%', padding:'12px 16px', borderRadius:16, border:`1px solid ${p.border}`, background:'rgba(255,255,255,0.05)', color:p.fg, fontFamily:p.bodyFont, fontSize:15, outline:0, marginTop:16 }} />
+        <div style={{ display:'flex', gap:6, marginTop:10, flexWrap:'wrap' }}>
+          {tags.map(t=>(
+            <button key={t} onClick={()=>setActiveTag(activeTag===t?null:t)} style={{
+              padding:'5px 12px', borderRadius:99, border:`1px solid ${activeTag===t?tc[t]:'rgba(255,255,255,0.12)'}`,
+              background:activeTag===t?`${tc[t]}22`:'transparent', color:activeTag===t?tc[t]:p.muted,
+              fontFamily:p.monoFont, fontSize:9.5, letterSpacing:0.12, textTransform:'uppercase', cursor:'pointer',
+            }}>{t}</button>
+          ))}
+        </div>
+        <SectionLabel num="01" title="NOTE" hint={`${filtered.length} risultati`}/>
+        <div style={{ display:'flex', flexDirection:'column', gap:8, marginTop:8 }}>
+          {filtered.map(note=>(
+            <NeonGlass key={note.id} tint="rgba(255,255,255,0.04)" radius={20}>
+              <div style={{ padding:'14px 16px' }}>
+                <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:8 }}>
+                  <div style={{ fontFamily:p.displayFont, fontWeight:700, fontSize:16, textTransform:'uppercase', letterSpacing:-0.2, flex:1 }}>{note.title}</div>
+                  <span style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim, flexShrink:0, marginTop:2 }}>{note.date}</span>
+                </div>
+                <div style={{ fontFamily:p.bodyFont, fontSize:13, color:p.muted, marginTop:4, lineHeight:1.35 }}>{note.body}</div>
+                <div style={{ display:'flex', gap:5, marginTop:8 }}>
+                  {note.tags.map(t=><span key={t} style={{ padding:'2px 8px', borderRadius:99, background:`${tc[t]}22`, color:tc[t], fontFamily:p.monoFont, fontSize:8.5 }}>{t}</span>)}
+                </div>
+              </div>
+            </NeonGlass>
+          ))}
+        </div>
+        <NeonGlass style={{ marginTop:16 }} tint="linear-gradient(90deg,rgba(0,240,255,0.18),rgba(107,0,255,0.14))" edge="rgba(0,240,255,0.4)" glow="#00f0ff" radius={18}>
+          <div style={{ padding:'14px 18px', display:'flex', alignItems:'center', gap:12 }}>
+            <Marker.Hex size={16} color={p.cyan}/>
+            <div style={{ flex:1 }}>
+              <div style={{ fontFamily:p.monoFont, fontSize:10, color:p.cyan, letterSpacing:0.18, textTransform:'uppercase' }}>AI GROQ · ANALISI</div>
+              <div style={{ fontFamily:p.bodyFont, fontSize:12, color:p.muted, marginTop:2 }}>Chiedi, riorganizza, trova pattern</div>
+            </div>
+            <span style={{ fontFamily:p.monoFont, fontSize:18, color:p.cyan }}>→</span>
+          </div>
+        </NeonGlass>
+      </div>
+      {showNew&&(
+        <div onClick={()=>setShowNew(false)} style={{ position:'absolute',inset:0,zIndex:100,background:'rgba(0,0,0,0.65)',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',display:'flex',alignItems:'flex-end' }}>
+          <div onClick={e=>e.stopPropagation()} style={{ width:'100%',padding:'24px 20px 110px',background:p.captureBg,borderTop:`1px solid ${p.border}`,borderTopLeftRadius:28,borderTopRightRadius:28 }}>
+            <div style={{ fontFamily:p.monoFont, fontSize:10, color:p.cyan, textTransform:'uppercase', marginBottom:14 }}>+ NUOVA NOTA</div>
+            <textarea value={newNote} onChange={e=>setNewNote(e.target.value)} placeholder="Scrivi qui…" rows={6}
+              style={{ width:'100%',resize:'none',border:0,outline:0,background:'transparent',color:p.fg,fontFamily:p.bodyFont,fontSize:16,lineHeight:1.4 }}/>
+            <div style={{ display:'flex', gap:8, marginTop:12 }}>
+              <button onClick={()=>setShowNew(false)} style={{ padding:'11px 18px',borderRadius:14,border:0,cursor:'pointer',background:'rgba(255,255,255,0.08)',color:p.fg,fontFamily:p.monoFont,fontSize:11,textTransform:'uppercase' }}>Esc</button>
+              <div style={{ flex:1 }}/>
+              <button style={{ padding:'11px 22px',borderRadius:14,border:0,cursor:'pointer',background:p.cyan,color:'#0a0a0a',fontFamily:p.monoFont,fontSize:11,textTransform:'uppercase',fontWeight:800 }}>↵ Salva</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Me sub-tabs ──────────────────────────────────────────────────────────────
+function CiboTab() {
+  const [mode, setMode] = useState('cut');
+  const [caffeine, setCaffeine] = useState(1);
+  const kcalEaten=1840, kcalTarget=2050, kcalLeft=kcalTarget-kcalEaten;
+  const pct=Math.min(100,Math.round((kcalEaten/kcalTarget)*100));
+  const meals=[
+    {name:'COLAZIONE',kcal:520,pr:42,c:68,g:12,done:true},
+    {name:'PRANZO',kcal:620,pr:58,c:74,g:18,done:true},
+    {name:'MERENDA',kcal:240,pr:28,c:18,g:8,done:false},
+    {name:'CENA',kcal:460,pr:52,c:38,g:14,done:false},
+  ];
+  return (
+    <div>
+      <SectionLabel num="01" title="MODALITÀ" hint=""/>
+      <div style={{ display:'flex', gap:6, marginTop:8 }}>
+        {['bulk','cut','mantenimento'].map(m=>(
+          <button key={m} onClick={()=>setMode(m)} style={{ flex:1,padding:'9px 4px',borderRadius:14,border:`1px solid ${mode===m?p.orange:'rgba(255,255,255,0.1)'}`,background:mode===m?'rgba(255,106,0,0.2)':'transparent',color:mode===m?p.orange:p.muted,cursor:'pointer',fontFamily:p.monoFont,fontSize:8.5,letterSpacing:0.1,textTransform:'uppercase' }}>{m}</button>
+        ))}
+      </div>
+      <SectionLabel num="02" title="KCAL" hint={`target ${kcalTarget}`}/>
+      <NeonGlass style={{ marginTop:8 }} tint="linear-gradient(135deg,rgba(255,106,0,0.28),rgba(255,212,0,0.1))" edge="rgba(255,106,0,0.5)" glow="#ff6a00" radius={22}>
+        <div style={{ padding:'16px' }}>
+          <div style={{ display:'flex', alignItems:'flex-end', gap:12 }}>
+            <div style={{ fontFamily:p.displayFont, fontSize:52, fontWeight:800, letterSpacing:-2, lineHeight:0.88 }}>{kcalEaten}</div>
+            <div style={{ fontFamily:p.monoFont, fontSize:11, color:p.muted, paddingBottom:6 }}>/ {kcalTarget} kcal</div>
+          </div>
+          <div style={{ height:6, marginTop:14, borderRadius:99, background:'rgba(255,255,255,0.08)', overflow:'hidden' }}>
+            <div style={{ height:'100%',width:`${pct}%`,borderRadius:99,background:'linear-gradient(90deg,#ffd400,#ff6a00,#ff0040)',boxShadow:'0 0 10px #ff6a00' }}/>
+          </div>
+          <div style={{ display:'flex', justifyContent:'space-between', marginTop:10, fontFamily:p.monoFont, fontSize:10 }}>
+            <span style={{ color:p.fg }}>P <strong>142g</strong></span>
+            <span style={{ color:p.fg }}>C <strong>198g</strong></span>
+            <span style={{ color:p.fg }}>G <strong>62g</strong></span>
+            <span style={{ color:kcalLeft>0?p.green:p.red }}>{kcalLeft>0?`−${kcalLeft}`:`+${Math.abs(kcalLeft)}`} kcal</span>
+          </div>
+        </div>
+      </NeonGlass>
+      <SectionLabel num="03" title="CAFFEINA" hint="max 3"/>
+      <NeonGlass style={{ marginTop:8 }} tint="rgba(255,255,255,0.04)" radius={18}>
+        <div style={{ padding:'12px 16px', display:'flex', gap:8, alignItems:'center' }}>
+          {['☕ Caffè','🍵 Tè','⚡ Monster'].map(label=>(
+            <button key={label} onClick={()=>setCaffeine(c=>Math.min(3,c+1))} style={{ flex:1,padding:'10px 4px',borderRadius:14,border:'1px solid rgba(255,212,0,0.3)',background:'rgba(255,212,0,0.08)',color:p.fg,cursor:'pointer',fontFamily:p.monoFont,fontSize:9.5,textTransform:'uppercase' }}>{label}</button>
+          ))}
+          <div style={{ fontFamily:p.displayFont, fontSize:26, fontWeight:800, color:caffeine>=3?p.red:p.fg, minWidth:28, textAlign:'center' }}>{caffeine}</div>
+        </div>
+      </NeonGlass>
+      <SectionLabel num="04" title="PASTI" hint="oggi"/>
+      <div style={{ display:'flex', flexDirection:'column', gap:6, marginTop:8 }}>
+        {meals.map(meal=>(
+          <NeonGlass key={meal.name} tint={meal.done?'rgba(166,255,0,0.08)':'rgba(255,255,255,0.03)'} edge={meal.done?'rgba(166,255,0,0.3)':undefined} radius={18}>
+            <div style={{ padding:'12px 14px', display:'flex', alignItems:'center', gap:10 }}>
+              <div style={{ width:12,height:12,borderRadius:4,border:`1.5px solid ${meal.done?p.green:p.muted}`,background:meal.done?p.green:'transparent',flexShrink:0 }}/>
+              <div style={{ flex:1 }}>
+                <div style={{ fontFamily:p.monoFont, fontSize:10, letterSpacing:0.15, color:meal.done?p.fg:p.muted, textTransform:'uppercase' }}>{meal.name}</div>
+                <div style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim, marginTop:2 }}>P {meal.pr}g · C {meal.c}g · G {meal.g}g</div>
+              </div>
+              <div style={{ fontFamily:p.displayFont, fontSize:20, fontWeight:700, color:meal.done?p.fg:p.muted }}>{meal.kcal}</div>
+            </div>
+          </NeonGlass>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FitnessTab() {
+  const [workout, setWorkout] = useState(null);
+  const prs=[{n:'Panca Piana',v:'95',u:'kg'},{n:'Squat',v:'120',u:'kg'},{n:'Pressa',v:'200',u:'kg'},{n:'Stacco',v:'140',u:'kg'}];
+  return (
+    <div>
+      <SectionLabel num="01" title="ALLENAMENTO OGGI" hint=""/>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginTop:8 }}>
+        {['PUSH','PULL','LEGS','CARDIO'].map(w=>(
+          <NeonGlass key={w} onClick={()=>setWorkout(workout===w?null:w)} tint={workout===w?'rgba(255,106,0,0.22)':'rgba(255,255,255,0.04)'} edge={workout===w?'rgba(255,106,0,0.6)':undefined} radius={18}>
+            <div style={{ padding:'16px', textAlign:'center', fontFamily:p.displayFont, fontWeight:700, fontSize:20, textTransform:'uppercase', color:workout===w?p.orange:p.muted }}>{w}</div>
+          </NeonGlass>
+        ))}
+      </div>
+      <SectionLabel num="02" title="PERSONAL RECORDS" hint="aggiorna"/>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginTop:8 }}>
+        {prs.map(pr=>(
+          <NeonGlass key={pr.n} tint="rgba(255,255,255,0.04)" radius={18}>
+            <div style={{ padding:'12px 14px' }}>
+              <div style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim, textTransform:'uppercase', letterSpacing:0.15 }}>{pr.n}</div>
+              <div style={{ fontFamily:p.displayFont, fontSize:30, fontWeight:800, color:p.fg, marginTop:4 }}>{pr.v}<span style={{ fontSize:12,color:p.muted }}>{pr.u}</span></div>
+            </div>
+          </NeonGlass>
+        ))}
+      </div>
+      <SectionLabel num="03" title="CARDIO" hint="stima kcal"/>
+      <NeonGlass style={{ marginTop:8 }} tint="rgba(255,255,255,0.04)" radius={18}>
+        <div style={{ padding:'14px 16px', display:'flex', gap:10 }}>
+          {[['PENDENZA','3%'],['VELOCITÀ','6.5 km/h'],['KCAL EST.','285']].map(([l,v],i)=>(
+            <div key={l} style={{ flex:1 }}>
+              <div style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim, textTransform:'uppercase' }}>{l}</div>
+              <div style={{ fontFamily:p.displayFont, fontSize:26, fontWeight:700, color:i===2?p.orange:p.fg, marginTop:4 }}>{v}</div>
+            </div>
+          ))}
+        </div>
+      </NeonGlass>
+    </div>
+  );
+}
+
+function MoodTab() {
+  const [morning, setMorning] = useState(null);
+  const [evening, setEvening] = useState(null);
+  const [note, setNote] = useState('');
+  const moods=[{id:'awful',c:p.red,l:'GIÙ'},{id:'bad',c:p.orange,l:'STANCO'},{id:'meh',c:'#ffd400',l:'OK'},{id:'good',c:p.green,l:'BENE'},{id:'great',c:p.cyan,l:'TOP'}];
+  const mc2={awful:p.red,bad:p.orange,meh:'#ffd400',good:p.green,great:p.cyan};
+  const heatmap=[['great','good','great','meh','great','good','bad'],['great','good','meh','good','great','great','good'],['meh','bad','good','great','good','good','good'],['good','great','great','good','meh',null,null]];
+  const MoodPicker=({value,onChange,label})=>(
+    <div>
+      <div style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim, textTransform:'uppercase', letterSpacing:0.15, marginBottom:8 }}>{label}</div>
+      <div style={{ display:'flex', justifyContent:'space-between' }}>
+        {moods.map(m=>{
+          const active=value===m.id;
+          return(
+            <button key={m.id} onClick={()=>onChange(m.id)} style={{ border:0,background:'transparent',cursor:'pointer',padding:4,display:'flex',flexDirection:'column',alignItems:'center',gap:5,opacity:active?1:(value?0.38:0.85),transform:active?'scale(1.15)':'scale(1)',transition:'all .2s' }}>
+              <MoodFace mood={m.id} bg={m.c} color="#0a0a0a" size={36}/>
+              <span style={{ fontFamily:p.monoFont, fontSize:8, color:active?m.c:p.dim }}>{m.l}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+  return (
+    <div>
+      <SectionLabel num="01" title="LOG OGGI" hint=""/>
+      <NeonGlass style={{ marginTop:8 }} tint="rgba(255,255,255,0.04)" radius={22}>
+        <div style={{ padding:'16px' }}>
+          <MoodPicker value={morning} onChange={setMorning} label="MATTINA"/>
+          <div style={{ height:1,background:p.border,margin:'14px 0' }}/>
+          <MoodPicker value={evening} onChange={setEvening} label="SERA"/>
+          <textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="Cosa ha influenzato il tuo umore?" rows={3}
+            style={{ width:'100%',resize:'none',border:`1px solid ${p.border}`,outline:0,borderRadius:14,marginTop:14,padding:'10px 14px',background:'rgba(255,255,255,0.04)',color:p.fg,fontFamily:p.bodyFont,fontSize:14 }}/>
+        </div>
+      </NeonGlass>
+      <SectionLabel num="02" title="HEATMAP" hint="4 settimane"/>
+      <NeonGlass style={{ marginTop:8 }} tint="rgba(255,255,255,0.04)" radius={22}>
+        <div style={{ padding:'14px 16px' }}>
+          <div style={{ display:'flex', gap:3, marginBottom:6 }}>
+            {['LU','MA','ME','GI','VE','SA','DO'].map(d=><div key={d} style={{ flex:1,textAlign:'center',fontFamily:p.monoFont,fontSize:8,color:p.dim }}>{d}</div>)}
+          </div>
+          {heatmap.map((week,wi)=>(
+            <div key={wi} style={{ display:'flex', gap:3, marginBottom:3 }}>
+              {week.map((m,di)=>(
+                <div key={di} style={{ flex:1,height:22,borderRadius:6,background:m?`${mc2[m]}55`:'rgba(255,255,255,0.04)',border:m?`1px solid ${mc2[m]}44`:'1px solid transparent' }}/>
+              ))}
+            </div>
+          ))}
+        </div>
+      </NeonGlass>
+    </div>
+  );
+}
+
+function HabitsTab() {
+  const [habits, setHabits] = useState([true,true,false,false,false,false]);
+  const goodH=[{n:'Stretching',s:28,xp:15},{n:'No scroll a letto',s:14,xp:20},{n:'Luci rosse sera',s:6,xp:10},{n:'Candle prima dormire',s:3,xp:10}];
+  const badH=[{n:'Fumo',xp:50},{n:'Junk food',xp:30}];
+  const toggle=i=>setHabits(prev=>prev.map((v,ix)=>ix===i?!v:v));
+  const totalXP=habits.reduce((acc,v,i)=>{
+    if(!v) return acc;
+    const h=i<goodH.length?goodH[i]:badH[i-goodH.length];
+    return acc+(h?h.xp:0);
+  },0);
+  return (
+    <div>
+      <SectionLabel num="01" title="GOOD HABITS" hint={`+${totalXP} XP oggi`}/>
+      <div style={{ display:'flex', flexDirection:'column', gap:6, marginTop:8 }}>
+        {goodH.map((h,i)=>{
+          const on=habits[i];
+          return(
+            <NeonGlass key={h.n} onClick={()=>toggle(i)} tint={on?'rgba(166,255,0,0.1)':'rgba(255,255,255,0.03)'} edge={on?'rgba(166,255,0,0.4)':undefined} radius={18}>
+              <div style={{ padding:'12px 14px', display:'flex', alignItems:'center', gap:10 }}>
+                <div style={{ width:18,height:18,borderRadius:6,border:`1.5px solid ${on?p.green:p.muted}`,background:on?p.green:'transparent',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',color:'#0a0a0a',fontSize:11,fontWeight:900,boxShadow:on?`0 0 10px ${p.green}`:'none' }}>{on?'✓':''}</div>
+                <div style={{ flex:1, fontFamily:p.bodyFont, fontWeight:600, fontSize:13, color:on?p.fg:p.muted, textTransform:'uppercase' }}>{h.n}</div>
+                <span style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim }}>×{h.s}</span>
+                <span style={{ fontFamily:p.monoFont, fontSize:9, color:p.green }}>+{h.xp}xp</span>
+              </div>
+            </NeonGlass>
+          );
+        })}
+      </div>
+      <SectionLabel num="02" title="BAD HABITS" hint="rimozione"/>
+      <div style={{ display:'flex', flexDirection:'column', gap:6, marginTop:8 }}>
+        {badH.map((h,i)=>{
+          const idx=goodH.length+i;
+          const avoided=habits[idx];
+          return(
+            <NeonGlass key={h.n} onClick={()=>toggle(idx)} tint={avoided?'rgba(166,255,0,0.08)':'rgba(255,0,64,0.08)'} edge={avoided?'rgba(166,255,0,0.3)':'rgba(255,0,64,0.3)'} radius={18}>
+              <div style={{ padding:'12px 14px', display:'flex', alignItems:'center', gap:10 }}>
+                <div style={{ width:18,height:18,borderRadius:6,border:`1.5px solid ${avoided?p.green:p.red}`,background:'transparent',flexShrink:0 }}/>
+                <div style={{ flex:1, fontFamily:p.bodyFont, fontWeight:600, fontSize:13, color:p.fg, textTransform:'uppercase' }}>{h.n}</div>
+                <span style={{ fontFamily:p.monoFont, fontSize:9, color:avoided?p.green:p.red }}>{avoided?'EVITATO ✓':'RESISTERE!'}</span>
+                <span style={{ fontFamily:p.monoFont, fontSize:9, color:p.green }}>+{h.xp}xp</span>
+              </div>
+            </NeonGlass>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Me Screen ────────────────────────────────────────────────────────────────
+function MeScreen() {
+  const [tab, setTab] = useState('cibo');
+  const tabs=[{id:'cibo',l:'CIBO'},{id:'fitness',l:'FIT'},{id:'mood',l:'MOOD'},{id:'habits',l:'HABIT'}];
+  return (
+    <div style={{ position:'absolute', inset:0, overflow:'auto', background:p.bg, color:p.fg, fontFamily:p.bodyFont }}>
+      {[{t:-80,r:-80,w:280,c:'#ff14b8',o:0.55},{t:350,l:-80,w:260,c:'#ff6a00',o:0.4}].map((orb,i)=>(
+        <div key={i} style={{ position:'absolute',top:orb.t,left:orb.l,right:orb.r,width:orb.w,height:orb.w,borderRadius:'50%',
+          background:`radial-gradient(circle, ${orb.c} 0%, transparent 65%)`,filter:'blur(65px)',opacity:orb.o,zIndex:0,pointerEvents:'none'}} />
+      ))}
+      <div style={{ position:'relative', zIndex:2, padding:'56px 18px 130px' }}>
+        <div style={{ marginTop:8 }}>
+          <div style={{ fontFamily:p.monoFont, fontSize:10, color:p.magenta, textTransform:'uppercase', letterSpacing:0.2, display:'flex', alignItems:'center', gap:6 }}>
+            <Marker.Diamond size={8} color={p.magenta}/> PROFILO · ME
+          </div>
+          <div style={{ fontFamily:p.displayFont, fontWeight:700, fontSize:38, letterSpacing:-1.2, textTransform:'uppercase', lineHeight:0.92, marginTop:6 }}>
+            AARON<br/><span style={{ color:p.magenta }}>84.8 KG.</span>
+          </div>
+        </div>
+        <div style={{ display:'flex', gap:5, marginTop:18 }}>
+          {tabs.map(t=>(
+            <button key={t.id} onClick={()=>setTab(t.id)} style={{ flex:1,padding:'9px 4px',borderRadius:14,border:`1px solid ${tab===t.id?p.magenta:'rgba(255,255,255,0.1)'}`,background:tab===t.id?'rgba(255,20,184,0.18)':'transparent',color:tab===t.id?p.fg:p.muted,cursor:'pointer',fontFamily:p.monoFont,fontSize:9,letterSpacing:0.12,textTransform:'uppercase' }}>{t.l}</button>
+          ))}
+        </div>
+        {tab==='cibo'&&<CiboTab/>}
+        {tab==='fitness'&&<FitnessTab/>}
+        {tab==='mood'&&<MoodTab/>}
+        {tab==='habits'&&<HabitsTab/>}
+      </div>
+    </div>
+  );
+}
+
+// ─── Focus Screen ─────────────────────────────────────────────────────────────
+function FocusScreen({ onBack }) {
+  const WORK=25*60, SHORT=5*60, LONG=15*60;
+  const [phase, setPhase] = useState('idle');
+  const [timeLeft, setTimeLeft] = useState(WORK);
+  const [session, setSession] = useState(0);
+
+  useEffect(() => {
+    if (phase==='idle') return;
+    const id = setInterval(()=>setTimeLeft(t=>t>1?t-1:0), 1000);
+    return ()=>clearInterval(id);
+  }, [phase]);
+
+  useEffect(() => {
+    if (timeLeft!==0||phase==='idle') return;
+    if (phase==='work') {
+      setSession(s=>{
+        const next=s+1;
+        setPhase('break');
+        setTimeLeft(next%4===0?LONG:SHORT);
+        return next;
+      });
+    } else {
+      setPhase('idle');
+      setTimeLeft(WORK);
+    }
+  }, [timeLeft, phase]);
+
+  const mins=String(Math.floor(timeLeft/60)).padStart(2,'0');
+  const secs=String(timeLeft%60).padStart(2,'0');
+  const total=phase==='break'?(session%4===0?LONG:SHORT):WORK;
+  const progress=phase==='idle'?0:1-timeLeft/total;
+  const circ=2*Math.PI*90;
+  const strokeColor=phase==='break'?p.green:p.orange;
+
+  return (
+    <div style={{ position:'absolute', inset:0, background:p.bg, color:p.fg, fontFamily:p.bodyFont, display:'flex', flexDirection:'column' }}>
+      {[{t:-80,l:-80,w:300,c:'#ff0040',o:0.6},{b:100,r:-80,w:260,c:'#ff6a00',o:0.45}].map((orb,i)=>(
+        <div key={i} style={{ position:'absolute',top:orb.t,bottom:orb.b,left:orb.l,right:orb.r,width:orb.w,height:orb.w,borderRadius:'50%',
+          background:`radial-gradient(circle, ${orb.c} 0%, transparent 65%)`,filter:'blur(65px)',opacity:orb.o,zIndex:0,pointerEvents:'none'}} />
+      ))}
+      <div style={{ position:'relative', zIndex:2, padding:'56px 18px 0', display:'flex', alignItems:'center' }}>
+        <button onClick={onBack} style={{ border:0,background:'transparent',cursor:'pointer',color:p.muted,fontFamily:p.monoFont,fontSize:11,letterSpacing:0.15,textTransform:'uppercase' }}>← BACK</button>
+        <div style={{ flex:1 }}/>
+        <div style={{ fontFamily:p.monoFont, fontSize:10, color:p.orange, textTransform:'uppercase', letterSpacing:0.2 }}>FOCUS · POMODORO</div>
+      </div>
+      <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', position:'relative', zIndex:2 }}>
+        <div style={{ position:'relative', width:220, height:220 }}>
+          <svg width="220" height="220" style={{ transform:'rotate(-90deg)' }}>
+            <circle cx="110" cy="110" r="90" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="4"/>
+            <circle cx="110" cy="110" r="90" fill="none" stroke={strokeColor} strokeWidth="4"
+              strokeDasharray={circ} strokeDashoffset={circ*(1-progress)} strokeLinecap="round"
+              style={{ transition:'stroke-dashoffset 1s linear', filter:`drop-shadow(0 0 8px ${strokeColor})` }}/>
+          </svg>
+          <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center' }}>
+            <div style={{ fontFamily:p.displayFont, fontSize:58, fontWeight:800, letterSpacing:-3, lineHeight:1 }}>{mins}:{secs}</div>
+            <div style={{ fontFamily:p.monoFont, fontSize:10, color:p.muted, textTransform:'uppercase', letterSpacing:0.2, marginTop:6 }}>
+              {phase==='idle'?'PRONTO':phase==='work'?'LAVORO':'PAUSA'}
+            </div>
+          </div>
+        </div>
+        <div style={{ fontFamily:p.monoFont, fontSize:9.5, color:p.dim, marginTop:20, letterSpacing:0.15 }}>SESSIONE {session+1} · {session} completate</div>
+        <div style={{ display:'flex', gap:10, marginTop:28 }}>
+          {phase==='idle'?(
+            <NeonGlass onClick={()=>{setPhase('work');setTimeLeft(WORK);}} tint="linear-gradient(135deg,rgba(255,0,64,0.3),rgba(255,106,0,0.2))" edge="rgba(255,106,0,0.6)" glow="#ff6a00" radius={20}>
+              <div style={{ padding:'14px 36px', fontFamily:p.monoFont, fontSize:12, letterSpacing:0.2, fontWeight:700, textTransform:'uppercase', color:p.fg }}>▶ INIZIA</div>
+            </NeonGlass>
+          ):(
+            <NeonGlass onClick={()=>{setPhase('idle');setTimeLeft(WORK);}} tint="rgba(255,255,255,0.06)" radius={20}>
+              <div style={{ padding:'14px 32px', fontFamily:p.monoFont, fontSize:12, letterSpacing:0.2, textTransform:'uppercase', color:p.muted }}>■ STOP</div>
+            </NeonGlass>
+          )}
+        </div>
+      </div>
+      <div style={{ position:'relative', zIndex:2, padding:'0 18px 50px' }}>
+        <NeonGlass tint="rgba(255,255,255,0.04)" radius={18}>
+          <div style={{ padding:'12px 16px', fontFamily:p.monoFont, fontSize:10, color:p.dim, textTransform:'uppercase', letterSpacing:0.15, display:'flex', alignItems:'center', gap:8 }}>
+            <Marker.Plus size={11} color={p.orange}/>
+            DUMP PENSIERO — scrivi dopo, non fermarti
+            <span style={{ flex:1 }}/><span style={{ color:p.orange }}>→</span>
+          </div>
+        </NeonGlass>
+      </div>
+    </div>
+  );
+}
+
+// ─── App ──────────────────────────────────────────────────────────────────────
+function App() {
+  const [screen, setScreen] = useState('home');
+  const [capture, setCapture] = useState(false);
+
+  const content = {
+    home:  <HomeScreen onNavigate={setScreen} />,
+    cal:   <CalendarScreen />,
+    brain: <BrainScreen />,
+    me:    <MeScreen />,
+    focus: <FocusScreen onBack={() => setScreen('home')} />,
+  };
+
+  return (
+    <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: p.bg }}>
+      {content[screen]}
+      <CaptureOverlay open={capture} onClose={() => setCapture(false)} />
+      {screen !== 'focus' && <BottomNav screen={screen} setScreen={setScreen} onCapture={() => setCapture(true)} />}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
