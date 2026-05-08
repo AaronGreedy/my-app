@@ -1,11 +1,117 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { p } from '@/lib/design';
 import { NeonGlass, SectionLabel } from '@/components/neon-glass';
 import { MarkerDiamond, MarkerStar4, MarkerHex } from '@/components/markers';
 import { useAuth } from '@/lib/auth-context';
-import { useNotes, useShoppingList, useGifts, Gift } from '@/lib/user-store';
+import { useNotes, useShoppingList, useGifts, Gift, BrainNote } from '@/lib/user-store';
+
+// ─── Note linking utilities ──────────────────────────────────────────────────
+
+function extractWikiLinks(body: string): string[] {
+  const out: string[] = [];
+  const re = /\[\[([^\]]+)\]\]/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(body))) {
+    const t = m[1].trim();
+    if (t) out.push(t);
+  }
+  return out;
+}
+
+function buildLinkGraph(notes: BrainNote[]) {
+  const titleToId = new Map<string, string>();
+  for (const n of notes) titleToId.set(n.title.toLowerCase().trim(), n.id);
+
+  // outgoing[noteId] = referenced note ids
+  const outgoing = new Map<string, Set<string>>();
+  // incoming[noteId] = ids that reference it
+  const incoming = new Map<string, Set<string>>();
+
+  for (const n of notes) {
+    const targets = new Set<string>();
+    for (const link of extractWikiLinks(n.body)) {
+      const tid = titleToId.get(link.toLowerCase());
+      if (tid && tid !== n.id) targets.add(tid);
+    }
+    outgoing.set(n.id, targets);
+    for (const t of targets) {
+      if (!incoming.has(t)) incoming.set(t, new Set());
+      incoming.get(t)!.add(n.id);
+    }
+  }
+  return { outgoing, incoming };
+}
+
+interface GraphNode { id: string; title: string; x: number; y: number; vx: number; vy: number; deg: number }
+
+function forceLayout(notes: BrainNote[], edges: [string, string][], W: number, H: number, iters = 80): GraphNode[] {
+  if (notes.length === 0) return [];
+  const cx = W / 2, cy = H / 2;
+  const R = Math.min(W, H) * 0.36;
+  const nodes: GraphNode[] = notes.map((n, i) => ({
+    id: n.id,
+    title: n.title,
+    x: cx + Math.cos((i / notes.length) * Math.PI * 2) * R,
+    y: cy + Math.sin((i / notes.length) * Math.PI * 2) * R,
+    vx: 0, vy: 0,
+    deg: 0,
+  }));
+  const idx = new Map(nodes.map((n, i) => [n.id, i]));
+  for (const [a, b] of edges) {
+    const ai = idx.get(a), bi = idx.get(b);
+    if (ai !== undefined) nodes[ai].deg++;
+    if (bi !== undefined) nodes[bi].deg++;
+  }
+
+  const REPEL = 4500;
+  const SPRING = 0.05;
+  const SPRING_LEN = 90;
+  const DAMP = 0.82;
+  const CENTER = 0.005;
+
+  for (let it = 0; it < iters; it++) {
+    // repulsive
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const dx = nodes[j].x - nodes[i].x;
+        const dy = nodes[j].y - nodes[i].y;
+        const d2 = Math.max(dx*dx + dy*dy, 1);
+        const d = Math.sqrt(d2);
+        const f = REPEL / d2;
+        const fx = (dx / d) * f, fy = (dy / d) * f;
+        nodes[i].vx -= fx; nodes[i].vy -= fy;
+        nodes[j].vx += fx; nodes[j].vy += fy;
+      }
+    }
+    // spring on edges
+    for (const [a, b] of edges) {
+      const ai = idx.get(a), bi = idx.get(b);
+      if (ai === undefined || bi === undefined) continue;
+      const dx = nodes[bi].x - nodes[ai].x;
+      const dy = nodes[bi].y - nodes[ai].y;
+      const d = Math.sqrt(dx*dx + dy*dy) || 0.1;
+      const f = (d - SPRING_LEN) * SPRING;
+      const fx = (dx / d) * f, fy = (dy / d) * f;
+      nodes[ai].vx += fx; nodes[ai].vy += fy;
+      nodes[bi].vx -= fx; nodes[bi].vy -= fy;
+    }
+    // pull to center
+    for (const n of nodes) {
+      n.vx += (cx - n.x) * CENTER;
+      n.vy += (cy - n.y) * CENTER;
+    }
+    // integrate + dampen + clamp
+    for (const n of nodes) {
+      n.vx *= DAMP; n.vy *= DAMP;
+      n.x += n.vx; n.y += n.vy;
+      n.x = Math.max(30, Math.min(W - 30, n.x));
+      n.y = Math.max(30, Math.min(H - 30, n.y));
+    }
+  }
+  return nodes;
+}
 
 const TAGS = ['idea','progetto','fitness','lavoro','personale','mindfulness'] as const;
 type Tag = typeof TAGS[number];
@@ -234,12 +340,30 @@ export function BrainScreen() {
   const { items, addItem, toggleItem, removeItem } = useShoppingList(user?.uid ?? null);
 
   const [section, setSection] = useState<'brain'|'spesa'|'regali'>('brain');
+  const [view, setView]     = useState<'list'|'graph'>('list');
   const [search, setSearch] = useState('');
   const [activeTag, setActiveTag] = useState<Tag | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [newBody, setNewBody] = useState('');
   const [newTags, setNewTags] = useState<Tag[]>([]);
   const [newItem, setNewItem] = useState('');
+
+  const linkGraph = useMemo(() => buildLinkGraph(notes), [notes]);
+  const idToTitle = useMemo(() => new Map(notes.map(n => [n.id, n.title])), [notes]);
+
+  const graphEdges = useMemo<[string,string][]>(() => {
+    const set = new Set<string>();
+    const edges: [string, string][] = [];
+    for (const [from, targets] of linkGraph.outgoing) {
+      for (const to of targets) {
+        const key = from < to ? `${from}|${to}` : `${to}|${from}`;
+        if (!set.has(key)) { set.add(key); edges.push([from, to]); }
+      }
+    }
+    return edges;
+  }, [linkGraph]);
+
+  const graphNodes = useMemo(() => view === 'graph' ? forceLayout(notes, graphEdges, 340, 360) : [], [view, notes, graphEdges]);
 
   const [showAi, setShowAi] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
@@ -359,35 +483,109 @@ export function BrainScreen() {
               ))}
             </div>
 
-            <SectionLabel num="01" title="NOTE" hint={`${filtered.length} nota${filtered.length!==1?'e':''}`}/>
+            <SectionLabel num="01" title="NOTE" hint={`${filtered.length} nota${filtered.length!==1?'e':''} · ${graphEdges.length} link`}/>
+
+            {/* List/Graph view toggle */}
+            <div style={{ display:'flex', gap:5, marginTop:8 }}>
+              {(['list','graph'] as const).map(v => (
+                <button key={v} onClick={() => setView(v)} style={{ flex:1, padding:'7px 4px', borderRadius:11, border:`1px solid ${view===v?p.cyan:'rgba(255,255,255,0.1)'}`, background:view===v?'rgba(0,240,255,0.12)':'transparent', color:view===v?p.cyan:p.muted, fontFamily:p.monoFont, fontSize:9, letterSpacing:0.12, textTransform:'uppercase', cursor:'pointer' }}>
+                  {v === 'list' ? '☰ LISTA' : '◇ GRAPH'}
+                </button>
+              ))}
+            </div>
 
             {filtered.length === 0 && (
               <div style={{ textAlign:'center', padding:'40px 0', fontFamily:p.monoFont, fontSize:11, color:p.dim }}>
-                nessuna nota · premi + NOTA per iniziare
+                nessuna nota · premi + NOTA per iniziare<br/>
+                <span style={{ fontSize:10 }}>tip: usa <code style={{ color:p.cyan }}>[[titolo]]</code> per linkare note tra loro</span>
               </div>
             )}
 
-            <div style={{ display:'flex', flexDirection:'column', gap:8, marginTop:8 }}>
-              {filtered.map(note => (
-                <NeonGlass key={note.id} tint="rgba(255,255,255,0.04)" radius={20}>
-                  <div style={{ padding:'14px 16px' }}>
-                    <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:8 }}>
-                      <div style={{ fontFamily:p.displayFont, fontWeight:700, fontSize:16, textTransform:'uppercase', letterSpacing:-0.2, flex:1 }}>{note.title}</div>
-                      <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                        <span style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim, flexShrink:0 }}>{formatDate(note.createdAt)}</span>
-                        <button onClick={() => deleteNote(note.id)} style={{ background:'transparent', border:'none', color:p.dim, cursor:'pointer', fontSize:14, padding:'0 2px' }}>×</button>
-                      </div>
-                    </div>
-                    <div style={{ fontFamily:p.bodyFont, fontSize:13, color:p.muted, marginTop:4, lineHeight:1.35 }}>{note.body}</div>
-                    {note.tags.length > 0 && (
-                      <div style={{ display:'flex', gap:5, marginTop:8 }}>
-                        {note.tags.map(t => <span key={t} style={{ padding:'2px 8px', borderRadius:99, background:`${TC[t as Tag]??p.dim}22`, color:TC[t as Tag]??p.dim, fontFamily:p.monoFont, fontSize:8.5 }}>{t}</span>)}
-                      </div>
-                    )}
+            {/* Graph view */}
+            {view === 'graph' && filtered.length > 0 && (
+              <NeonGlass style={{ marginTop:10 }} tint="rgba(0,240,255,0.04)" radius={20}>
+                <div style={{ padding:'10px' }}>
+                  <svg viewBox="0 0 340 360" width="100%" style={{ display:'block' }}>
+                    {/* edges */}
+                    {graphEdges.map(([a, b], i) => {
+                      const na = graphNodes.find(n => n.id === a);
+                      const nb = graphNodes.find(n => n.id === b);
+                      if (!na || !nb) return null;
+                      return <line key={i} x1={na.x} y1={na.y} x2={nb.x} y2={nb.y} stroke="rgba(0,240,255,0.35)" strokeWidth="1.5"/>;
+                    })}
+                    {/* nodes */}
+                    {graphNodes.map(n => {
+                      const note = notes.find(x => x.id === n.id);
+                      const tag = note?.tags[0] as Tag | undefined;
+                      const c = tag ? TC[tag] : p.cyan;
+                      const r = 6 + Math.min(8, n.deg * 2);
+                      return (
+                        <g key={n.id} style={{ cursor:'pointer' }} onClick={() => { setSearch(note?.title ?? ''); setView('list'); }}>
+                          <circle cx={n.x} cy={n.y} r={r} fill={c} opacity={0.85} style={{ filter:`drop-shadow(0 0 6px ${c})` }}/>
+                          <text x={n.x} y={n.y + r + 12} textAnchor="middle" fontFamily={p.monoFont} fontSize="9" fill={p.fg} style={{ pointerEvents:'none' }}>
+                            {(note?.title ?? '').slice(0, 18)}
+                          </text>
+                        </g>
+                      );
+                    })}
+                  </svg>
+                  <div style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim, textAlign:'center', marginTop:6 }}>
+                    Tap nodo → cerca · usa [[titolo]] nel body per creare link
                   </div>
-                </NeonGlass>
-              ))}
-            </div>
+                </div>
+              </NeonGlass>
+            )}
+
+            {/* List view */}
+            {view === 'list' && (
+              <div style={{ display:'flex', flexDirection:'column', gap:8, marginTop:8 }}>
+                {filtered.map(note => {
+                  const backlinks = linkGraph.incoming.get(note.id);
+                  const outlinks  = linkGraph.outgoing.get(note.id);
+                  return (
+                    <NeonGlass key={note.id} tint="rgba(255,255,255,0.04)" radius={20}>
+                      <div style={{ padding:'14px 16px' }}>
+                        <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:8 }}>
+                          <div style={{ fontFamily:p.displayFont, fontWeight:700, fontSize:16, textTransform:'uppercase', letterSpacing:-0.2, flex:1 }}>{note.title}</div>
+                          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                            <span style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim, flexShrink:0 }}>{formatDate(note.createdAt)}</span>
+                            <button onClick={() => deleteNote(note.id)} style={{ background:'transparent', border:'none', color:p.dim, cursor:'pointer', fontSize:14, padding:'0 2px' }}>×</button>
+                          </div>
+                        </div>
+                        <div style={{ fontFamily:p.bodyFont, fontSize:13, color:p.muted, marginTop:4, lineHeight:1.35, whiteSpace:'pre-wrap' }}>
+                          {note.body.split(/(\[\[[^\]]+\]\])/g).map((part, i) => {
+                            const m = part.match(/^\[\[([^\]]+)\]\]$/);
+                            if (m) return <span key={i} onClick={() => setSearch(m[1])} style={{ color:p.cyan, cursor:'pointer', textDecoration:'underline', textDecorationStyle:'dotted' }}>{m[1]}</span>;
+                            return <span key={i}>{part}</span>;
+                          })}
+                        </div>
+                        {note.tags.length > 0 && (
+                          <div style={{ display:'flex', gap:5, marginTop:8 }}>
+                            {note.tags.map(t => <span key={t} style={{ padding:'2px 8px', borderRadius:99, background:`${TC[t as Tag]??p.dim}22`, color:TC[t as Tag]??p.dim, fontFamily:p.monoFont, fontSize:8.5 }}>{t}</span>)}
+                          </div>
+                        )}
+                        {(backlinks && backlinks.size > 0) && (
+                          <div style={{ marginTop:10, paddingTop:8, borderTop:`1px solid ${p.border}`, fontFamily:p.monoFont, fontSize:9, color:p.dim }}>
+                            ← linked from:{' '}
+                            {Array.from(backlinks).map((bid, i) => (
+                              <span key={bid} onClick={() => setSearch(idToTitle.get(bid) ?? '')} style={{ color:p.cyan, cursor:'pointer', marginRight:6 }}>{idToTitle.get(bid)}{i < backlinks.size - 1 ? ',' : ''}</span>
+                            ))}
+                          </div>
+                        )}
+                        {(outlinks && outlinks.size > 0) && (
+                          <div style={{ marginTop:6, fontFamily:p.monoFont, fontSize:9, color:p.dim }}>
+                            → links to:{' '}
+                            {Array.from(outlinks).map((oid, i) => (
+                              <span key={oid} onClick={() => setSearch(idToTitle.get(oid) ?? '')} style={{ color:p.cyan, cursor:'pointer', marginRight:6 }}>{idToTitle.get(oid)}{i < outlinks.size - 1 ? ',' : ''}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </NeonGlass>
+                  );
+                })}
+              </div>
+            )}
 
             <NeonGlass style={{ marginTop:16 }} tint="linear-gradient(90deg,rgba(0,240,255,0.18),rgba(107,0,255,0.14))" edge="rgba(0,240,255,0.4)" glow="#00f0ff" radius={18} onClick={() => setShowAi(true)}>
               <div style={{ padding:'14px 18px', display:'flex', alignItems:'center', gap:12 }}>
