@@ -3,8 +3,12 @@
 import { useState, useEffect, useRef, CSSProperties } from 'react';
 import { p } from '@/lib/design';
 import { MarkerPlus } from './markers';
+import { useAuth } from '@/lib/auth-context';
+import { useNotes, useShoppingList } from '@/lib/user-store';
+import { useDayStore } from '@/lib/day-store';
 
 type Screen = 'home' | 'cal' | 'brain' | 'me';
+type Route = 'todo' | 'brain' | 'spesa' | 'problema' | 'regalo' | 'nota';
 
 function NavIcon({ kind, color, size = 18 }: { kind: string; color: string; size?: number }) {
   const sw = 1.8;
@@ -15,44 +19,112 @@ function NavIcon({ kind, color, size = 18 }: { kind: string; color: string; size
   return null;
 }
 
+function detectRoute(text: string): { route: Route; label: string; color: string } | null {
+  const t = text.toLowerCase().trim();
+  if (!t) return null;
+  if (t.includes('ricord') || t.startsWith('fare ') || t.includes('todo'))      return { route: 'todo',     label: 'TO-DO · oggi',  color: p.orange };
+  if (t.includes('brain') || t.includes('idea'))                                return { route: 'brain',    label: 'BRAIN',         color: p.cyan   };
+  if (t.includes('compr') || t.includes('spesa'))                               return { route: 'spesa',    label: 'SPESA',         color: p.green  };
+  if (t.includes('problema'))                                                   return { route: 'problema', label: 'PROBLEMA',      color: p.red    };
+  if (t.includes('regalo'))                                                     return { route: 'regalo',   label: 'REGALO 🔒',     color: p.magenta };
+  return { route: 'nota', label: 'NOTA', color: p.muted };
+}
+
+function cleanText(text: string): string {
+  return text
+    .replace(/^(ricord(a(mi)?)?|fare|todo|brain|idea|compr(a|are)?|spesa|problema|regalo)[:\s,]*/i, '')
+    .trim();
+}
+
 function CaptureOverlay({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [text, setText] = useState('');
-  const [route, setRoute] = useState<{ k: string; c: string } | null>(null);
+  const { user } = useAuth();
+  const uid = user?.uid ?? null;
+  const { addNote }    = useNotes(uid);
+  const { addItem }    = useShoppingList(uid);
+  const { data, save } = useDayStore(uid);
+
+  const [text, setText]   = useState('');
+  const [saving, setSaving] = useState(false);
+  const [done, setDone]   = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    if (open) { setText(''); setRoute(null); setTimeout(() => inputRef.current?.focus(), 80); }
+    if (open) {
+      setText(''); setSaving(false); setDone(null);
+      setTimeout(() => inputRef.current?.focus(), 80);
+    }
   }, [open]);
 
-  useEffect(() => {
-    const t = text.toLowerCase().trim();
-    if (!t) return setRoute(null);
-    if (t.includes('ricord') || t.startsWith('fare ') || t.includes('todo')) setRoute({ k: 'TO-DO', c: p.orange });
-    else if (t.includes('brain') || t.includes('idea')) setRoute({ k: 'BRAIN', c: p.green });
-    else if (t.includes('compr') || t.includes('spesa')) setRoute({ k: 'SPESA', c: p.green });
-    else if (t.includes('problema')) setRoute({ k: 'PROBLEMA', c: p.red });
-    else if (t.includes('regalo')) setRoute({ k: 'REGALO 🔒', c: p.orange });
-    else setRoute({ k: 'NOTA', c: p.muted });
-  }, [text]);
+  const route = detectRoute(text);
+
+  const handleSave = async () => {
+    if (!route || !text.trim() || saving) return;
+    setSaving(true);
+    const body = cleanText(text);
+    const display = body || text.trim();
+    try {
+      switch (route.route) {
+        case 'todo': {
+          // Diventa la "cosa di oggi" se non c'è già, altrimenti aggiunge come nota con tag
+          if (!data.todayThing.trim()) {
+            save({ todayThing: display, todayDeadline: '', todayDone: false });
+          } else {
+            await addNote(`TODO · ${display}`, ['progetto']);
+          }
+          break;
+        }
+        case 'brain':    await addNote(display, ['idea']);                  break;
+        case 'spesa':    addItem(display);                                  break;
+        case 'problema': await addNote(display, ['lavoro']);                break;
+        case 'regalo':   await addNote(`REGALO · ${display}`, ['idea']);    break; // PIN-locked area, salva come nota promemoria
+        case 'nota':     await addNote(display, []);                        break;
+      }
+      setDone(route.label);
+      setText('');
+      setTimeout(() => { setDone(null); onClose(); }, 800);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (!open) return null;
   return (
-    <div onClick={onClose} style={{ position: 'absolute', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', display: 'flex', alignItems: 'flex-end' } as CSSProperties}>
+    <div onClick={() => !saving && onClose()} style={{ position: 'absolute', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', display: 'flex', alignItems: 'flex-end' } as CSSProperties}>
       <div onClick={e => e.stopPropagation()} style={{ width: '100%', padding: '24px 20px 110px', background: p.captureBg, borderTop: `1px solid ${p.border}`, borderTopLeftRadius: 28, borderTopRightRadius: 28 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, fontFamily: p.monoFont, fontSize: 10, letterSpacing: 0.18, color: p.muted, textTransform: 'uppercase' }}>
           <MarkerPlus size={11} color={p.orange} />
           <span>QUICK CAPTURE</span>
           <span style={{ flex: 1 }} />
-          {route && <span style={{ color: route.c, fontWeight: 700 }}>→ {route.k}</span>}
+          {done ? <span style={{ color: p.green, fontWeight: 700 }}>✓ SALVATO IN {done}</span>
+            : route ? <span style={{ color: route.color, fontWeight: 700 }}>→ {route.label}</span>
+            : null}
         </div>
-        <textarea ref={inputRef} value={text} onChange={e => setText(e.target.value)} rows={4}
-          placeholder="parla, scrivi, dump…  →  prova: ricordami, brain, regalo"
+        <textarea
+          ref={inputRef}
+          value={text}
+          onChange={e => setText(e.target.value)}
+          onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') handleSave(); }}
+          rows={4}
+          disabled={saving}
+          placeholder="parla, scrivi, dump…  →  prova: ricordami X, brain Y, compra Z, regalo W"
           style={{ width: '100%', resize: 'none', border: 0, outline: 0, background: 'transparent', color: p.fg, fontFamily: p.bodyFont, fontSize: 17, lineHeight: 1.35 }}
         />
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10 }}>
-          <button onClick={onClose} style={{ padding: '12px 18px', borderRadius: 14, border: 0, cursor: 'pointer', background: 'rgba(255,255,255,0.08)', color: p.fg, fontFamily: p.monoFont, fontSize: 11, letterSpacing: 0.1, textTransform: 'uppercase' }}>Esc</button>
+          <button onClick={onClose} disabled={saving} style={{ padding: '12px 18px', borderRadius: 14, border: 0, cursor: saving ? 'not-allowed' : 'pointer', background: 'rgba(255,255,255,0.08)', color: p.fg, fontFamily: p.monoFont, fontSize: 11, letterSpacing: 0.1, textTransform: 'uppercase', opacity: saving ? 0.5 : 1 }}>Esc</button>
           <div style={{ flex: 1 }} />
-          <button style={{ padding: '12px 22px', borderRadius: 14, border: 0, cursor: 'pointer', background: p.orange, color: '#0a0a0a', fontFamily: p.monoFont, fontSize: 11, letterSpacing: 0.1, textTransform: 'uppercase', fontWeight: 800 }}>↵ Salva</button>
+          <button
+            onClick={handleSave}
+            disabled={!text.trim() || saving}
+            style={{
+              padding: '12px 22px', borderRadius: 14, border: 0,
+              cursor: (!text.trim() || saving) ? 'not-allowed' : 'pointer',
+              background: route?.color ?? p.orange, color: '#0a0a0a',
+              fontFamily: p.monoFont, fontSize: 11, letterSpacing: 0.1, textTransform: 'uppercase', fontWeight: 800,
+              opacity: (!text.trim() || saving) ? 0.5 : 1,
+            }}
+          >
+            {saving ? '...' : done ? '✓ FATTO' : '↵ Salva'}
+          </button>
         </div>
       </div>
     </div>

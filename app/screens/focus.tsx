@@ -4,15 +4,37 @@ import { useState, useEffect } from 'react';
 import { p } from '@/lib/design';
 import { NeonGlass } from '@/components/neon-glass';
 import { MarkerPlus } from '@/components/markers';
+import { useAuth } from '@/lib/auth-context';
+import { useNotes } from '@/lib/user-store';
 
 const WORK = 25 * 60;
 const SHORT = 5 * 60;
 const LONG = 15 * 60;
 
 export function FocusScreen({ onBack }: { onBack: () => void }) {
+  const { user } = useAuth();
+  const { addNote } = useNotes(user?.uid ?? null);
   const [phase, setPhase] = useState<'idle'|'work'|'break'>('idle');
   const [timeLeft, setTimeLeft] = useState(WORK);
   const [session, setSession] = useState(0);
+  const [dumpOpen, setDumpOpen] = useState(false);
+  const [dumpText, setDumpText] = useState('');
+  const [dumpSaving, setDumpSaving] = useState(false);
+  const [dumpSaved, setDumpSaved] = useState(false);
+
+  const saveDump = async () => {
+    const body = dumpText.trim();
+    if (!body || dumpSaving) return;
+    setDumpSaving(true);
+    try {
+      await addNote(body, ['idea']);
+      setDumpSaved(true);
+      setDumpText('');
+      setTimeout(() => { setDumpSaved(false); setDumpOpen(false); }, 900);
+    } finally {
+      setDumpSaving(false);
+    }
+  };
 
   useEffect(() => {
     if (phase === 'idle') return;
@@ -81,13 +103,41 @@ export function FocusScreen({ onBack }: { onBack: () => void }) {
         </div>
       </div>
       <div style={{ position:'relative', zIndex:2, padding:'0 18px 50px' }}>
-        <NeonGlass tint="rgba(255,255,255,0.04)" radius={18}>
-          <div style={{ padding:'12px 16px',fontFamily:p.monoFont,fontSize:10,color:p.dim,textTransform:'uppercase',letterSpacing:0.15,display:'flex',alignItems:'center',gap:8 }}>
-            <MarkerPlus size={11} color={p.orange}/>
-            DUMP PENSIERO — scrivi dopo, non fermarti
-            <span style={{ flex:1 }}/><span style={{ color:p.orange }}>→</span>
-          </div>
-        </NeonGlass>
+        {!dumpOpen ? (
+          <NeonGlass tint="rgba(255,255,255,0.04)" radius={18} onClick={() => setDumpOpen(true)}>
+            <div style={{ padding:'12px 16px',fontFamily:p.monoFont,fontSize:10,color:p.dim,textTransform:'uppercase',letterSpacing:0.15,display:'flex',alignItems:'center',gap:8 }}>
+              <MarkerPlus size={11} color={p.orange}/>
+              DUMP PENSIERO — scrivi dopo, non fermarti
+              <span style={{ flex:1 }}/><span style={{ color:p.orange }}>→</span>
+            </div>
+          </NeonGlass>
+        ) : (
+          <NeonGlass tint="rgba(255,106,0,0.08)" edge="rgba(255,106,0,0.3)" radius={18}>
+            <div style={{ padding:'14px 16px' }}>
+              <div style={{ display:'flex',alignItems:'center',gap:8,marginBottom:8,fontFamily:p.monoFont,fontSize:10,color:p.orange,textTransform:'uppercase',letterSpacing:0.15 }}>
+                <MarkerPlus size={11} color={p.orange}/>
+                DUMP — salva subito nel Brain
+                <span style={{ flex:1 }}/>
+                {dumpSaved && <span style={{ color:p.green, fontWeight:700 }}>✓ SALVATO</span>}
+              </div>
+              <textarea
+                value={dumpText}
+                onChange={e => setDumpText(e.target.value)}
+                onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') saveDump(); }}
+                disabled={dumpSaving}
+                rows={3}
+                autoFocus
+                placeholder="Pensiero veloce, idea, distrazione… butta giù."
+                style={{ width:'100%',resize:'none',border:0,outline:0,background:'transparent',color:p.fg,fontFamily:p.bodyFont,fontSize:15,lineHeight:1.35 }}
+              />
+              <div style={{ display:'flex',gap:8,marginTop:8 }}>
+                <button onClick={() => { setDumpOpen(false); setDumpText(''); }} disabled={dumpSaving} style={{ padding:'9px 14px',borderRadius:12,border:0,cursor:dumpSaving?'not-allowed':'pointer',background:'rgba(255,255,255,0.08)',color:p.fg,fontFamily:p.monoFont,fontSize:10,textTransform:'uppercase' }}>Esc</button>
+                <div style={{ flex:1 }}/>
+                <button onClick={saveDump} disabled={!dumpText.trim() || dumpSaving} style={{ padding:'9px 20px',borderRadius:12,border:0,cursor:(!dumpText.trim()||dumpSaving)?'not-allowed':'pointer',background:p.orange,color:'#0a0a0a',fontFamily:p.monoFont,fontSize:10,textTransform:'uppercase',fontWeight:800,opacity:(!dumpText.trim()||dumpSaving)?0.5:1 }}>{dumpSaving ? '...' : '↵ Salva'}</button>
+              </div>
+            </div>
+          </NeonGlass>
+        )}
       </div>
     </div>
   );

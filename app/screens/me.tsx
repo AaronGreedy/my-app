@@ -1,14 +1,132 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { p } from '@/lib/design';
 import { NeonGlass, SectionLabel } from '@/components/neon-glass';
 import { MarkerDiamond, MarkerStar4 } from '@/components/markers';
 import { MoodFace } from '@/components/mood-face';
 import { useAuth } from '@/lib/auth-context';
 import { useDayStore, MoodId, DayData, useMonthData } from '@/lib/day-store';
-import { useUserProfile, useSupplements, useWeightLog, useNotes, DEFAULT_PRS } from '@/lib/user-store';
+import { useUserProfile, useSupplements, useWeightLog, useNotes, useXP, DEFAULT_PRS } from '@/lib/user-store';
 import { MEALS, getMealTotals } from '@/lib/meals';
+
+// ─── Achievements ─────────────────────────────────────────────────────────────
+
+interface AchievementDef {
+  id: string;
+  label: string;
+  desc: string;
+  icon: string;
+  cat: 'fit'|'brain'|'level'|'habits'|'mood'|'water';
+}
+
+const ACHIEVEMENTS: AchievementDef[] = [
+  { id:'first_workout',     icon:'⚡',  label:'Primo Allenamento',   desc:'Logga 1 workout',                         cat:'fit'    },
+  { id:'workouts_5',        icon:'💪',  label:'In Forma',             desc:'5 workout in 30 giorni',                  cat:'fit'    },
+  { id:'workouts_15',       icon:'🏋',  label:'Macchina',             desc:'15 workout in 30 giorni',                 cat:'fit'    },
+  { id:'workout_streak_7',  icon:'🔥',  label:'7 Giorni di Fuoco',    desc:'7 giorni di workout consecutivi',         cat:'fit'    },
+  { id:'level_5',           icon:'⭐',  label:'Apprendista',          desc:'Raggiungi livello 5',                     cat:'level'  },
+  { id:'level_10',          icon:'🥇',  label:'Guerriero',            desc:'Raggiungi livello 10',                    cat:'level'  },
+  { id:'level_20',          icon:'🏆',  label:'Veterano',             desc:'Raggiungi livello 20',                    cat:'level'  },
+  { id:'notes_10',          icon:'🧠',  label:'Pensatore',            desc:'10 note nel Brain',                       cat:'brain'  },
+  { id:'notes_50',          icon:'📚',  label:'Filosofo',             desc:'50 note nel Brain',                       cat:'brain'  },
+  { id:'habits_today',      icon:'✅',  label:'Giorno Perfetto',      desc:'Tutte le 4 habit di home oggi',           cat:'habits' },
+  { id:'good_habits_8',     icon:'😇',  label:'Saint Mode',           desc:'8/8 abitudini buone in Me oggi',          cat:'habits' },
+  { id:'mood_7_full',       icon:'🌗',  label:'Auto-osservatore',     desc:'Mood mattina+sera per 7 giorni di fila',  cat:'mood'   },
+  { id:'water_3l_5in7',     icon:'💧',  label:'Idratato',             desc:'Target acqua 5/7 ultimi giorni',          cat:'water'  },
+  { id:'weight_minus_1',    icon:'⚖️',  label:'−1 KG',                desc:'Peso giù di 1kg dal primo log',           cat:'fit'    },
+  { id:'weight_minus_3',    icon:'🎯',  label:'−3 KG',                desc:'Peso giù di 3kg dal primo log',           cat:'fit'    },
+];
+
+const CAT_COL: Record<AchievementDef['cat'], string> = {
+  fit: p.orange, brain: p.cyan, level: '#ffd400', habits: p.green, mood: p.magenta, water: '#00f0ff',
+};
+
+function localDateKeyD(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function AchievementsSection({ data, uid }: { data: DayData; uid: string | null }) {
+  const { level } = useXP(uid);
+  const { notes } = useNotes(uid);
+  const { entries } = useWeightLog(uid);
+
+  const now = new Date();
+  const curr = useMonthData(uid, now.getFullYear(), now.getMonth());
+  const prevM = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
+  const prevY = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+  const prev = useMonthData(uid, prevY, prevM);
+  const allDays = { ...prev, ...curr };
+
+  // Stats computation
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  let workouts30 = 0;
+  let water3L_in_last7 = 0;
+  let moodFullDays_in_last7 = 0;
+  for (let i = 0; i < 30; i++) {
+    const d = new Date(today); d.setDate(today.getDate() - i);
+    const dd = allDays[localDateKeyD(d)];
+    if (!dd) continue;
+    if ((dd.workouts?.length ?? 0) > 0) workouts30++;
+    if (i < 7) {
+      if ((dd.water ?? 0) >= 3000) water3L_in_last7++;
+      if (dd.moodMorning && dd.moodEvening) moodFullDays_in_last7++;
+    }
+  }
+
+  // workout streak from today backwards
+  let workoutStreak = 0;
+  for (let i = 0; i < 60; i++) {
+    const d = new Date(today); d.setDate(today.getDate() - i);
+    const dd = allDays[localDateKeyD(d)];
+    if ((dd?.workouts?.length ?? 0) > 0) workoutStreak++;
+    else break;
+  }
+
+  const habitsToday = data.habits.filter(Boolean).length;
+  const goodHabitsToday = data.meHabits.slice(0, 8).filter(Boolean).length;
+
+  const weightLossKg = entries.length >= 2 ? entries[0].weight - entries[entries.length - 1].weight : 0;
+
+  const unlocked = new Set<string>();
+  if (workouts30 >= 1)              unlocked.add('first_workout');
+  if (workouts30 >= 5)              unlocked.add('workouts_5');
+  if (workouts30 >= 15)             unlocked.add('workouts_15');
+  if (workoutStreak >= 7)           unlocked.add('workout_streak_7');
+  if (level >= 5)                   unlocked.add('level_5');
+  if (level >= 10)                  unlocked.add('level_10');
+  if (level >= 20)                  unlocked.add('level_20');
+  if (notes.length >= 10)           unlocked.add('notes_10');
+  if (notes.length >= 50)           unlocked.add('notes_50');
+  if (habitsToday >= 4)             unlocked.add('habits_today');
+  if (goodHabitsToday >= 8)         unlocked.add('good_habits_8');
+  if (moodFullDays_in_last7 >= 7)   unlocked.add('mood_7_full');
+  if (water3L_in_last7 >= 5)        unlocked.add('water_3l_5in7');
+  if (weightLossKg >= 1)            unlocked.add('weight_minus_1');
+  if (weightLossKg >= 3)            unlocked.add('weight_minus_3');
+
+  return (
+    <>
+      <SectionLabel num="03" title="ACHIEVEMENTS" hint={`${unlocked.size}/${ACHIEVEMENTS.length}`}/>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginTop:8 }}>
+        {ACHIEVEMENTS.map(a => {
+          const on = unlocked.has(a.id);
+          const c = CAT_COL[a.cat];
+          return (
+            <NeonGlass key={a.id} tint={on ? `${c}1F` : 'rgba(255,255,255,0.03)'} edge={on ? `${c}66` : 'rgba(255,255,255,0.08)'} radius={14}>
+              <div style={{ padding:'10px 11px', display:'flex', flexDirection:'column', gap:5, opacity:on?1:0.42 }}>
+                <div style={{ fontSize:22, lineHeight:1, filter:on?`drop-shadow(0 0 6px ${c}88)`:'grayscale(1)' }}>{a.icon}</div>
+                <div style={{ fontFamily:p.bodyFont, fontSize:11.5, fontWeight:700, color:on?p.fg:p.muted, lineHeight:1.2, textTransform:'uppercase', letterSpacing:-0.1 }}>{a.label}</div>
+                <div style={{ fontFamily:p.monoFont, fontSize:8.5, color:p.dim, lineHeight:1.3 }}>{a.desc}</div>
+              </div>
+            </NeonGlass>
+          );
+        })}
+      </div>
+    </>
+  );
+}
 
 const MOODS: { id: MoodId; c: string; l: string }[] = [
   {id:'awful',c:p.red,l:'GIÙ'},{id:'bad',c:p.orange,l:'STANCO'},
@@ -106,6 +224,99 @@ function CiboTab({ data, save }: { data: DayData; save: (p: Partial<DayData>) =>
         {caffeine >= 3 && <div style={{ padding:'0 16px 10px',fontFamily:p.monoFont,fontSize:9,color:p.red,textTransform:'uppercase' }}>⚠ LIMITE RAGGIUNTO</div>}
       </NeonGlass>
     </div>
+  );
+}
+
+// ─── Stretching Timer ────────────────────────────────────────────────────────
+
+interface Stretch { name: string; secs: number }
+
+const STRETCHES: Stretch[] = [
+  { name:'Collo',                 secs:30 },
+  { name:'Spalle',                secs:45 },
+  { name:'Apertura petto',        secs:30 },
+  { name:'Schiena (gatto-mucca)', secs:60 },
+  { name:'Anche',                 secs:45 },
+  { name:'Posteriori coscia',     secs:60 },
+  { name:'Quadricipiti',          secs:45 },
+  { name:'Polpacci',              secs:30 },
+];
+
+const TOTAL_STRETCH_SECS = STRETCHES.reduce((s, x) => s + x.secs, 0);
+
+function StretchingTimer() {
+  const [phase, setPhase] = useState<'idle'|'running'|'done'>('idle');
+  const [idx, setIdx]     = useState(0);
+  const [left, setLeft]   = useState(STRETCHES[0].secs);
+
+  useEffect(() => {
+    if (phase !== 'running') return;
+    if (left <= 0) {
+      const nextIdx = idx + 1;
+      if (nextIdx >= STRETCHES.length) { setPhase('done'); return; }
+      setIdx(nextIdx);
+      setLeft(STRETCHES[nextIdx].secs);
+      return;
+    }
+    const id = setTimeout(() => setLeft(l => l - 1), 1000);
+    return () => clearTimeout(id);
+  }, [phase, left, idx]);
+
+  const start = () => { setIdx(0); setLeft(STRETCHES[0].secs); setPhase('running'); };
+  const stop  = () => { setPhase('idle'); setIdx(0); setLeft(STRETCHES[0].secs); };
+  const skip  = () => setLeft(0);
+  const total = phase === 'idle' ? TOTAL_STRETCH_SECS : STRETCHES[idx].secs;
+  const progress = phase === 'running' ? 1 - left / total : 0;
+  const cur = STRETCHES[idx];
+
+  return (
+    <NeonGlass style={{ marginTop: 8 }} tint={phase==='done' ? 'linear-gradient(135deg,rgba(166,255,0,0.18),rgba(0,240,255,0.1))' : 'linear-gradient(135deg,rgba(0,240,255,0.15),rgba(107,0,255,0.1))'} edge={phase==='done' ? 'rgba(166,255,0,0.4)' : 'rgba(0,240,255,0.3)'} radius={20}>
+      <div style={{ padding:'14px 16px' }}>
+        {phase === 'idle' && (
+          <>
+            <div style={{ fontFamily:p.monoFont, fontSize:9.5, color:p.cyan, textTransform:'uppercase', letterSpacing:0.18, marginBottom:8 }}>
+              {STRETCHES.length} esercizi · {Math.round(TOTAL_STRETCH_SECS/60)} min
+            </div>
+            <div style={{ display:'flex', flexDirection:'column', gap:3, marginBottom:12 }}>
+              {STRETCHES.map((s, i) => (
+                <div key={s.name} style={{ display:'flex', justifyContent:'space-between', fontFamily:p.bodyFont, fontSize:12, color:p.muted }}>
+                  <span>{i+1}. {s.name}</span>
+                  <span style={{ fontFamily:p.monoFont, fontSize:10, color:p.dim }}>{s.secs}s</span>
+                </div>
+              ))}
+            </div>
+            <button onClick={start} style={{ width:'100%', padding:'12px', borderRadius:14, border:0, background:p.cyan, color:'#0a0a0a', fontFamily:p.monoFont, fontSize:11, textTransform:'uppercase', letterSpacing:0.15, cursor:'pointer', fontWeight:800 }}>▶ INIZIA STRETCHING</button>
+          </>
+        )}
+        {phase === 'running' && (
+          <>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:8 }}>
+              <div style={{ fontFamily:p.monoFont, fontSize:9.5, color:p.cyan, textTransform:'uppercase' }}>{idx+1} / {STRETCHES.length}</div>
+              <div style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim, textTransform:'uppercase' }}>step</div>
+            </div>
+            <div style={{ fontFamily:p.displayFont, fontWeight:800, fontSize:26, letterSpacing:-0.7, lineHeight:1, textTransform:'uppercase' }}>{cur.name}</div>
+            <div style={{ display:'flex', alignItems:'baseline', gap:8, marginTop:8 }}>
+              <div style={{ fontFamily:p.displayFont, fontWeight:800, fontSize:48, letterSpacing:-2, color:p.cyan, lineHeight:1 }}>{left}</div>
+              <div style={{ fontFamily:p.monoFont, fontSize:12, color:p.muted }}>secondi</div>
+            </div>
+            <div style={{ height:6, marginTop:10, borderRadius:99, background:'rgba(255,255,255,0.08)', overflow:'hidden' }}>
+              <div style={{ height:'100%', width:`${Math.round(progress*100)}%`, background:'linear-gradient(90deg,#00f0ff,#a6ff00)', transition:'width 1s linear', boxShadow:'0 0 10px #00f0ff' }}/>
+            </div>
+            <div style={{ display:'flex', gap:6, marginTop:12 }}>
+              <button onClick={stop} style={{ flex:1, padding:'10px', borderRadius:12, border:`1px solid ${p.border}`, background:'transparent', color:p.muted, fontFamily:p.monoFont, fontSize:10, textTransform:'uppercase', cursor:'pointer' }}>■ STOP</button>
+              <button onClick={skip} style={{ flex:1, padding:'10px', borderRadius:12, border:0, background:p.cyan, color:'#0a0a0a', fontFamily:p.monoFont, fontSize:10, textTransform:'uppercase', cursor:'pointer', fontWeight:800 }}>↦ SKIP</button>
+            </div>
+          </>
+        )}
+        {phase === 'done' && (
+          <>
+            <div style={{ fontFamily:p.displayFont, fontWeight:800, fontSize:32, letterSpacing:-0.8, color:p.green, lineHeight:1, textTransform:'uppercase' }}>✓ COMPLETATO</div>
+            <div style={{ fontFamily:p.monoFont, fontSize:10, color:p.muted, marginTop:6 }}>Tutti i {STRETCHES.length} esercizi fatti</div>
+            <button onClick={stop} style={{ width:'100%', marginTop:12, padding:'10px', borderRadius:12, border:`1px solid ${p.border}`, background:'transparent', color:p.muted, fontFamily:p.monoFont, fontSize:10, textTransform:'uppercase', cursor:'pointer' }}>RESET</button>
+          </>
+        )}
+      </div>
+    </NeonGlass>
   );
 }
 
@@ -246,6 +457,9 @@ function FitnessTab({
           })()}
         </div>
       </NeonGlass>
+
+      <SectionLabel num={workouts.includes('CARDIO')?'05':'04'} title="STRETCHING" hint="timer guidato"/>
+      <StretchingTimer/>
     </div>
   );
 }
@@ -448,7 +662,7 @@ const BAD_HABITS = [
   {n:'Junk food',xp:30},
 ];
 
-function HabitsTab({ data, save }: { data: DayData; save: (p: Partial<DayData>) => void }) {
+function HabitsTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayData>) => void; uid: string | null }) {
   const habits = data.meHabits;
   const toggle = (i: number) => save({ meHabits: habits.map((v, ix) => ix === i ? !v : v) });
 
@@ -494,6 +708,8 @@ function HabitsTab({ data, save }: { data: DayData; save: (p: Partial<DayData>) 
           );
         })}
       </div>
+
+      <AchievementsSection data={data} uid={uid}/>
     </div>
   );
 }
@@ -635,7 +851,7 @@ export function MeScreen() {
         {tab==='cibo'    && <CiboTab    data={data} save={save}/>}
         {tab==='fitness' && <FitnessTab data={data} save={save} prs={prs} savePr={savePr} uid={user?.uid ?? null}/>}
         {tab==='mood'    && <MoodTab    data={data} save={save} uid={user?.uid ?? null}/>}
-        {tab==='habits'  && <HabitsTab  data={data} save={save}/>}
+        {tab==='habits'  && <HabitsTab  data={data} save={save} uid={user?.uid ?? null}/>}
         {tab==='suppl'   && <SupplTab   data={data} save={save} uid={user?.uid ?? null}/>}
       </div>
     </div>
