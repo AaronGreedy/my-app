@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { p } from '@/lib/design';
 import { NeonGlass, SectionLabel } from '@/components/neon-glass';
 import { MarkerDiamond, MarkerStar4 } from '@/components/markers';
 import { useAuth } from '@/lib/auth-context';
 import { useMonthData, MoodId } from '@/lib/day-store';
 import { useCountdowns, daysUntil } from '@/lib/user-store';
+import { useGoogleCalendar, CalEvent } from '@/lib/google-cal';
 
 const M_NAMES = ['GEN','FEB','MAR','APR','MAG','GIU','LUG','AGO','SET','OTT','NOV','DIC'];
 const D_NAMES = ['LU','MA','ME','GI','VE','SA','DO'];
@@ -20,13 +21,26 @@ export function CalendarScreen() {
 
   const { user } = useAuth();
   const monthData = useMonthData(user?.uid ?? null, vy, vm);
-  const { countdowns, saveCountdowns } = useCountdowns(user?.uid ?? null);
+  const { countdowns } = useCountdowns(user?.uid ?? null);
+  const gcal = useGoogleCalendar(vy, vm);
 
   const dim    = new Date(vy, vm + 1, 0).getDate();
   const fd     = new Date(vy, vm, 1).getDay();
   const offset = fd === 0 ? 6 : fd - 1;
 
   const dayKey = (d: number) => `${vy}-${String(vm + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+
+  const eventsByDay = useMemo(() => {
+    const map: Record<number, CalEvent[]> = {};
+    gcal.events.forEach(e => {
+      const d = new Date(e.start);
+      if (d.getFullYear() === vy && d.getMonth() === vm) {
+        const day = d.getDate();
+        (map[day] ??= []).push(e);
+      }
+    });
+    return map;
+  }, [gcal.events, vy, vm]);
 
   // Streak: consecutive days with workout (workouts is an array)
   const streak = (() => {
@@ -43,6 +57,7 @@ export function CalendarScreen() {
   const nextM = () => { const d = new Date(vy, vm + 1); setVm(d.getMonth()); setVy(d.getFullYear()); };
 
   const sorted = [...countdowns]
+    .filter(c => !c.done)
     .map(c => ({ ...c, days: daysUntil(c.date) }))
     .sort((a, b) => a.days - b.days);
 
@@ -77,6 +92,28 @@ export function CalendarScreen() {
           </div>
         </NeonGlass>
 
+        {/* Google Calendar sync */}
+        <NeonGlass style={{ marginTop:8 }} tint={gcal.connected ? 'rgba(0,240,255,0.08)' : 'rgba(255,255,255,0.04)'} edge={gcal.connected ? 'rgba(0,240,255,0.3)' : undefined} radius={16}>
+          <div style={{ padding:'10px 14px', display:'flex', alignItems:'center', gap:10 }}>
+            <span style={{ fontSize:14 }}>📅</span>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontFamily:p.monoFont, fontSize:9.5, color: gcal.connected ? p.cyan : p.muted, letterSpacing:0.18, textTransform:'uppercase' }}>GOOGLE CALENDAR</div>
+              <div style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim, marginTop:1 }}>
+                {!gcal.configured ? 'Setup OAuth client su Vercel'
+                  : gcal.error ? gcal.error
+                  : gcal.loading ? 'Carico eventi…'
+                  : gcal.connected ? `${gcal.events.length} eventi · ${M_NAMES[vm]}`
+                  : 'Non connesso · sync in 1 tap'}
+              </div>
+            </div>
+            {!gcal.connected ? (
+              <button onClick={gcal.connect} disabled={!gcal.configured} style={{ border:`1px solid rgba(0,240,255,0.4)`, background:'rgba(0,240,255,0.1)', borderRadius:10, padding:'7px 12px', cursor:gcal.configured?'pointer':'not-allowed', fontFamily:p.monoFont, fontSize:9, color:p.cyan, textTransform:'uppercase', opacity:gcal.configured?1:0.4 }}>CONNETTI</button>
+            ) : (
+              <button onClick={gcal.disconnect} style={{ border:`1px solid ${p.border}`, background:'transparent', borderRadius:10, padding:'7px 12px', cursor:'pointer', fontFamily:p.monoFont, fontSize:9, color:p.dim, textTransform:'uppercase' }}>DISCONNETTI</button>
+            )}
+          </div>
+        </NeonGlass>
+
         <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:3, marginTop:16 }}>
           {D_NAMES.map(d => <div key={d} style={{ textAlign:'center', fontFamily:p.monoFont, fontSize:9, color:p.dim, padding:'4px 0' }}>{d}</div>)}
         </div>
@@ -89,6 +126,7 @@ export function CalendarScreen() {
             const isSel   = day === selDay;
             const hasFit  = (monthData[k]?.workouts?.length ?? 0) > 0;
             const mood    = (monthData[k]?.mood ?? null) as MoodId | null;
+            const hasEvent = (eventsByDay[day]?.length ?? 0) > 0;
             return (
               <button key={day} onClick={() => setSelDay(day)} style={{
                 border:`1px solid ${isToday ? 'rgba(166,255,0,0.6)' : isSel ? 'rgba(255,106,0,0.6)' : 'transparent'}`,
@@ -98,8 +136,9 @@ export function CalendarScreen() {
               }}>
                 <span style={{ fontFamily:p.monoFont, fontSize:12, fontWeight:isToday||isSel?700:400, color:isToday?p.green:isSel?p.orange:p.fg }}>{day}</span>
                 <div style={{ display:'flex', gap:2 }}>
-                  {hasFit && <div style={{ width:4,height:4,borderRadius:'50%',background:p.orange }}/>}
-                  {mood   && <div style={{ width:4,height:4,borderRadius:'50%',background:MC[mood] }}/>}
+                  {hasFit   && <div style={{ width:4,height:4,borderRadius:'50%',background:p.orange }}/>}
+                  {mood     && <div style={{ width:4,height:4,borderRadius:'50%',background:MC[mood] }}/>}
+                  {hasEvent && <div style={{ width:4,height:4,borderRadius:'50%',background:p.cyan }}/>}
                 </div>
               </button>
             );
@@ -107,7 +146,7 @@ export function CalendarScreen() {
         </div>
 
         <div style={{ display:'flex', gap:12, marginTop:12, flexWrap:'wrap' }}>
-          {([['Allenamento',p.orange],['Mood top',p.cyan],['Mood bene',p.green],['Mood ok','#ffd400']] as [string,string][]).map(([l,c]) => (
+          {([['Allenamento',p.orange],['Mood',p.green],['Eventi GCal',p.cyan]] as [string,string][]).map(([l,c]) => (
             <div key={l} style={{ display:'flex', alignItems:'center', gap:5 }}>
               <div style={{ width:6,height:6,borderRadius:'50%',background:c }}/>
               <span style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim }}>{l}</span>
@@ -119,6 +158,12 @@ export function CalendarScreen() {
           const k = dayKey(selDay);
           const dayWorkouts = monthData[k]?.workouts ?? [];
           const dayMood = (monthData[k]?.mood ?? null) as MoodId | null;
+          const dayEvents = eventsByDay[selDay] ?? [];
+          const fmtTime = (iso: string, allDay: boolean) => {
+            if (allDay) return 'tutto il giorno';
+            const d = new Date(iso);
+            return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+          };
           return (
             <NeonGlass style={{ marginTop:14 }} tint="rgba(255,255,255,0.04)" radius={20}>
               <div style={{ padding:'14px 16px' }}>
@@ -135,6 +180,24 @@ export function CalendarScreen() {
                   <div style={{ marginTop:4, fontFamily:p.monoFont, fontSize:9, color:p.dim }}>
                     ACQUA: {((monthData[k]?.water ?? 0) / 1000).toFixed(2)}L
                   </div>
+                )}
+
+                {dayEvents.length > 0 && (
+                  <>
+                    <div style={{ height:1, background:p.border, margin:'12px 0 10px' }}/>
+                    <div style={{ fontFamily:p.monoFont, fontSize:9, color:p.cyan, textTransform:'uppercase', letterSpacing:0.18, marginBottom:6 }}>📅 EVENTI · {dayEvents.length}</div>
+                    <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+                      {dayEvents.map(e => (
+                        <a key={e.id} href={e.htmlLink} target="_blank" rel="noopener noreferrer" style={{ textDecoration:'none', padding:'8px 10px', borderRadius:10, background:'rgba(0,240,255,0.06)', border:`1px solid rgba(0,240,255,0.2)`, display:'flex', alignItems:'center', gap:8 }}>
+                          <div style={{ fontFamily:p.monoFont, fontSize:10, color:p.cyan, minWidth:60, fontWeight:700 }}>{fmtTime(e.start, e.allDay)}</div>
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ fontFamily:p.bodyFont, fontSize:13, color:p.fg, lineHeight:1.25 }}>{e.summary}</div>
+                            {e.location && <div style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim, marginTop:1 }}>📍 {e.location}</div>}
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  </>
                 )}
               </div>
             </NeonGlass>
