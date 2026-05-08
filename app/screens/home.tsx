@@ -8,7 +8,7 @@ import { MarkerTarget, MarkerDiamond, MarkerStar4, MarkerTriangle, MarkerHex } f
 import { useAuth } from '@/lib/auth-context';
 import { useDayStore, MoodId } from '@/lib/day-store';
 import { getMealTotals } from '@/lib/meals';
-import { useXP, useCountdowns, daysUntil, Countdown } from '@/lib/user-store';
+import { useXP, useCountdowns, useWeeklyChallenge, daysUntil, Countdown } from '@/lib/user-store';
 
 // ─── Weather (Bolzano) ────────────────────────────────────────────────────────
 
@@ -305,6 +305,7 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
   const { data, save } = useDayStore(user?.uid ?? null);
   const { totalXP, addXP, level, tier, progress, xpNext } = useXP(user?.uid ?? null);
   const { countdowns, saveCountdowns } = useCountdowns(user?.uid ?? null);
+  const weekly = useWeeklyChallenge(user?.uid ?? null);
   const [showEditor, setShowEditor] = useState(false);
 
   const waterMl  = data.water;
@@ -451,6 +452,23 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
                 <div style={{ padding: '11px 12px', textAlign: 'center', fontFamily: p.monoFont, fontSize: 10.5, letterSpacing: 0.2, color: p.muted, textTransform: 'uppercase' }}>{hasTodayTask ? 'EDIT' : '+ TASK'}</div>
               </NeonGlass>
             </div>
+          </div>
+        </NeonGlass>
+
+        {/* Weekly challenge */}
+        <NeonGlass style={{ marginTop: 12 }} tint={weekly.completed ? 'linear-gradient(135deg,rgba(166,255,0,0.22),rgba(0,240,255,0.12))' : 'linear-gradient(135deg,rgba(255,212,0,0.22),rgba(255,106,0,0.14))'} edge={weekly.completed ? 'rgba(166,255,0,0.5)' : 'rgba(255,212,0,0.5)'} radius={20}>
+          <div style={{ padding:'12px 14px', display:'flex', alignItems:'center', gap:12 }}>
+            <div style={{ fontSize:24, lineHeight:1, flexShrink:0 }}>{weekly.completed ? '✓' : '🎯'}</div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontFamily:p.monoFont, fontSize:9, color:weekly.completed?p.green:'#ffd400', letterSpacing:0.18, textTransform:'uppercase' }}>SFIDA SETTIMANALE · +{weekly.challenge.xp} XP</div>
+              <div style={{ fontFamily:p.bodyFont, fontWeight:700, fontSize:14, color:p.fg, marginTop:2, textTransform:'uppercase', letterSpacing:-0.2, textDecoration:weekly.completed?'line-through':'none' }}>{weekly.challenge.label}</div>
+              <div style={{ fontFamily:p.monoFont, fontSize:10, color:p.muted, marginTop:1 }}>{weekly.challenge.desc}</div>
+            </div>
+            {!weekly.completed ? (
+              <button onClick={() => { weekly.markComplete(); addXP(weekly.challenge.xp); }} style={{ border:`1px solid ${'#ffd400'}66`, background:'rgba(255,212,0,0.15)', borderRadius:10, padding:'7px 12px', cursor:'pointer', fontFamily:p.monoFont, fontSize:9, color:'#ffd400', textTransform:'uppercase', fontWeight:700 }}>FATTA</button>
+            ) : (
+              <span style={{ fontFamily:p.monoFont, fontSize:9, color:p.green, textTransform:'uppercase' }}>+{weekly.challenge.xp} XP</span>
+            )}
           </div>
         </NeonGlass>
 

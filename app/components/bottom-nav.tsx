@@ -10,6 +10,29 @@ import { useDayStore } from '@/lib/day-store';
 type Screen = 'home' | 'cal' | 'brain' | 'me';
 type Route = 'todo' | 'brain' | 'spesa' | 'problema' | 'regalo' | 'nota';
 
+// Web Speech API types
+interface SRResult { 0: { transcript: string }; isFinal?: boolean }
+interface SREvent { resultIndex: number; results: { length: number; [i: number]: SRResult } }
+interface SRInstance {
+  lang: string; continuous: boolean; interimResults: boolean;
+  onresult: ((e: SREvent) => void) | null;
+  onend:    (() => void) | null;
+  onerror:  ((e: { error: string }) => void) | null;
+  start(): void; stop(): void;
+}
+type SRConstructor = new () => SRInstance;
+declare global {
+  interface Window {
+    SpeechRecognition?: SRConstructor;
+    webkitSpeechRecognition?: SRConstructor;
+  }
+}
+
+function getSpeechRecognition(): SRConstructor | null {
+  if (typeof window === 'undefined') return null;
+  return window.SpeechRecognition ?? window.webkitSpeechRecognition ?? null;
+}
+
 function NavIcon({ kind, color, size = 18 }: { kind: string; color: string; size?: number }) {
   const sw = 1.8;
   if (kind === 'home') return <svg width={size} height={size} viewBox="0 0 24 24" fill="none"><path d="M3 11 L12 3 L21 11 V20 H14 V14 H10 V20 H3 Z" stroke={color} strokeWidth={sw} strokeLinejoin="round"/></svg>;
@@ -36,7 +59,7 @@ function cleanText(text: string): string {
     .trim();
 }
 
-function CaptureOverlay({ open, onClose }: { open: boolean; onClose: () => void }) {
+function CaptureOverlay({ open, onClose, autoVoice }: { open: boolean; onClose: () => void; autoVoice: boolean }) {
   const { user } = useAuth();
   const uid = user?.uid ?? null;
   const { addNote }    = useNotes(uid);
@@ -46,19 +69,66 @@ function CaptureOverlay({ open, onClose }: { open: boolean; onClose: () => void 
   const [text, setText]   = useState('');
   const [saving, setSaving] = useState(false);
   const [done, setDone]   = useState<string | null>(null);
+  const [recording, setRecording] = useState(false);
+  const [voiceErr, setVoiceErr]   = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const recRef = useRef<SRInstance | null>(null);
+  const baseTextRef = useRef<string>('');
+
+  const startVoice = () => {
+    const SR = getSpeechRecognition();
+    if (!SR) { setVoiceErr('Voice non supportata da questo browser'); return; }
+    if (recRef.current) return;
+    setVoiceErr(null);
+    baseTextRef.current = text ? text.trim() + ' ' : '';
+    const r = new SR();
+    r.lang = 'it-IT';
+    r.continuous = true;
+    r.interimResults = true;
+    r.onresult = (e) => {
+      let interim = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        interim += e.results[i][0].transcript;
+      }
+      setText(baseTextRef.current + interim);
+    };
+    r.onerror = (e) => { setVoiceErr(`Voice: ${e.error}`); setRecording(false); recRef.current = null; };
+    r.onend   = () => { setRecording(false); recRef.current = null; };
+    try {
+      r.start();
+      recRef.current = r;
+      setRecording(true);
+    } catch (err) {
+      setVoiceErr(err instanceof Error ? err.message : 'Voice error');
+    }
+  };
+
+  const stopVoice = () => {
+    if (recRef.current) {
+      try { recRef.current.stop(); } catch {}
+      recRef.current = null;
+    }
+    setRecording(false);
+  };
+
+  const toggleVoice = () => recording ? stopVoice() : startVoice();
 
   useEffect(() => {
     if (open) {
-      setText(''); setSaving(false); setDone(null);
+      setText(''); setSaving(false); setDone(null); setVoiceErr(null);
       setTimeout(() => inputRef.current?.focus(), 80);
+      if (autoVoice) setTimeout(() => startVoice(), 100);
+    } else {
+      stopVoice();
     }
-  }, [open]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, autoVoice]);
 
   const route = detectRoute(text);
 
   const handleSave = async () => {
     if (!route || !text.trim() || saving) return;
+    stopVoice();
     setSaving(true);
     const body = cleanText(text);
     const display = body || text.trim();
@@ -106,11 +176,22 @@ function CaptureOverlay({ open, onClose }: { open: boolean; onClose: () => void 
           onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') handleSave(); }}
           rows={4}
           disabled={saving}
-          placeholder="parla, scrivi, dump…  →  prova: ricordami X, brain Y, compra Z, regalo W"
+          placeholder="parla, scrivi, dump…  →  ricordami / brain / compra / regalo"
           style={{ width: '100%', resize: 'none', border: 0, outline: 0, background: 'transparent', color: p.fg, fontFamily: p.bodyFont, fontSize: 17, lineHeight: 1.35 }}
         />
+        {voiceErr && (
+          <div style={{ marginTop: 6, fontFamily: p.monoFont, fontSize: 9, color: p.red }}>{voiceErr}</div>
+        )}
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10 }}>
           <button onClick={onClose} disabled={saving} style={{ padding: '12px 18px', borderRadius: 14, border: 0, cursor: saving ? 'not-allowed' : 'pointer', background: 'rgba(255,255,255,0.08)', color: p.fg, fontFamily: p.monoFont, fontSize: 11, letterSpacing: 0.1, textTransform: 'uppercase', opacity: saving ? 0.5 : 1 }}>Esc</button>
+          <button
+            onClick={toggleVoice}
+            disabled={saving || !getSpeechRecognition()}
+            title={getSpeechRecognition() ? (recording ? 'Stop voice' : 'Start voice') : 'Voice non supportata'}
+            style={{ width: 44, height: 44, borderRadius: 14, border: 0, cursor: getSpeechRecognition() ? 'pointer' : 'not-allowed', background: recording ? p.red : 'rgba(255,255,255,0.08)', color: recording ? '#0a0a0a' : p.fg, fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: recording ? `0 0 18px ${p.red}aa` : 'none', opacity: getSpeechRecognition() ? 1 : 0.4 }}
+          >
+            {recording ? '●' : '🎤'}
+          </button>
           <div style={{ flex: 1 }} />
           <button
             onClick={handleSave}
@@ -141,15 +222,55 @@ const TABS = [
 
 export function BottomNav({ screen, setScreen }: { screen: Screen; setScreen: (s: Screen) => void }) {
   const [capture, setCapture] = useState(false);
+  const [autoVoice, setAutoVoice] = useState(false);
+
+  // Hold-to-voice detection: tap = open normally, hold ≥250ms = open in voice mode
+  const holdTimer = useRef<number | null>(null);
+  const isHoldRef = useRef(false);
+
+  const startHold = () => {
+    isHoldRef.current = false;
+    holdTimer.current = window.setTimeout(() => {
+      isHoldRef.current = true;
+      setAutoVoice(true);
+      setCapture(true);
+      if ('vibrate' in navigator) navigator.vibrate(15);
+    }, 260);
+  };
+
+  const endHold = (e?: React.PointerEvent | React.TouchEvent) => {
+    e?.preventDefault();
+    if (holdTimer.current) {
+      clearTimeout(holdTimer.current);
+      holdTimer.current = null;
+    }
+    if (!isHoldRef.current) {
+      setAutoVoice(false);
+      setCapture(true);
+    }
+  };
+
+  const cancelHold = () => {
+    if (holdTimer.current) { clearTimeout(holdTimer.current); holdTimer.current = null; }
+    isHoldRef.current = false;
+  };
 
   return (
     <>
-      <CaptureOverlay open={capture} onClose={() => setCapture(false)} />
+      <CaptureOverlay open={capture} onClose={() => { setCapture(false); setAutoVoice(false); }} autoVoice={autoVoice} />
       <div style={{ position: 'absolute', left: 12, right: 12, bottom: 18, zIndex: 30, display: 'flex', alignItems: 'center', gap: 6, padding: '6px', borderRadius: 32, background: p.navBg, backdropFilter: 'blur(24px) saturate(180%)', WebkitBackdropFilter: 'blur(24px) saturate(180%)', border: p.navBorder, boxShadow: p.navShadow } as CSSProperties}>
         {TABS.map(tab => {
           const active = tab.id !== 'fab' && screen === (tab.id as Screen);
           if (tab.id === 'fab') return (
-            <button key="fab" onClick={() => setCapture(true)} style={{ width: 56, height: 56, borderRadius: '50%', border: 0, cursor: 'pointer', flexShrink: 0, background: p.fabBg, color: '#0a0a0a', boxShadow: p.fabShadow, fontWeight: 800, fontSize: 28, marginTop: -22, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
+            <button
+              key="fab"
+              onPointerDown={startHold}
+              onPointerUp={endHold}
+              onPointerLeave={cancelHold}
+              onPointerCancel={cancelHold}
+              style={{ width: 56, height: 56, borderRadius: '50%', border: 0, cursor: 'pointer', flexShrink: 0, background: p.fabBg, color: '#0a0a0a', boxShadow: p.fabShadow, fontWeight: 800, fontSize: 28, marginTop: -22, display: 'flex', alignItems: 'center', justifyContent: 'center', touchAction: 'none', userSelect: 'none' }}
+              title="Tap per scrivere · Tieni premuto per dettare"
+            >+</button>
           );
           return (
             <button key={tab.id} onClick={() => setScreen(tab.id as Screen)} style={{ flex: 1, padding: '10px 4px 8px', border: 0, cursor: 'pointer', borderRadius: 22, background: active ? p.navActive : 'transparent', color: active ? p.fg : p.muted, fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.12, textTransform: 'uppercase', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>

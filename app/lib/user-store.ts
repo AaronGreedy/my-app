@@ -265,6 +265,74 @@ export function useGifts(uid: string | null) {
   return { gifts, saveGifts };
 }
 
+// ─── Weekly Challenge ─────────────────────────────────────────────────────────
+
+export interface WeeklyChallenge {
+  id: string;
+  label: string;
+  desc: string;
+  xp: number;
+}
+
+const CHALLENGES: WeeklyChallenge[] = [
+  { id:'water_5x4l',    label:'Idratazione totale', desc:'Bevi 4L per 5 giorni',                 xp:80  },
+  { id:'workout_4',     label:'4 Workout',          desc:'Allena 4 volte questa settimana',      xp:100 },
+  { id:'brain_10',      label:'Brain dump',         desc:'Aggiungi 10 note al Brain',            xp:70  },
+  { id:'stretching_5',  label:'Mobilità',           desc:'5 sessioni stretching complete',       xp:60  },
+  { id:'candle_7',      label:'Sonno sacro',        desc:'Candle prima di dormire 7 sere',       xp:70  },
+  { id:'nofap_7',       label:'No Fap × 7',         desc:'7 giorni di astinenza',                xp:100 },
+  { id:'nojunk_7',      label:'No Junk',            desc:'7 giorni senza junk food',             xp:80  },
+  { id:'reading_5',     label:'Lettore',            desc:'15 min lettura × 5 giorni',            xp:60  },
+  { id:'cold_5',        label:'Doccia fredda',      desc:'5 docce fredde',                       xp:70  },
+  { id:'mood_full_7',   label:'Auto-osservazione',  desc:'Mood mattina+sera per 7 giorni',       xp:60  },
+  { id:'meditation_7',  label:'Mente quieta',       desc:'Meditazione 5 min × 7 giorni',         xp:70  },
+  { id:'red_light_7',   label:'Luce rossa serale',  desc:'Luci rosse 7 sere',                    xp:50  },
+];
+
+function isoWeekKey(d: Date): string {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `${date.getUTCFullYear()}-W${String(week).padStart(2,'0')}`;
+}
+
+function pickChallenge(weekKey: string): WeeklyChallenge {
+  let h = 0;
+  for (let i = 0; i < weekKey.length; i++) h = (h * 31 + weekKey.charCodeAt(i)) >>> 0;
+  return CHALLENGES[h % CHALLENGES.length];
+}
+
+export function useWeeklyChallenge(uid: string | null) {
+  const [completedMap, setCompletedMap] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (!uid || !db) return;
+    const ref = doc(db, 'users', uid);
+    return onSnapshot(ref, snap => {
+      if (snap.exists() && snap.data().weeklyChallenges) {
+        setCompletedMap(snap.data().weeklyChallenges as Record<string, boolean>);
+      }
+    });
+  }, [uid]);
+
+  const weekKey = isoWeekKey(new Date());
+  const challenge = pickChallenge(weekKey);
+  const compositeKey = `${weekKey}_${challenge.id}`;
+  const completed = !!completedMap[compositeKey];
+
+  const markComplete = () => {
+    if (completed) return;
+    const next = { ...completedMap, [compositeKey]: true };
+    setCompletedMap(next);
+    if (!uid || !db) return;
+    setDoc(doc(db, 'users', uid), { weeklyChallenges: next }, { merge: true }).catch(console.error);
+  };
+
+  return { weekKey, challenge, completed, markComplete };
+}
+
 // ─── Weight Log ───────────────────────────────────────────────────────────────
 
 export interface WeightEntry {
