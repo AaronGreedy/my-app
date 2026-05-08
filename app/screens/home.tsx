@@ -1,6 +1,6 @@
 'use client';
 
-import { CSSProperties } from 'react';
+import { useState, CSSProperties } from 'react';
 import { p, NOISE_SVG } from '@/lib/design';
 import { NeonGlass, SectionLabel, MetricHead } from '@/components/neon-glass';
 import { MoodFace } from '@/components/mood-face';
@@ -8,8 +8,7 @@ import { MarkerTarget, MarkerDiamond, MarkerStar4, MarkerTriangle, MarkerHex } f
 import { useAuth } from '@/lib/auth-context';
 import { useDayStore, MoodId } from '@/lib/day-store';
 import { getMealTotals } from '@/lib/meals';
-
-const WATER_TARGET = 4000; // ml
+import { useXP, useCountdowns, daysUntil, Countdown } from '@/lib/user-store';
 
 const MOODS = [
   { id: 'awful' as MoodId, c: '#ff0040', label: 'GIÙ' },
@@ -19,12 +18,12 @@ const MOODS = [
   { id: 'great' as MoodId, c: '#00f0ff', label: 'TOP' },
 ];
 
-const HABITS = [
-  ['Stretching',          28],
-  ['No scroll a letto',   14],
-  ['Luci rosse',           6],
-  ['Candle prima dormire', 3],
-] as const;
+const HABITS: [string, number, number][] = [
+  ['Stretching',          28, 15],
+  ['No scroll a letto',   14, 20],
+  ['Luci rosse',           6, 10],
+  ['Candle prima dormire', 3, 10],
+];
 
 const ORBS = [
   { t: -100, l: -80,  w: 380, c: '#ff6a00', o: 0.95 },
@@ -34,13 +33,83 @@ const ORBS = [
   { b:   40, l:  60,  w: 240, c: '#ff0040', o: 0.50 },
 ] as const;
 
+// ─── Countdown Editor ─────────────────────────────────────────────────────────
+
+function CountdownEditor({ countdowns, saveCountdowns, onClose }: {
+  countdowns: Countdown[];
+  saveCountdowns: (l: Countdown[]) => void;
+  onClose: () => void;
+}) {
+  const [list, setList] = useState<Countdown[]>(countdowns);
+  const [label, setLabel] = useState('');
+  const [date,  setDate]  = useState('');
+  const [note,  setNote]  = useState('');
+
+  const add = () => {
+    if (!label.trim() || !date) return;
+    setList(prev => [...prev, { id: Date.now().toString(), label: label.trim(), date, note: note.trim() }]);
+    setLabel(''); setDate(''); setNote('');
+  };
+
+  return (
+    <div onClick={onClose} style={{ position:'absolute',inset:0,zIndex:100,background:'rgba(0,0,0,0.7)',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',display:'flex',alignItems:'flex-end' }}>
+      <div onClick={e => e.stopPropagation()} style={{ width:'100%',padding:'24px 20px 48px',background:'rgba(10,8,6,0.96)',borderTop:`1px solid ${p.border}`,borderTopLeftRadius:28,borderTopRightRadius:28,maxHeight:'80vh',overflowY:'auto' }}>
+        <div style={{ fontFamily:p.monoFont,fontSize:10,color:p.orange,textTransform:'uppercase',letterSpacing:0.2,marginBottom:16 }}>⏱ COUNTDOWN · GESTISCI</div>
+
+        {list.map(c => (
+          <div key={c.id} style={{ display:'flex',alignItems:'center',gap:10,marginBottom:8,padding:'10px 14px',borderRadius:14,background:'rgba(255,255,255,0.05)' }}>
+            <div style={{ flex:1 }}>
+              <div style={{ fontFamily:p.displayFont,fontWeight:700,fontSize:14,textTransform:'uppercase' }}>{c.label}</div>
+              <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.muted,marginTop:2 }}>{c.date}{c.note ? ` · ${c.note}` : ''}</div>
+            </div>
+            <div style={{ fontFamily:p.displayFont,fontWeight:800,fontSize:22,color:p.orange,minWidth:36,textAlign:'right' }}>{daysUntil(c.date)}<span style={{ fontFamily:p.monoFont,fontSize:9,color:p.muted }}>g</span></div>
+            <button onClick={() => setList(prev => prev.filter(x => x.id !== c.id))} style={{ background:'transparent',border:'none',color:p.red,cursor:'pointer',fontSize:18,padding:'0 4px' }}>×</button>
+          </div>
+        ))}
+
+        <div style={{ marginTop:14,padding:'14px 16px',borderRadius:16,background:'rgba(255,106,0,0.08)',border:`1px solid rgba(255,106,0,0.3)` }}>
+          <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim,textTransform:'uppercase',marginBottom:10 }}>+ NUOVO</div>
+          <input value={label} onChange={e=>setLabel(e.target.value)} placeholder="Nome evento" style={{ width:'100%',background:'transparent',border:'none',borderBottom:`1px solid ${p.border}`,outline:'none',color:p.fg,fontFamily:p.bodyFont,fontSize:15,padding:'5px 0',marginBottom:10 }}/>
+          <input type="date" value={date} onChange={e=>setDate(e.target.value)} style={{ width:'100%',background:'transparent',border:'none',borderBottom:`1px solid ${p.border}`,outline:'none',color:p.fg,fontFamily:p.monoFont,fontSize:13,padding:'5px 0',marginBottom:10,colorScheme:'dark' }}/>
+          <input value={note} onChange={e=>setNote(e.target.value)} placeholder="Note (opzionale)" style={{ width:'100%',background:'transparent',border:'none',borderBottom:`1px solid ${p.border}`,outline:'none',color:p.fg,fontFamily:p.bodyFont,fontSize:13,padding:'5px 0' }}/>
+          <button onClick={add} style={{ marginTop:12,padding:'9px 20px',borderRadius:12,border:'none',background:p.orange,color:'#0a0a0a',fontFamily:p.monoFont,fontSize:10,textTransform:'uppercase',cursor:'pointer',fontWeight:800 }}>+ Aggiungi</button>
+        </div>
+
+        <div style={{ display:'flex',gap:8,marginTop:14 }}>
+          <button onClick={onClose} style={{ padding:'12px 20px',borderRadius:14,border:'none',background:'rgba(255,255,255,0.08)',color:p.fg,fontFamily:p.monoFont,fontSize:11,textTransform:'uppercase',cursor:'pointer' }}>Annulla</button>
+          <button onClick={() => { saveCountdowns(list); onClose(); }} style={{ flex:1,padding:'12px 20px',borderRadius:14,border:'none',background:p.orange,color:'#0a0a0a',fontFamily:p.monoFont,fontSize:11,textTransform:'uppercase',cursor:'pointer',fontWeight:800 }}>↵ Salva</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── HomeScreen ───────────────────────────────────────────────────────────────
+
+function computeTodayXP(habits: boolean[], moodM: MoodId|null, moodE: MoodId|null, meals: (string|null)[], waterMl: number, workouts: string[]): number {
+  const habitXP = [15, 20, 10, 10];
+  let xp = 0;
+  habits.forEach((on, i) => { if (on) xp += habitXP[i] ?? 10; });
+  if (moodM) xp += 10;
+  if (moodE) xp += 10;
+  meals.forEach(m => { if (m !== null) xp += 5; });
+  if (waterMl >= 3000) xp += 25;
+  xp += workouts.length * 30;
+  return xp;
+}
+
 export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brain'|'me'|'focus') => void }) {
   const { user } = useAuth();
   const { data, save } = useDayStore(user?.uid ?? null);
+  const { totalXP, addXP, level, tier, progress, xpNext } = useXP(user?.uid ?? null);
+  const { countdowns, saveCountdowns } = useCountdowns(user?.uid ?? null);
+  const [showEditor, setShowEditor] = useState(false);
 
-  const waterMl   = data.water;
-  const habits    = data.habits;
-  const mood      = data.mood;
+  const waterMl  = data.water;
+  const habits   = data.habits;
+  const mood     = data.mood;
+
+  const WATER_TARGET = data.workouts.length > 0 ? 4000 : 3000;
 
   const { kcal: kcalEaten, pr: totalPr, c: totalC, g: totalG } = getMealTotals(data.mealSelected);
   const KCAL_TARGET = 2050;
@@ -50,15 +119,33 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
 
   const addGlass  = () => save({ water: Math.min(WATER_TARGET, waterMl + 250) });
   const addBottle = () => save({ water: Math.min(WATER_TARGET, waterMl + 750) });
-  const toggleHabit = (i: number) => save({ habits: habits.map((v, ix) => ix === i ? !v : v) });
-  const chooseMood  = (m: MoodId) => save({ mood: m });
+
+  const toggleHabit = (i: number) => {
+    const wasOn = habits[i];
+    save({ habits: habits.map((v, ix) => ix === i ? !v : v) });
+    if (!wasOn) addXP(HABITS[i][2]);
+  };
+
+  const chooseMood = (m: MoodId) => {
+    const hadMood = !!mood;
+    save({ mood: m });
+    if (!hadMood) addXP(10);
+  };
 
   const now = new Date();
-  const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  const timeStr  = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
   const isMorning = now.getHours() < 14;
 
+  const todayXP = computeTodayXP(habits, data.moodMorning, data.moodEvening, data.mealSelected, waterMl, data.workouts);
+
+  // Sort countdowns by date ascending, pick upcoming ones
+  const sorted = [...countdowns]
+    .map(c => ({ ...c, days: daysUntil(c.date) }))
+    .sort((a, b) => a.days - b.days);
+  const nearest = sorted[0] ?? null;
+
   return (
-    <div style={{ position: 'absolute', inset: 0, overflow: 'auto', background: p.bg, color: p.fg, fontFamily: p.bodyFont }}>
+    <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', overflowX: 'hidden', background: p.bg, color: p.fg, fontFamily: p.bodyFont }}>
 
       {ORBS.map((orb, i) => (
         <div key={i} style={{ position: 'absolute', top: 't' in orb ? orb.t : undefined, bottom: 'b' in orb ? orb.b : undefined, left: 'l' in orb ? orb.l : undefined, right: 'r' in orb ? orb.r : undefined, width: orb.w, height: orb.w, borderRadius: '50%', background: `radial-gradient(circle, ${orb.c} 0%, transparent 65%)`, filter: 'blur(65px)', opacity: orb.o, zIndex: 0, pointerEvents: 'none' } as CSSProperties} />
@@ -66,8 +153,8 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
       <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1, backgroundImage: `url("${NOISE_SVG}")`, opacity: 0.18, mixBlendMode: 'overlay' } as CSSProperties} />
       <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1, opacity: 0.35, backgroundImage: 'linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px)', backgroundSize: '100% 4px' }} />
 
-      <div style={{ position: 'absolute', left: 5, top: 110, zIndex: 5, pointerEvents: 'none', fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.32, color: p.dim, writingMode: 'vertical-rl', transform: 'rotate(180deg)' } as CSSProperties}>SYS::DAY / Q2.W19 / OPS-MORNING</div>
-      <div style={{ position: 'absolute', right: 5, top: 110, zIndex: 5, pointerEvents: 'none', fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.32, color: p.dim, writingMode: 'vertical-rl' } as CSSProperties}>LV·12 GUERRIERO / XP 4280·6500</div>
+      <div style={{ position: 'absolute', left: 5, top: 110, zIndex: 5, pointerEvents: 'none', fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.32, color: p.dim, writingMode: 'vertical-rl', transform: 'rotate(180deg)' } as CSSProperties}>SYS::DAY / {isMorning ? 'OPS-MORNING' : 'OPS-EVENING'}</div>
+      <div style={{ position: 'absolute', right: 5, top: 110, zIndex: 5, pointerEvents: 'none', fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.32, color: p.dim, writingMode: 'vertical-rl' } as CSSProperties}>LV·{level} {tier} / XP {totalXP}</div>
 
       <div style={{ position: 'relative', zIndex: 2, padding: '56px 18px 130px' }}>
 
@@ -132,7 +219,7 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
         <SectionLabel num="02" title="VITALS" hint="oggi" />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
 
-          {/* KCAL — live from meals */}
+          {/* KCAL */}
           <NeonGlass tint="linear-gradient(135deg, rgba(255,106,0,0.32), rgba(255,212,0,0.10))" edge="rgba(255,106,0,0.55)" glow="#ff6a00" radius={22} onClick={() => onNavigate?.('me')}>
             <div style={{ padding: '13px 13px 12px' }}>
               <MetricHead icon={<MarkerTriangle size={9} color={p.orange} />} label="KCAL" right={kcalLeft > 0 ? `−${kcalLeft}` : `+${Math.abs(kcalLeft)}`} />
@@ -146,17 +233,18 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
             </div>
           </NeonGlass>
 
-          {/* ACQUA — ml, target 4L */}
+          {/* ACQUA — dynamic target */}
           <NeonGlass tint="linear-gradient(135deg, rgba(166,255,0,0.28), rgba(0,240,255,0.18))" edge="rgba(166,255,0,0.55)" glow="#a6ff00" radius={22}>
             <div style={{ padding: '13px 13px 12px' }}>
               <MetricHead icon={<MarkerHex size={9} color={p.green} />} label="ACQUA" right={`${waterMl}/${WATER_TARGET}ml`} />
               <div style={{ fontFamily: p.displayFont, fontSize: 36, fontWeight: 800, letterSpacing: -1.2, lineHeight: 0.95, marginTop: 4 }}>
                 {(waterMl / 1000).toFixed(2)}<span style={{ fontSize: 14, color: p.muted }}>l</span>
               </div>
-              <div style={{ height: 8, marginTop: 10, borderRadius: 99, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+              <div style={{ fontFamily: p.monoFont, fontSize: 8, color: p.dim, marginTop: 2 }}>target: {WATER_TARGET/1000}L {data.workouts.length > 0 ? '(allenamento)' : '(riposo)'}</div>
+              <div style={{ height: 8, marginTop: 6, borderRadius: 99, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
                 <div style={{ height: '100%', width: `${waterPct}%`, borderRadius: 99, background: 'linear-gradient(90deg, #a6ff00, #00f0ff)', boxShadow: '0 0 10px rgba(166,255,0,0.7)' }} />
               </div>
-              <div style={{ display: 'flex', gap: 5, marginTop: 10 }}>
+              <div style={{ display: 'flex', gap: 5, marginTop: 8 }}>
                 <button onClick={addGlass} style={{ flex: 1, padding: '8px 4px', borderRadius: 10, border: `1px solid rgba(166,255,0,0.4)`, background: 'rgba(166,255,0,0.08)', color: p.green, cursor: 'pointer', fontFamily: p.monoFont, fontSize: 8.5, textTransform: 'uppercase' }}>+250ml</button>
                 <button onClick={addBottle} style={{ flex: 1, padding: '8px 4px', borderRadius: 10, border: `1px solid rgba(0,240,255,0.4)`, background: 'rgba(0,240,255,0.08)', color: p.cyan, cursor: 'pointer', fontFamily: p.monoFont, fontSize: 8.5, textTransform: 'uppercase' }}>+750ml</button>
               </div>
@@ -166,9 +254,9 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
           {/* HABITS */}
           <NeonGlass style={{ gridColumn: 'span 2' }} tint="rgba(255,255,255,0.05)" radius={22}>
             <div style={{ padding: '13px 13px' }}>
-              <MetricHead icon={<MarkerStar4 size={10} color={p.orange} />} label="HABITS" right={`${habits.filter(Boolean).length}/4 · +50 XP`} />
+              <MetricHead icon={<MarkerStar4 size={10} color={p.orange} />} label="HABITS" right={`${habits.filter(Boolean).length}/4 · +${habits.reduce((s,v,i) => s + (v ? HABITS[i][2] : 0), 0)} XP`} />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 8 }}>
-                {HABITS.map(([label, streak], i) => {
+                {HABITS.map(([label, streak, xpVal], i) => {
                   const on = !!habits[i];
                   return (
                     <button key={label} onClick={() => toggleHabit(i)} style={{ padding: '10px 11px', borderRadius: 14, cursor: 'pointer', textAlign: 'left', border: `1px solid ${on ? 'rgba(166,255,0,0.75)' : 'rgba(255,255,255,0.10)'}`, background: on ? 'rgba(166,255,0,0.16)' : 'rgba(255,255,255,0.02)', boxShadow: on ? '0 0 22px rgba(166,255,0,0.4)' : 'none', display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -176,6 +264,7 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
                         <div style={{ width: 14, height: 14, borderRadius: 4, border: `1.5px solid ${on ? p.green : p.muted}`, background: on ? p.green : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0a0a0a', fontSize: 10, fontWeight: 900, boxShadow: on ? `0 0 12px ${p.green}` : 'none' }}>{on ? '✓' : ''}</div>
                         <span style={{ flex: 1 }} />
                         <span style={{ fontFamily: p.monoFont, fontSize: 8.5, color: on ? p.green : p.dim }}>×{streak}</span>
+                        <span style={{ fontFamily: p.monoFont, fontSize: 8, color: p.dim }}>+{xpVal}xp</span>
                       </div>
                       <div style={{ fontFamily: p.bodyFont, fontWeight: 600, fontSize: 12, color: on ? p.fg : p.muted, textTransform: 'uppercase', letterSpacing: 0.04, lineHeight: 1.2 }}>{label}</div>
                     </button>
@@ -186,37 +275,62 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
           </NeonGlass>
         </div>
 
-        {/* Countdown */}
+        {/* Countdown — live from Firestore */}
         <SectionLabel num="03" title="COUNTDOWN" hint="prossimi" />
         <NeonGlass style={{ marginTop: 8 }} tint="linear-gradient(135deg, rgba(255,106,0,0.28), rgba(255,20,184,0.12))" edge="rgba(255,106,0,0.55)" glow="#ff6a00" radius={22}>
-          <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ fontFamily: p.displayFont, fontWeight: 800, fontSize: 56, letterSpacing: -2.5, lineHeight: 0.85, background: 'linear-gradient(180deg, #ffd400, #ff6a00 50%, #ff0040)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>
-              14<span style={{ fontSize: 14, marginLeft: 2, fontFamily: p.monoFont, fontWeight: 400, WebkitTextFillColor: p.muted, color: p.muted } as CSSProperties}>g</span>
+          {nearest ? (
+            <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
+              <div style={{ fontFamily: p.displayFont, fontWeight: 800, fontSize: 56, letterSpacing: -2.5, lineHeight: 0.85, background: 'linear-gradient(180deg, #ffd400, #ff6a00 50%, #ff0040)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>
+                {nearest.days}<span style={{ fontSize: 14, marginLeft: 2, fontFamily: p.monoFont, fontWeight: 400, WebkitTextFillColor: p.muted, color: p.muted } as CSSProperties}>g</span>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontFamily: p.monoFont, fontSize: 9.5, letterSpacing: 0.2, color: p.dim, textTransform: 'uppercase' }}>giorni a</div>
+                <div style={{ fontFamily: p.displayFont, fontWeight: 700, fontSize: 18, marginTop: 2, textTransform: 'uppercase' }}>{nearest.label}</div>
+                {nearest.note && <div style={{ fontFamily: p.monoFont, fontSize: 10, color: p.muted, marginTop: 2 }}>{nearest.date} · {nearest.note}</div>}
+              </div>
+              <button onClick={() => setShowEditor(true)} style={{ border:`1px solid rgba(255,106,0,0.4)`,background:'rgba(255,106,0,0.1)',borderRadius:10,padding:'6px 10px',cursor:'pointer',fontFamily:p.monoFont,fontSize:9,color:p.orange,textTransform:'uppercase' }}>EDIT</button>
             </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontFamily: p.monoFont, fontSize: 9.5, letterSpacing: 0.2, color: p.dim, textTransform: 'uppercase' }}>giorni a</div>
-              <div style={{ fontFamily: p.displayFont, fontWeight: 700, fontSize: 18, marginTop: 2, textTransform: 'uppercase' }}>Anniversario · 3 anni</div>
-              <div style={{ fontFamily: p.monoFont, fontSize: 10, color: p.muted, marginTop: 2 }}>21 maggio · regalo da pensare</div>
+          ) : (
+            <div style={{ padding:'16px 18px',display:'flex',alignItems:'center',justifyContent:'space-between' }}>
+              <div style={{ fontFamily:p.monoFont,fontSize:11,color:p.muted }}>Nessun countdown</div>
+              <button onClick={() => setShowEditor(true)} style={{ border:`1px solid rgba(255,106,0,0.4)`,background:'rgba(255,106,0,0.1)',borderRadius:10,padding:'6px 12px',cursor:'pointer',fontFamily:p.monoFont,fontSize:9,color:p.orange,textTransform:'uppercase' }}>+ AGGIUNGI</button>
             </div>
-            <MarkerDiamond size={14} color={p.orange} />
-          </div>
+          )}
         </NeonGlass>
 
-        {/* XP */}
+        {/* More countdowns */}
+        {sorted.slice(1, 3).map(c => (
+          <NeonGlass key={c.id} style={{ marginTop: 6 }} tint="rgba(255,255,255,0.03)" radius={18}>
+            <div style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ fontFamily: p.displayFont, fontSize: 28, fontWeight: 800, color: p.orange, lineHeight: 1, minWidth: 44 }}>{c.days}<span style={{ fontSize: 10, color: p.muted, fontFamily: p.monoFont }}>g</span></div>
+              <div>
+                <div style={{ fontFamily: p.displayFont, fontWeight: 700, fontSize: 13, textTransform: 'uppercase' }}>{c.label}</div>
+                {c.note && <div style={{ fontFamily: p.monoFont, fontSize: 9, color: p.muted, marginTop: 2 }}>{c.note}</div>}
+              </div>
+            </div>
+          </NeonGlass>
+        ))}
+
+        {/* XP — live from Firestore */}
         <NeonGlass style={{ marginTop: 10 }} tint="rgba(255,255,255,0.05)" radius={22}>
           <div style={{ padding: '13px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ width: 48, height: 48, borderRadius: 14, flexShrink: 0, background: 'linear-gradient(135deg, #ffd400, #ff6a00 50%, #ff0040)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: p.displayFont, fontWeight: 800, fontSize: 22, color: '#0a0a0a', boxShadow: '0 10px 28px rgba(255,106,0,0.65)' }}>12</div>
+            <div style={{ width: 48, height: 48, borderRadius: 14, flexShrink: 0, background: 'linear-gradient(135deg, #ffd400, #ff6a00 50%, #ff0040)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: p.displayFont, fontWeight: 800, fontSize: 22, color: '#0a0a0a', boxShadow: '0 10px 28px rgba(255,106,0,0.65)' }}>{level}</div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontFamily: p.monoFont, fontSize: 9.5, letterSpacing: 0.2, color: p.muted, textTransform: 'uppercase' }}>TIER 04 · GUERRIERO</div>
-              <div style={{ fontFamily: p.displayFont, fontWeight: 700, fontSize: 16, letterSpacing: -0.2, marginTop: 2 }}>+220 XP OGGI</div>
+              <div style={{ fontFamily: p.monoFont, fontSize: 9.5, letterSpacing: 0.2, color: p.muted, textTransform: 'uppercase' }}>TIER {String(Math.min(Math.floor((level-1)/5),6)+1).padStart(2,'0')} · {tier}</div>
+              <div style={{ fontFamily: p.displayFont, fontWeight: 700, fontSize: 16, letterSpacing: -0.2, marginTop: 2 }}>+{todayXP} XP OGGI</div>
               <div style={{ height: 4, marginTop: 6, borderRadius: 99, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: '66%', background: 'linear-gradient(90deg, #ffd400, #ff6a00, #ff0040)', boxShadow: '0 0 10px #ff6a00' }} />
+                <div style={{ height: '100%', width: `${Math.round(progress * 100)}%`, background: 'linear-gradient(90deg, #ffd400, #ff6a00, #ff0040)', boxShadow: '0 0 10px #ff6a00', transition: 'width .4s ease' }} />
               </div>
+              <div style={{ fontFamily: p.monoFont, fontSize: 8, color: p.dim, marginTop: 3 }}>{totalXP} / {xpNext} XP → LV {level + 1}</div>
             </div>
           </div>
         </NeonGlass>
 
       </div>
+
+      {showEditor && (
+        <CountdownEditor countdowns={countdowns} saveCountdowns={saveCountdowns} onClose={() => setShowEditor(false)} />
+      )}
     </div>
   );
 }

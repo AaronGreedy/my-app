@@ -6,6 +6,7 @@ import { NeonGlass, SectionLabel } from '@/components/neon-glass';
 import { MarkerDiamond, MarkerStar4 } from '@/components/markers';
 import { useAuth } from '@/lib/auth-context';
 import { useMonthData, MoodId } from '@/lib/day-store';
+import { useCountdowns, daysUntil } from '@/lib/user-store';
 
 const M_NAMES = ['GEN','FEB','MAR','APR','MAG','GIU','LUG','AGO','SET','OTT','NOV','DIC'];
 const D_NAMES = ['LU','MA','ME','GI','VE','SA','DO'];
@@ -19,6 +20,7 @@ export function CalendarScreen() {
 
   const { user } = useAuth();
   const monthData = useMonthData(user?.uid ?? null, vy, vm);
+  const { countdowns, saveCountdowns } = useCountdowns(user?.uid ?? null);
 
   const dim    = new Date(vy, vm + 1, 0).getDate();
   const fd     = new Date(vy, vm, 1).getDay();
@@ -26,12 +28,12 @@ export function CalendarScreen() {
 
   const dayKey = (d: number) => `${vy}-${String(vm + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 
-  // Streak: consecutive days from today (current month only) with workout logged
+  // Streak: consecutive days with workout (workouts is an array)
   const streak = (() => {
     if (vm !== today.getMonth() || vy !== today.getFullYear()) return 0;
     let s = 0;
     for (let d = today.getDate(); d >= 1; d--) {
-      if (monthData[dayKey(d)]?.workout) s++;
+      if ((monthData[dayKey(d)]?.workouts?.length ?? 0) > 0) s++;
       else break;
     }
     return s;
@@ -40,8 +42,12 @@ export function CalendarScreen() {
   const prevM = () => { const d = new Date(vy, vm - 1); setVm(d.getMonth()); setVy(d.getFullYear()); };
   const nextM = () => { const d = new Date(vy, vm + 1); setVm(d.getMonth()); setVy(d.getFullYear()); };
 
+  const sorted = [...countdowns]
+    .map(c => ({ ...c, days: daysUntil(c.date) }))
+    .sort((a, b) => a.days - b.days);
+
   return (
-    <div style={{ position: 'absolute', inset: 0, overflow: 'auto', background: p.bg, color: p.fg, fontFamily: p.bodyFont }}>
+    <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', overflowX: 'hidden', background: p.bg, color: p.fg, fontFamily: p.bodyFont }}>
       {[{t:-80,l:-80,w:280,c:'#6b00ff',o:0.6},{t:300,r:-100,w:260,c:'#ff6a00',o:0.45}].map((orb,i) => (
         <div key={i} style={{ position:'absolute', top:orb.t, left:'l' in orb ? orb.l : undefined, right:'r' in orb ? (orb as {r:number}).r : undefined, width:orb.w, height:orb.w, borderRadius:'50%', background:`radial-gradient(circle, ${orb.c} 0%, transparent 65%)`, filter:'blur(65px)', opacity:orb.o, zIndex:0, pointerEvents:'none' }} />
       ))}
@@ -81,7 +87,7 @@ export function CalendarScreen() {
             const k = dayKey(day);
             const isToday = day === today.getDate() && vm === today.getMonth() && vy === today.getFullYear();
             const isSel   = day === selDay;
-            const hasFit  = !!monthData[k]?.workout;
+            const hasFit  = (monthData[k]?.workouts?.length ?? 0) > 0;
             const mood    = (monthData[k]?.mood ?? null) as MoodId | null;
             return (
               <button key={day} onClick={() => setSelDay(day)} style={{
@@ -109,30 +115,43 @@ export function CalendarScreen() {
           ))}
         </div>
 
-        {selDay && (
-          <NeonGlass style={{ marginTop:14 }} tint="rgba(255,255,255,0.04)" radius={20}>
-            <div style={{ padding:'14px 16px' }}>
-              <div style={{ fontFamily:p.monoFont, fontSize:10, color:p.orange, textTransform:'uppercase' }}>{selDay} {M_NAMES[vm]}</div>
-              <div style={{ marginTop:6, fontFamily:p.bodyFont, fontSize:14, color:monthData[dayKey(selDay)]?.workout ? p.orange : p.muted }}>
-                {monthData[dayKey(selDay)]?.workout ? `⚡ ${monthData[dayKey(selDay)]?.workout}` : 'Nessun allenamento'}
-              </div>
-              {monthData[dayKey(selDay)]?.mood && (
-                <div style={{ marginTop:4, fontFamily:p.monoFont, fontSize:10, color:MC[monthData[dayKey(selDay)]?.mood as string] }}>
-                  MOOD: {(monthData[dayKey(selDay)]?.mood as string).toUpperCase()}
+        {selDay && (() => {
+          const k = dayKey(selDay);
+          const dayWorkouts = monthData[k]?.workouts ?? [];
+          const dayMood = (monthData[k]?.mood ?? null) as MoodId | null;
+          return (
+            <NeonGlass style={{ marginTop:14 }} tint="rgba(255,255,255,0.04)" radius={20}>
+              <div style={{ padding:'14px 16px' }}>
+                <div style={{ fontFamily:p.monoFont, fontSize:10, color:p.orange, textTransform:'uppercase' }}>{selDay} {M_NAMES[vm]}</div>
+                <div style={{ marginTop:6, fontFamily:p.bodyFont, fontSize:14, color:dayWorkouts.length > 0 ? p.orange : p.muted }}>
+                  {dayWorkouts.length > 0 ? `⚡ ${dayWorkouts.join(' + ')}` : 'Nessun allenamento'}
                 </div>
-              )}
-            </div>
-          </NeonGlass>
-        )}
+                {dayMood && (
+                  <div style={{ marginTop:4, fontFamily:p.monoFont, fontSize:10, color:MC[dayMood] }}>
+                    MOOD: {dayMood.toUpperCase()}
+                  </div>
+                )}
+                {monthData[k]?.water != null && (
+                  <div style={{ marginTop:4, fontFamily:p.monoFont, fontSize:9, color:p.dim }}>
+                    ACQUA: {((monthData[k]?.water ?? 0) / 1000).toFixed(2)}L
+                  </div>
+                )}
+              </div>
+            </NeonGlass>
+          );
+        })()}
 
         <SectionLabel num="01" title="COUNTDOWN" hint="prossimi"/>
-        {([{g:14,l:'Anniversario · 3 anni',s:'21 maggio'},{g:28,l:'Fine cut Q2',s:'obiettivo 82 kg'}] as {g:number;l:string;s:string}[]).map(({g,l,s}) => (
-          <NeonGlass key={l} style={{ marginTop:8 }} tint="rgba(255,255,255,0.04)" radius={18}>
+        {sorted.length === 0 && (
+          <div style={{ padding:'20px 0', fontFamily:p.monoFont, fontSize:10, color:p.dim }}>Nessun countdown · aggiungili dalla Home</div>
+        )}
+        {sorted.map(c => (
+          <NeonGlass key={c.id} style={{ marginTop:8 }} tint="rgba(255,255,255,0.04)" radius={18}>
             <div style={{ padding:'12px 16px', display:'flex', alignItems:'center', gap:12 }}>
-              <div style={{ fontFamily:p.displayFont, fontSize:36, fontWeight:800, color:p.orange, lineHeight:1, minWidth:52 }}>{g}<span style={{ fontSize:11,color:p.muted,fontFamily:p.monoFont }}>g</span></div>
+              <div style={{ fontFamily:p.displayFont, fontSize:36, fontWeight:800, color:p.orange, lineHeight:1, minWidth:52 }}>{c.days}<span style={{ fontSize:11,color:p.muted,fontFamily:p.monoFont }}>g</span></div>
               <div>
-                <div style={{ fontFamily:p.displayFont, fontWeight:700, fontSize:15, textTransform:'uppercase' }}>{l}</div>
-                <div style={{ fontFamily:p.monoFont, fontSize:9.5, color:p.muted, marginTop:2 }}>{s}</div>
+                <div style={{ fontFamily:p.displayFont, fontWeight:700, fontSize:15, textTransform:'uppercase' }}>{c.label}</div>
+                {c.note && <div style={{ fontFamily:p.monoFont, fontSize:9.5, color:p.muted, marginTop:2 }}>{c.note}</div>}
               </div>
             </div>
           </NeonGlass>

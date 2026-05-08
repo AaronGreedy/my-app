@@ -13,12 +13,17 @@ export interface DayData {
   moodMorning: MoodId | null;
   moodEvening: MoodId | null;
   moodNote: string;
-  meHabits: boolean[];        // 6 me-habits (4 good + 2 bad)
-  mealSelected: (string|null)[];  // index of chosen option per meal, or null
+  moodNoteM: string;          // morning journal note
+  moodNoteE: string;          // evening journal note
+  meHabits: boolean[];        // 10 me-habits (8 good + 2 bad)
+  mealSelected: (string|null)[];
   caffeine: number;
   dietMode: 'bulk' | 'cut' | 'mantenimento';
-  workouts: string[];         // multi-select: ['PUSH','CARDIO'] etc.
+  workouts: string[];
+  supplementsTaken: string[];
 }
+
+const EMPTY_ME_HABITS = Array(10).fill(false) as boolean[];
 
 const EMPTY: DayData = {
   water: 0,
@@ -27,15 +32,24 @@ const EMPTY: DayData = {
   moodMorning: null,
   moodEvening: null,
   moodNote: '',
-  meHabits: [false, false, false, false, false, false],
+  moodNoteM: '',
+  moodNoteE: '',
+  meHabits: EMPTY_ME_HABITS,
   mealSelected: [null, null, null, null],
   caffeine: 0,
   dietMode: 'cut',
   workouts: [],
+  supplementsTaken: [],
 };
 
 function todayKey(): string {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function padHabits(arr: boolean[], len: number): boolean[] {
+  if (arr.length >= len) return arr.slice(0, len);
+  return [...arr, ...Array(len - arr.length).fill(false)];
 }
 
 export function useDayStore(uid: string | null) {
@@ -48,17 +62,20 @@ export function useDayStore(uid: string | null) {
       if (snap.exists()) {
         const d = snap.data();
         setData({
-          water:        typeof d.water === 'number'       ? d.water        : 0,
-          mood:         (d.mood        ?? null)            as MoodId | null,
-          habits:       Array.isArray(d.habits)            ? d.habits       : [false,false,false,false],
-          moodMorning:  (d.moodMorning ?? null)            as MoodId | null,
-          moodEvening:  (d.moodEvening ?? null)            as MoodId | null,
-          moodNote:     typeof d.moodNote === 'string'     ? d.moodNote     : '',
-          meHabits:     Array.isArray(d.meHabits)          ? d.meHabits     : [false,false,false,false,false,false],
-          mealSelected: Array.isArray(d.mealSelected)      ? d.mealSelected : [null,null,null,null],
-          caffeine:     typeof d.caffeine === 'number'     ? d.caffeine     : 0,
-          dietMode:     d.dietMode ?? 'cut',
-          workouts:     Array.isArray(d.workouts)          ? d.workouts     : [],
+          water:            typeof d.water === 'number'      ? d.water            : 0,
+          mood:             (d.mood        ?? null)           as MoodId | null,
+          habits:           Array.isArray(d.habits)           ? d.habits           : [false,false,false,false],
+          moodMorning:      (d.moodMorning ?? null)           as MoodId | null,
+          moodEvening:      (d.moodEvening ?? null)           as MoodId | null,
+          moodNote:         typeof d.moodNote  === 'string'   ? d.moodNote         : '',
+          moodNoteM:        typeof d.moodNoteM === 'string'   ? d.moodNoteM        : '',
+          moodNoteE:        typeof d.moodNoteE === 'string'   ? d.moodNoteE        : '',
+          meHabits:         Array.isArray(d.meHabits)         ? padHabits(d.meHabits, 10) : EMPTY_ME_HABITS,
+          mealSelected:     Array.isArray(d.mealSelected)     ? d.mealSelected     : [null,null,null,null],
+          caffeine:         typeof d.caffeine === 'number'    ? d.caffeine         : 0,
+          dietMode:         d.dietMode ?? 'cut',
+          workouts:         Array.isArray(d.workouts)         ? d.workouts         : [],
+          supplementsTaken: Array.isArray(d.supplementsTaken) ? d.supplementsTaken : [],
         });
       } else {
         setData(EMPTY);

@@ -1,22 +1,181 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { p } from '@/lib/design';
 import { NeonGlass, SectionLabel } from '@/components/neon-glass';
 import { MarkerDiamond, MarkerStar4, MarkerHex } from '@/components/markers';
 import { useAuth } from '@/lib/auth-context';
-import { useNotes, useShoppingList } from '@/lib/user-store';
+import { useNotes, useShoppingList, useGifts, Gift } from '@/lib/user-store';
 
 const TAGS = ['idea','progetto','fitness','lavoro','personale','mindfulness'] as const;
 type Tag = typeof TAGS[number];
 const TC: Record<Tag, string> = { idea:p.cyan, progetto:p.orange, fitness:p.green, lavoro:'#ffd400', personale:p.magenta, mindfulness:'#a78bfa' };
+
+const PIN_KEY = 'gifts_pin_hash';
+function hashPin(pin: string): string { return btoa(pin + 'pgapp_salt'); }
+function verifyPin(pin: string): boolean {
+  if (typeof window === 'undefined') return false;
+  const stored = localStorage.getItem(PIN_KEY);
+  return stored === hashPin(pin);
+}
+function storePin(pin: string) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(PIN_KEY, hashPin(pin));
+}
+function hasPin(): boolean {
+  if (typeof window === 'undefined') return false;
+  return !!localStorage.getItem(PIN_KEY);
+}
+
+// ─── PIN Pad ──────────────────────────────────────────────────────────────────
+
+function PinPad({ title, onSubmit, onCancel, confirmMode }: {
+  title: string;
+  onSubmit: (pin: string) => void;
+  onCancel: () => void;
+  confirmMode?: boolean;
+}) {
+  const [pin, setPin] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [step, setStep] = useState<'enter'|'confirm'>('enter');
+  const [error, setError] = useState('');
+
+  const press = (d: string) => {
+    if (step === 'enter') {
+      if (pin.length >= 3) return;
+      const next = pin + d;
+      setPin(next);
+      if (next.length === 3) {
+        if (confirmMode) { setStep('confirm'); }
+        else { setError(''); onSubmit(next); }
+      }
+    } else {
+      if (confirm.length >= 3) return;
+      const next = confirm + d;
+      setConfirm(next);
+      if (next.length === 3) {
+        if (next === pin) { onSubmit(next); }
+        else { setError('I PIN non coincidono'); setPin(''); setConfirm(''); setStep('enter'); }
+      }
+    }
+  };
+
+  const del = () => {
+    if (step === 'enter') setPin(p => p.slice(0,-1));
+    else setConfirm(c => c.slice(0,-1));
+  };
+
+  const current = step === 'enter' ? pin : confirm;
+
+  return (
+    <div style={{ display:'flex',flexDirection:'column',alignItems:'center',padding:'28px 24px 20px' }}>
+      <div style={{ fontFamily:p.monoFont,fontSize:10,color:p.muted,textTransform:'uppercase',letterSpacing:0.2,marginBottom:4 }}>{title}</div>
+      {confirmMode && <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim,marginBottom:16 }}>{step==='enter'?'Inserisci nuovo PIN':'Conferma PIN'}</div>}
+      {error && <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.red,marginBottom:10 }}>{error}</div>}
+      <div style={{ display:'flex',gap:16,marginBottom:28,marginTop:8 }}>
+        {[0,1,2].map(i => (
+          <div key={i} style={{ width:18,height:18,borderRadius:'50%',background:i < current.length ? p.magenta : 'rgba(255,255,255,0.12)',boxShadow:i < current.length ? `0 0 12px ${p.magenta}` : 'none',transition:'all .15s' }}/>
+        ))}
+      </div>
+      <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,width:'100%',maxWidth:220 }}>
+        {[1,2,3,4,5,6,7,8,9].map(n => (
+          <button key={n} onClick={() => press(String(n))} style={{ padding:'16px 0',borderRadius:16,border:`1px solid rgba(255,20,184,0.25)`,background:'rgba(255,20,184,0.08)',color:p.fg,fontFamily:p.displayFont,fontWeight:700,fontSize:22,cursor:'pointer',textAlign:'center' }}>{n}</button>
+        ))}
+        <button onClick={onCancel} style={{ padding:'16px 0',borderRadius:16,border:`1px solid ${p.border}`,background:'transparent',color:p.muted,fontFamily:p.monoFont,fontSize:10,cursor:'pointer',textTransform:'uppercase' }}>ESC</button>
+        <button onClick={() => press('0')} style={{ padding:'16px 0',borderRadius:16,border:`1px solid rgba(255,20,184,0.25)`,background:'rgba(255,20,184,0.08)',color:p.fg,fontFamily:p.displayFont,fontWeight:700,fontSize:22,cursor:'pointer',textAlign:'center' }}>0</button>
+        <button onClick={del} style={{ padding:'16px 0',borderRadius:16,border:`1px solid ${p.border}`,background:'transparent',color:p.muted,fontFamily:p.monoFont,fontSize:16,cursor:'pointer' }}>⌫</button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Gifts Section ─────────────────────────────────────────────────────────────
+
+function GiftsSection({ uid }: { uid: string | null }) {
+  const { gifts, saveGifts } = useGifts(uid);
+  const [verified, setVerified] = useState(false);
+  const [pinMode, setPinMode] = useState<'none'|'verify'|'set'>('none');
+  const [newLabel, setNewLabel] = useState('');
+  const [newNote, setNewNote] = useState('');
+
+  useEffect(() => {
+    if (!verified) setPinMode(hasPin() ? 'verify' : 'set');
+  }, [verified]);
+
+  const handlePinSubmit = (pin: string) => {
+    if (pinMode === 'set') { storePin(pin); setVerified(true); setPinMode('none'); }
+    else if (pinMode === 'verify') {
+      if (verifyPin(pin)) { setVerified(true); setPinMode('none'); }
+      else setPinMode('verify');
+    }
+  };
+
+  if (pinMode !== 'none' && !verified) {
+    return (
+      <PinPad
+        title={pinMode === 'set' ? '🎁 CREA PIN REGALI' : '🎁 INSERISCI PIN'}
+        onSubmit={handlePinSubmit}
+        onCancel={() => setPinMode('none')}
+        confirmMode={pinMode === 'set'}
+      />
+    );
+  }
+
+  const toggle = (id: string) => saveGifts(gifts.map(g => g.id === id ? { ...g, done: !g.done } : g));
+  const remove = (id: string) => saveGifts(gifts.filter(g => g.id !== id));
+  const add = () => {
+    if (!newLabel.trim()) return;
+    saveGifts([...gifts, { id: Date.now().toString(), label: newLabel.trim(), note: newNote.trim(), done: false }]);
+    setNewLabel(''); setNewNote('');
+  };
+
+  return (
+    <div>
+      <SectionLabel num="01" title="IDEE REGALO" hint="per lei 🤍"/>
+      <div style={{ display:'flex',gap:8,marginTop:8 }}>
+        <div style={{ flex:1 }}>
+          <input value={newLabel} onChange={e=>setNewLabel(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') add(); }} placeholder="Idea regalo…" style={{ width:'100%',padding:'12px 16px',borderRadius:14,border:`1px solid ${p.border}`,background:'rgba(255,255,255,0.05)',color:p.fg,fontFamily:p.bodyFont,fontSize:15,outline:'none' }}/>
+          <input value={newNote} onChange={e=>setNewNote(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') add(); }} placeholder="Note (link, prezzo…)" style={{ width:'100%',padding:'10px 16px',borderRadius:14,border:`1px solid ${p.border}`,background:'rgba(255,255,255,0.04)',color:p.fg,fontFamily:p.bodyFont,fontSize:13,outline:'none',marginTop:6 }}/>
+        </div>
+        <NeonGlass radius={14} tint="rgba(255,20,184,0.12)" edge="rgba(255,20,184,0.4)" onClick={add}>
+          <div style={{ padding:'12px 18px',fontFamily:p.monoFont,fontSize:11,color:p.magenta }}>+</div>
+        </NeonGlass>
+      </div>
+
+      {gifts.length === 0 && (
+        <div style={{ textAlign:'center',padding:'40px 0',fontFamily:p.monoFont,fontSize:11,color:p.dim }}>nessuna idea · aggiungine una</div>
+      )}
+
+      <div style={{ display:'flex',flexDirection:'column',gap:6,marginTop:12 }}>
+        {gifts.map(g => (
+          <NeonGlass key={g.id} tint={g.done?'rgba(166,255,0,0.06)':'rgba(255,20,184,0.06)'} edge={g.done?'rgba(166,255,0,0.2)':'rgba(255,20,184,0.2)'} radius={18}>
+            <div style={{ padding:'12px 14px',display:'flex',alignItems:'center',gap:10 }}>
+              <button onClick={() => toggle(g.id)} style={{ width:20,height:20,borderRadius:6,border:`1.5px solid ${g.done?p.green:p.magenta}`,background:g.done?p.green:'transparent',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',color:'#0a0a0a',fontSize:12,fontWeight:900,cursor:'pointer',boxShadow:g.done?`0 0 8px ${p.green}`:'none' }}>{g.done?'✓':''}</button>
+              <div style={{ flex:1 }}>
+                <div style={{ fontFamily:p.bodyFont,fontWeight:600,fontSize:14,color:g.done?p.muted:p.fg,textDecoration:g.done?'line-through':'none' }}>{g.label}</div>
+                {g.note && <div style={{ fontFamily:p.monoFont,fontSize:10,color:p.dim,marginTop:2 }}>{g.note}</div>}
+              </div>
+              <button onClick={() => remove(g.id)} style={{ background:'transparent',border:'none',color:p.dim,cursor:'pointer',fontSize:16,padding:'0 4px' }}>×</button>
+            </div>
+          </NeonGlass>
+        ))}
+      </div>
+
+      <NeonGlass style={{ marginTop:16 }} tint="rgba(255,0,64,0.06)" radius={14} onClick={() => { setVerified(false); setPinMode(hasPin()?'verify':'set'); }}>
+        <div style={{ padding:'10px 16px',textAlign:'center',fontFamily:p.monoFont,fontSize:9,color:p.dim,textTransform:'uppercase' }}>🔒 Blocca · cambia PIN</div>
+      </NeonGlass>
+    </div>
+  );
+}
+
+// ─── BrainScreen ──────────────────────────────────────────────────────────────
 
 export function BrainScreen() {
   const { user } = useAuth();
   const { notes, addNote, deleteNote } = useNotes(user?.uid ?? null);
   const { items, addItem, toggleItem, removeItem } = useShoppingList(user?.uid ?? null);
 
-  const [section, setSection] = useState<'brain'|'spesa'>('brain');
+  const [section, setSection] = useState<'brain'|'spesa'|'regali'>('brain');
   const [search, setSearch] = useState('');
   const [activeTag, setActiveTag] = useState<Tag | null>(null);
   const [showNew, setShowNew] = useState(false);
@@ -40,7 +199,7 @@ export function BrainScreen() {
   const formatDate = (ts: number) => new Date(ts).toLocaleDateString('it-IT',{day:'2-digit',month:'short'}).toUpperCase();
 
   return (
-    <div style={{ position:'absolute', inset:0, overflow:'auto', background:p.bg, color:p.fg, fontFamily:p.bodyFont }}>
+    <div style={{ position:'absolute', inset:0, overflowY:'auto', overflowX:'hidden', background:p.bg, color:p.fg, fontFamily:p.bodyFont }}>
       {[{t:-80,l:-60,w:260,c:'#6b00ff',o:0.55},{t:400,r:-80,w:280,c:'#00f0ff',o:0.4}].map((orb,i) => (
         <div key={i} style={{ position:'absolute', top:orb.t, left:'l' in orb ? orb.l : undefined, right:'r' in orb ? (orb as {r:number}).r : undefined, width:orb.w, height:orb.w, borderRadius:'50%', background:`radial-gradient(circle, ${orb.c} 0%, transparent 65%)`, filter:'blur(65px)', opacity:orb.o, zIndex:0, pointerEvents:'none' }} />
       ))}
@@ -64,10 +223,10 @@ export function BrainScreen() {
         </div>
 
         {/* Section tabs */}
-        <div style={{ display:'flex', gap:6, marginTop:18 }}>
-          {(['brain','spesa'] as const).map(s => (
-            <button key={s} onClick={() => setSection(s)} style={{ flex:1, padding:'10px 4px', borderRadius:14, border:`1px solid ${section===s?p.cyan:'rgba(255,255,255,0.1)'}`, background:section===s?'rgba(0,240,255,0.12)':'transparent', color:section===s?p.fg:p.muted, cursor:'pointer', fontFamily:p.monoFont, fontSize:9.5, letterSpacing:0.15, textTransform:'uppercase' }}>
-              {s === 'brain' ? '🧠 BRAIN' : '🛒 SPESA'}
+        <div style={{ display:'flex', gap:5, marginTop:18 }}>
+          {([['brain','🧠 BRAIN'],['spesa','🛒 SPESA'],['regali','🎁 REGALI']] as [typeof section, string][]).map(([s, lbl]) => (
+            <button key={s} onClick={() => setSection(s)} style={{ flex:1, padding:'10px 4px', borderRadius:14, border:`1px solid ${section===s?(s==='regali'?p.magenta:p.cyan):'rgba(255,255,255,0.1)'}`, background:section===s?(s==='regali'?'rgba(255,20,184,0.12)':'rgba(0,240,255,0.12)'):'transparent', color:section===s?p.fg:p.muted, cursor:'pointer', fontFamily:p.monoFont, fontSize:9, letterSpacing:0.12, textTransform:'uppercase' }}>
+              {lbl}
             </button>
           ))}
         </div>
@@ -98,7 +257,7 @@ export function BrainScreen() {
               ))}
             </div>
 
-            <SectionLabel num="01" title="NOTE" hint={`${filtered.length} nota${filtered.length!==1?'':''}`}/>
+            <SectionLabel num="01" title="NOTE" hint={`${filtered.length} nota${filtered.length!==1?'e':''}`}/>
 
             {filtered.length === 0 && (
               <div style={{ textAlign:'center', padding:'40px 0', fontFamily:p.monoFont, fontSize:11, color:p.dim }}>
@@ -184,6 +343,9 @@ export function BrainScreen() {
             )}
           </>
         )}
+
+        {/* ── REGALI TAB ── */}
+        {section === 'regali' && <GiftsSection uid={user?.uid ?? null} />}
 
       </div>
 

@@ -41,3 +41,19 @@ body > div {
 
 ::-webkit-scrollbar { display: none; }
 * { scrollbar-width: none; }
+
+/* Prevent horizontal scroll on all scrollable containers */
+[style*="overflow"] {
+  overflow-x: hidden !important;
+  -ms-overflow-style: none;
+}
+
+/* Prevent bounce/horizontal pan on iOS */
+html {
+  overscroll-behavior: none;
+  touch-action: pan-y;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}

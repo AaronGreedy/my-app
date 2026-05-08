@@ -108,3 +108,191 @@ export function useUserProfile(uid: string | null) {
 
   return { prs, savePr };
 }
+
+// ─── Countdowns ───────────────────────────────────────────────────────────────
+
+export interface Countdown {
+  id: string;
+  label: string;
+  date: string; // YYYY-MM-DD
+  note: string;
+}
+
+export function daysUntil(dateStr: string): number {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const target = new Date(y, m - 1, d);
+  return Math.max(0, Math.round((target.getTime() - today.getTime()) / 86400000));
+}
+
+const DEFAULT_COUNTDOWNS: Countdown[] = [
+  { id: 'c1', label: 'Anniversario · 3 anni', date: '2026-05-21', note: 'regalo da pensare' },
+  { id: 'c2', label: 'Fine Cut Q2', date: '2026-06-30', note: 'obiettivo 82 kg' },
+];
+
+export function useCountdowns(uid: string | null) {
+  const [countdowns, setCountdowns] = useState<Countdown[]>(DEFAULT_COUNTDOWNS);
+
+  useEffect(() => {
+    if (!uid || !db) return;
+    const ref = doc(db, 'users', uid, 'profile');
+    return onSnapshot(ref, snap => {
+      if (snap.exists() && Array.isArray(snap.data().countdowns)) {
+        setCountdowns(snap.data().countdowns);
+      }
+    });
+  }, [uid]);
+
+  const saveCountdowns = (list: Countdown[]) => {
+    setCountdowns(list);
+    if (!uid || !db) return;
+    setDoc(doc(db, 'users', uid, 'profile'), { countdowns: list }, { merge: true }).catch(console.error);
+  };
+
+  return { countdowns, saveCountdowns };
+}
+
+// ─── XP / Gamification ────────────────────────────────────────────────────────
+
+const TIER_NAMES = ['RECLUTA','APPRENDISTA','GUERRIERO','VETERANO','MAESTRO','LEGGENDA','MITO'] as const;
+
+function xpThreshold(level: number): number {
+  return Math.round(100 * Math.pow(level, 1.6));
+}
+
+export function levelInfo(totalXP: number) {
+  let level = 1;
+  while (xpThreshold(level) <= totalXP) level++;
+  const tierIdx = Math.min(Math.floor((level - 1) / 5), TIER_NAMES.length - 1);
+  const xpCurr = xpThreshold(level - 1);
+  const xpNext = xpThreshold(level);
+  return {
+    level,
+    tier: TIER_NAMES[tierIdx] as string,
+    progress: Math.max(0, Math.min(1, (totalXP - xpCurr) / Math.max(1, xpNext - xpCurr))),
+    xpNext,
+  };
+}
+
+export function useXP(uid: string | null) {
+  const [totalXP, setTotalXP] = useState(0);
+
+  useEffect(() => {
+    if (!uid || !db) return;
+    const ref = doc(db, 'users', uid, 'profile');
+    return onSnapshot(ref, snap => {
+      if (snap.exists() && typeof snap.data().xp === 'number') setTotalXP(snap.data().xp);
+    });
+  }, [uid]);
+
+  const addXP = (amount: number) => {
+    const next = totalXP + amount;
+    setTotalXP(next);
+    if (!uid || !db) return;
+    setDoc(doc(db, 'users', uid, 'profile'), { xp: next }, { merge: true }).catch(console.error);
+  };
+
+  return { totalXP, addXP, ...levelInfo(totalXP) };
+}
+
+// ─── Supplements ─────────────────────────────────────────────────────────────
+
+export interface Supplement {
+  id: string;
+  name: string;
+  dose: string;
+  when: 'mattina' | 'sera';
+}
+
+const DEFAULT_SUPPLEMENTS: Supplement[] = [
+  { id: 's1', name: 'Omega 3', dose: '2g', when: 'mattina' },
+  { id: 's2', name: 'Vitamina D3', dose: '2000 UI', when: 'mattina' },
+  { id: 's3', name: 'Magnesio', dose: '400mg', when: 'sera' },
+  { id: 's4', name: 'Melatonina', dose: '0.5mg', when: 'sera' },
+];
+
+export function useSupplements(uid: string | null) {
+  const [supplements, setSupplements] = useState<Supplement[]>(DEFAULT_SUPPLEMENTS);
+
+  useEffect(() => {
+    if (!uid || !db) return;
+    const ref = doc(db, 'users', uid, 'profile');
+    return onSnapshot(ref, snap => {
+      if (snap.exists() && Array.isArray(snap.data().supplements)) {
+        setSupplements(snap.data().supplements);
+      }
+    });
+  }, [uid]);
+
+  const saveSupplements = (list: Supplement[]) => {
+    setSupplements(list);
+    if (!uid || !db) return;
+    setDoc(doc(db, 'users', uid, 'profile'), { supplements: list }, { merge: true }).catch(console.error);
+  };
+
+  return { supplements, saveSupplements };
+}
+
+// ─── Gifts (PIN protected) ────────────────────────────────────────────────────
+
+export interface Gift {
+  id: string;
+  label: string;
+  note: string;
+  done: boolean;
+}
+
+export function useGifts(uid: string | null) {
+  const [gifts, setGifts] = useState<Gift[]>([]);
+
+  useEffect(() => {
+    if (!uid || !db) return;
+    const ref = doc(db, 'users', uid, 'lists', 'gifts');
+    return onSnapshot(ref, snap => {
+      if (snap.exists()) setGifts((snap.data().items ?? []) as Gift[]);
+      else setGifts([]);
+    });
+  }, [uid]);
+
+  const saveGifts = (list: Gift[]) => {
+    setGifts(list);
+    if (!uid || !db) return;
+    setDoc(doc(db, 'users', uid, 'lists', 'gifts'), { items: list }, { merge: true }).catch(console.error);
+  };
+
+  return { gifts, saveGifts };
+}
+
+// ─── Weight Log ───────────────────────────────────────────────────────────────
+
+export interface WeightEntry {
+  date: string; // YYYY-MM-DD
+  weight: number;
+}
+
+export function useWeightLog(uid: string | null) {
+  const [entries, setEntries] = useState<WeightEntry[]>([]);
+
+  useEffect(() => {
+    if (!uid || !db) return;
+    const ref = doc(db, 'users', uid, 'profile');
+    return onSnapshot(ref, snap => {
+      if (snap.exists() && Array.isArray(snap.data().weightLog)) {
+        const sorted = [...snap.data().weightLog].sort((a: WeightEntry, b: WeightEntry) => a.date.localeCompare(b.date));
+        setEntries(sorted);
+      }
+    });
+  }, [uid]);
+
+  const logWeight = (weight: number) => {
+    const d = new Date();
+    const date = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const next = [...entries.filter(e => e.date !== date), { date, weight }].sort((a,b) => a.date.localeCompare(b.date));
+    setEntries(next);
+    if (!uid || !db) return;
+    setDoc(doc(db, 'users', uid, 'profile'), { weightLog: next }, { merge: true }).catch(console.error);
+  };
+
+  return { entries, logWeight };
+}

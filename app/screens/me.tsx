@@ -6,8 +6,8 @@ import { NeonGlass, SectionLabel } from '@/components/neon-glass';
 import { MarkerDiamond, MarkerStar4 } from '@/components/markers';
 import { MoodFace } from '@/components/mood-face';
 import { useAuth } from '@/lib/auth-context';
-import { useDayStore, MoodId, DayData } from '@/lib/day-store';
-import { useUserProfile, DEFAULT_PRS } from '@/lib/user-store';
+import { useDayStore, MoodId, DayData, useMonthData } from '@/lib/day-store';
+import { useUserProfile, useSupplements, useWeightLog, useNotes, DEFAULT_PRS } from '@/lib/user-store';
 import { MEALS, getMealTotals } from '@/lib/meals';
 
 const MOODS: { id: MoodId; c: string; l: string }[] = [
@@ -15,6 +15,10 @@ const MOODS: { id: MoodId; c: string; l: string }[] = [
   {id:'meh',c:'#ffd400',l:'OK'},{id:'good',c:p.green,l:'BENE'},{id:'great',c:p.cyan,l:'TOP'},
 ];
 const MC: Record<MoodId, string> = {awful:p.red,bad:p.orange,meh:'#ffd400',good:p.green,great:p.cyan};
+
+function localDateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
 
 // ─── Cibo ──────────────────────────────────────────────────────────────────────
 
@@ -93,31 +97,68 @@ function CiboTab({ data, save }: { data: DayData; save: (p: Partial<DayData>) =>
       <NeonGlass style={{ marginTop:8 }} tint="rgba(255,255,255,0.04)" radius={18}>
         <div style={{ padding:'12px 16px', display:'flex', gap:8, alignItems:'center' }}>
           {['☕ Caffè','🍵 Tè','⚡ Monster'].map(label => (
-            <button key={label} onClick={() => save({ caffeine: Math.min(3, caffeine + 1) })} style={{ flex:1,padding:'10px 4px',borderRadius:14,border:'1px solid rgba(255,212,0,0.3)',background:'rgba(255,212,0,0.08)',color:p.fg,cursor:'pointer',fontFamily:p.monoFont,fontSize:9.5,textTransform:'uppercase' }}>{label}</button>
+            <button key={label} onClick={() => save({ caffeine: Math.min(5, caffeine + 1) })} style={{ flex:1,padding:'10px 4px',borderRadius:14,border:`1px solid ${caffeine>=3?'rgba(255,0,64,0.4)':'rgba(255,212,0,0.3)'}`,background:caffeine>=3?'rgba(255,0,64,0.1)':'rgba(255,212,0,0.08)',color:p.fg,cursor:'pointer',fontFamily:p.monoFont,fontSize:9.5,textTransform:'uppercase' }}>{label}</button>
           ))}
+          <button onClick={() => save({ caffeine: Math.max(0, caffeine - 1) })} style={{ padding:'10px 10px',borderRadius:14,border:`1px solid ${p.border}`,background:'transparent',color:p.muted,cursor:'pointer',fontFamily:p.monoFont,fontSize:14 }}>−</button>
           <div style={{ fontFamily:p.displayFont,fontSize:26,fontWeight:800,color:caffeine>=3?p.red:p.fg,minWidth:28,textAlign:'center' }}>{caffeine}</div>
         </div>
+        {caffeine >= 3 && <div style={{ padding:'0 16px 10px',fontFamily:p.monoFont,fontSize:9,color:p.red,textTransform:'uppercase' }}>⚠ LIMITE RAGGIUNTO</div>}
       </NeonGlass>
     </div>
   );
 }
 
-// ─── Fitness ───────────────────────────────────────────────────────────────────
+// ─── Fitness + Peso ────────────────────────────────────────────────────────────
 
 const WORKOUT_TYPES = ['PUSH','PULL','LEGS','CARDIO'] as const;
 
+function WeightSparkline({ entries }: { entries: { date: string; weight: number }[] }) {
+  const last = entries.slice(-30);
+  if (last.length < 2) return null;
+  const min = Math.min(...last.map(e => e.weight)) - 0.5;
+  const max = Math.max(...last.map(e => e.weight)) + 0.5;
+  const W = 280, H = 60;
+  const pts = last.map((e, i) => {
+    const x = (i / (last.length - 1)) * W;
+    const y = H - ((e.weight - min) / (max - min)) * H;
+    return `${x},${y}`;
+  }).join(' ');
+  const latest = last[last.length - 1];
+  const prev   = last[last.length - 2];
+  const delta  = latest.weight - prev.weight;
+  return (
+    <div>
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display:'block', marginBottom:6 }}>
+        <polyline points={pts} fill="none" stroke={p.magenta} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ filter:`drop-shadow(0 0 4px ${p.magenta})` }}/>
+        {last.map((e, i) => {
+          const x = (i / (last.length - 1)) * W;
+          const y = H - ((e.weight - min) / (max - min)) * H;
+          return <circle key={i} cx={x} cy={y} r="2.5" fill={p.magenta} opacity={i === last.length - 1 ? 1 : 0.4}/>;
+        })}
+      </svg>
+      <div style={{ display:'flex', justifyContent:'space-between', fontFamily:p.monoFont, fontSize:9, color:p.dim }}>
+        <span>{min.toFixed(1)} kg</span>
+        <span style={{ color: delta <= 0 ? p.green : p.red }}>{delta > 0 ? '+' : ''}{delta.toFixed(1)} kg vs ieri</span>
+        <span>{max.toFixed(1)} kg</span>
+      </div>
+    </div>
+  );
+}
+
 function FitnessTab({
-  data, save,
-  prs, savePr,
+  data, save, prs, savePr, uid,
 }: {
   data: DayData; save: (p: Partial<DayData>) => void;
   prs: Record<string, string>; savePr: (name: string, val: string) => void;
+  uid: string | null;
 }) {
   const workouts = data.workouts;
   const [cardioSlope, setCardioSlope] = useState('3');
   const [cardioSpeed, setCardioSpeed] = useState('6.5');
   const [editingPR, setEditingPR] = useState<string|null>(null);
   const [editVal, setEditVal] = useState('');
+  const [weightInput, setWeightInput] = useState('');
+  const { entries, logWeight } = useWeightLog(uid);
 
   const toggleWorkout = (w: string) => {
     const next = workouts.includes(w) ? workouts.filter(x => x !== w) : [...workouts, w];
@@ -125,8 +166,8 @@ function FitnessTab({
   };
 
   const cardioKcal = Math.round(parseFloat(cardioSpeed||'0') * parseFloat(cardioSlope||'0') * 0.85 + parseFloat(cardioSpeed||'0') * 4.5);
-
   const prNames = Object.keys(DEFAULT_PRS);
+  const latestWeight = entries.length > 0 ? entries[entries.length - 1].weight : null;
 
   return (
     <div>
@@ -155,11 +196,11 @@ function FitnessTab({
                   <input type="number" value={cardioSlope} onChange={e=>setCardioSlope(e.target.value)} style={{ width:'100%',background:'rgba(255,255,255,0.06)',border:`1px solid ${p.border}`,borderRadius:10,padding:'8px 12px',color:p.fg,fontFamily:p.displayFont,fontSize:22,fontWeight:700,outline:'none' }}/>
                 </div>
                 <div style={{ flex:1 }}>
-                  <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim,textTransform:'uppercase',marginBottom:4 }}>VELOCITÀ km/h</div>
+                  <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim,textTransform:'uppercase',marginBottom:4 }}>KM/H</div>
                   <input type="number" step="0.5" value={cardioSpeed} onChange={e=>setCardioSpeed(e.target.value)} style={{ width:'100%',background:'rgba(255,255,255,0.06)',border:`1px solid ${p.border}`,borderRadius:10,padding:'8px 12px',color:p.fg,fontFamily:p.displayFont,fontSize:22,fontWeight:700,outline:'none' }}/>
                 </div>
                 <div style={{ flex:1 }}>
-                  <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim,textTransform:'uppercase',marginBottom:4 }}>KCAL EST.</div>
+                  <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim,textTransform:'uppercase',marginBottom:4 }}>KCAL</div>
                   <div style={{ fontFamily:p.displayFont,fontSize:22,fontWeight:700,color:p.orange,paddingTop:8 }}>{cardioKcal}</div>
                 </div>
               </div>
@@ -175,15 +216,10 @@ function FitnessTab({
             <div style={{ padding:'12px 14px' }}>
               <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim,textTransform:'uppercase',letterSpacing:0.15 }}>{name}</div>
               {editingPR === name ? (
-                <input
-                  autoFocus
-                  type="number"
-                  value={editVal}
-                  onChange={e=>setEditVal(e.target.value)}
+                <input autoFocus type="number" value={editVal} onChange={e=>setEditVal(e.target.value)}
                   onBlur={() => { savePr(name, editVal); setEditingPR(null); }}
                   onKeyDown={e => { if(e.key==='Enter'){ savePr(name, editVal); setEditingPR(null); } }}
-                  style={{ width:'100%',background:'transparent',border:'none',borderBottom:`1px solid ${p.orange}`,outline:'none',color:p.orange,fontFamily:p.displayFont,fontSize:28,fontWeight:800,padding:'4px 0' }}
-                />
+                  style={{ width:'100%',background:'transparent',border:'none',borderBottom:`1px solid ${p.orange}`,outline:'none',color:p.orange,fontFamily:p.displayFont,fontSize:28,fontWeight:800,padding:'4px 0' }}/>
               ) : (
                 <div style={{ fontFamily:p.displayFont,fontSize:30,fontWeight:800,color:p.fg,marginTop:4 }}>{prs[name]??DEFAULT_PRS[name]}<span style={{ fontSize:12,color:p.muted }}>kg</span></div>
               )}
@@ -191,23 +227,66 @@ function FitnessTab({
           </NeonGlass>
         ))}
       </div>
+
+      <SectionLabel num={workouts.includes('CARDIO')?'04':'03'} title="PESO" hint={latestWeight ? `${latestWeight} kg` : 'nessun log'}/>
+      <NeonGlass style={{ marginTop:8 }} tint="linear-gradient(135deg,rgba(255,20,184,0.18),rgba(107,0,255,0.12))" edge="rgba(255,20,184,0.4)" radius={22}>
+        <div style={{ padding:'14px 16px' }}>
+          {entries.length >= 2 && <WeightSparkline entries={entries} />}
+          {entries.length === 0 && <div style={{ fontFamily:p.monoFont,fontSize:10,color:p.dim,marginBottom:10 }}>Inizia a loggare il peso giornaliero</div>}
+          <div style={{ display:'flex', gap:8, marginTop: entries.length > 0 ? 10 : 0, alignItems:'center' }}>
+            <input type="number" step="0.1" value={weightInput} onChange={e=>setWeightInput(e.target.value)} placeholder={latestWeight ? String(latestWeight) : '84.8'} style={{ flex:1,background:'rgba(255,255,255,0.06)',border:`1px solid ${p.border}`,borderRadius:12,padding:'10px 14px',color:p.fg,fontFamily:p.displayFont,fontSize:22,fontWeight:700,outline:'none',minWidth:0 }}/>
+            <span style={{ fontFamily:p.monoFont,fontSize:11,color:p.muted,flexShrink:0 }}>kg</span>
+            <button onClick={() => { if(weightInput) { logWeight(parseFloat(weightInput)); setWeightInput(''); } }} style={{ padding:'10px 18px',borderRadius:12,border:'none',background:p.magenta,color:'#0a0a0a',fontFamily:p.monoFont,fontSize:10,textTransform:'uppercase',cursor:'pointer',fontWeight:800,flexShrink:0 }}>Salva</button>
+          </div>
+          {entries.length >= 2 && (() => {
+            const last7 = entries.slice(-7);
+            const avg7 = last7.reduce((s,e)=>s+e.weight,0)/last7.length;
+            return <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim,marginTop:8 }}>Media 7gg: {avg7.toFixed(1)} kg · {entries.length} log totali</div>;
+          })()}
+        </div>
+      </NeonGlass>
     </div>
   );
 }
 
-// ─── Mood ──────────────────────────────────────────────────────────────────────
+// ─── Mood + Journal ────────────────────────────────────────────────────────────
 
-function MoodTab({ data, save }: { data: DayData; save: (p: Partial<DayData>) => void }) {
-  const morning = data.moodMorning;
-  const evening = data.moodEvening;
-  const note    = data.moodNote;
+function MoodTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayData>) => void; uid: string | null }) {
+  const morning  = data.moodMorning;
+  const evening  = data.moodEvening;
+  const noteM    = data.moodNoteM;
+  const noteE    = data.moodNoteE;
+  const { addNote } = useNotes(uid);
 
-  const heatmap: (MoodId|null)[][] = [
-    [null,null,null,null,null,null,null],
-    [null,null,null,null,null,null,null],
-    [null,null,null,null,null,null,null],
-    [null,null,null,null,null,null,null],
-  ];
+  const now = new Date();
+  const currMonthData = useMonthData(uid, now.getFullYear(), now.getMonth());
+  const prevMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
+  const prevYear  = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+  const prevMonthData = useMonthData(uid, prevYear, prevMonth);
+  const allDays = { ...prevMonthData, ...currMonthData };
+
+  const today = new Date(); today.setHours(0,0,0,0);
+  const heatmap: (MoodId|null)[][] = Array.from({length:4}, (_,w) =>
+    Array.from({length:7}, (_,d) => {
+      const date = new Date(today);
+      date.setDate(today.getDate() - 27 + w * 7 + d);
+      const key = localDateKey(date);
+      const dd = allDays[key];
+      return (dd?.moodEvening ?? dd?.mood ?? null) as MoodId | null;
+    })
+  );
+
+  const saveMorningNote = () => {
+    if (!noteM.trim()) return;
+    const dateStr = localDateKey(new Date());
+    addNote(`MATTINA ${dateStr} · ${noteM.trim().slice(0,50)}`, ['personale']);
+  };
+
+  const saveEveningNote = () => {
+    if (!noteE.trim()) return;
+    const dateStr = localDateKey(new Date());
+    addNote(`SERA ${dateStr} · ${noteE.trim().slice(0,50)}`, ['personale']);
+  };
 
   const MoodPicker = ({ value, onChange, label }: { value: MoodId|null; onChange: (v: MoodId) => void; label: string }) => (
     <div>
@@ -231,13 +310,20 @@ function MoodTab({ data, save }: { data: DayData; save: (p: Partial<DayData>) =>
       <SectionLabel num="01" title="LOG OGGI" hint=""/>
       <NeonGlass style={{ marginTop:8 }} tint="rgba(255,255,255,0.04)" radius={22}>
         <div style={{ padding:'16px' }}>
-          <MoodPicker value={morning} onChange={v => save({ moodMorning: v })} label="MATTINA"/>
-          <div style={{ height:1,background:p.border,margin:'14px 0' }}/>
-          <MoodPicker value={evening} onChange={v => save({ moodEvening: v })} label="SERA"/>
-          <textarea value={note} onChange={e => save({ moodNote: e.target.value })} placeholder="Cosa ha influenzato il tuo umore?" rows={3}
-            style={{ width:'100%',resize:'none',border:`1px solid ${p.border}`,outline:'none',borderRadius:14,marginTop:14,padding:'10px 14px',background:'rgba(255,255,255,0.04)',color:p.fg,fontFamily:p.bodyFont,fontSize:14 }}/>
+          <MoodPicker value={morning} onChange={v => save({ moodMorning: v })} label="☀ MATTINA"/>
+          <textarea value={noteM} onChange={e => save({ moodNoteM: e.target.value })} placeholder="Come stai stamattina? Cosa senti?" rows={3}
+            style={{ width:'100%',resize:'none',border:`1px solid ${p.border}`,outline:'none',borderRadius:14,marginTop:10,padding:'10px 14px',background:'rgba(255,255,255,0.04)',color:p.fg,fontFamily:p.bodyFont,fontSize:14 }}/>
+          <button onClick={saveMorningNote} style={{ marginTop:8,padding:'8px 16px',borderRadius:12,border:`1px solid rgba(0,240,255,0.3)`,background:'rgba(0,240,255,0.08)',color:p.cyan,fontFamily:p.monoFont,fontSize:9.5,textTransform:'uppercase',cursor:'pointer' }}>↵ Salva nel Brain</button>
+
+          <div style={{ height:1,background:p.border,margin:'16px 0' }}/>
+
+          <MoodPicker value={evening} onChange={v => save({ moodEvening: v })} label="🌙 SERA"/>
+          <textarea value={noteE} onChange={e => save({ moodNoteE: e.target.value })} placeholder="Com'è andata oggi? Rifletti sulla giornata." rows={3}
+            style={{ width:'100%',resize:'none',border:`1px solid ${p.border}`,outline:'none',borderRadius:14,marginTop:10,padding:'10px 14px',background:'rgba(255,255,255,0.04)',color:p.fg,fontFamily:p.bodyFont,fontSize:14 }}/>
+          <button onClick={saveEveningNote} style={{ marginTop:8,padding:'8px 16px',borderRadius:12,border:`1px solid rgba(0,240,255,0.3)`,background:'rgba(0,240,255,0.08)',color:p.cyan,fontFamily:p.monoFont,fontSize:9.5,textTransform:'uppercase',cursor:'pointer' }}>↵ Salva nel Brain</button>
         </div>
       </NeonGlass>
+
       <SectionLabel num="02" title="HEATMAP" hint="4 settimane"/>
       <NeonGlass style={{ marginTop:8 }} tint="rgba(255,255,255,0.04)" radius={22}>
         <div style={{ padding:'14px 16px' }}>
@@ -247,10 +333,18 @@ function MoodTab({ data, save }: { data: DayData; save: (p: Partial<DayData>) =>
           {heatmap.map((week,wi) => (
             <div key={wi} style={{ display:'flex', gap:3, marginBottom:3 }}>
               {week.map((m,di) => (
-                <div key={di} style={{ flex:1,height:22,borderRadius:6,background:m?`${MC[m]}55`:'rgba(255,255,255,0.04)',border:m?`1px solid ${MC[m]}44`:'1px solid transparent' }}/>
+                <div key={di} style={{ flex:1,height:22,borderRadius:6,background:m?`${MC[m]}55`:'rgba(255,255,255,0.04)',border:m?`1px solid ${MC[m]}44`:'1px solid transparent',transition:'background .3s' }}/>
               ))}
             </div>
           ))}
+          <div style={{ display:'flex',gap:10,marginTop:10,flexWrap:'wrap' }}>
+            {MOODS.map(m => (
+              <div key={m.id} style={{ display:'flex',alignItems:'center',gap:4 }}>
+                <div style={{ width:8,height:8,borderRadius:3,background:`${m.c}55`,border:`1px solid ${m.c}44` }}/>
+                <span style={{ fontFamily:p.monoFont,fontSize:8,color:p.dim }}>{m.l}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </NeonGlass>
     </div>
@@ -259,38 +353,55 @@ function MoodTab({ data, save }: { data: DayData; save: (p: Partial<DayData>) =>
 
 // ─── Habits ────────────────────────────────────────────────────────────────────
 
+const GOOD_HABITS = [
+  {n:'Stretching',         s:28, xp:15},
+  {n:'No scroll a letto',  s:14, xp:20},
+  {n:'Luci rosse sera',    s:6,  xp:10},
+  {n:'Candle prima dormire',s:3,  xp:10},
+  {n:'Meditazione 5 min',  s:0,  xp:15},
+  {n:'Lettura 15 min',     s:0,  xp:10},
+  {n:'Doccia fredda',      s:0,  xp:20},
+  {n:'Allenamento',        s:0,  xp:30},
+];
+
+const BAD_HABITS = [
+  {n:'No Fap',   xp:50},
+  {n:'Junk food',xp:30},
+];
+
 function HabitsTab({ data, save }: { data: DayData; save: (p: Partial<DayData>) => void }) {
   const habits = data.meHabits;
-  const goodH = [{n:'Stretching',s:28,xp:15},{n:'No scroll a letto',s:14,xp:20},{n:'Luci rosse sera',s:6,xp:10},{n:'Candle prima dormire',s:3,xp:10}];
-  const badH = [{n:'Fumo',xp:50},{n:'Junk food',xp:30}];
   const toggle = (i: number) => save({ meHabits: habits.map((v, ix) => ix === i ? !v : v) });
+
   const totalXP = habits.reduce((acc,v,i) => {
     if (!v) return acc;
-    const h = i < goodH.length ? goodH[i] : badH[i - goodH.length];
+    const h = i < GOOD_HABITS.length ? GOOD_HABITS[i] : BAD_HABITS[i - GOOD_HABITS.length];
     return acc + (h?.xp ?? 0);
   }, 0);
+
   return (
     <div>
       <SectionLabel num="01" title="GOOD HABITS" hint={`+${totalXP} XP oggi`}/>
       <div style={{ display:'flex', flexDirection:'column', gap:6, marginTop:8 }}>
-        {goodH.map((h,i) => {
+        {GOOD_HABITS.map((h,i) => {
           const on = !!habits[i];
           return (
             <NeonGlass key={h.n} onClick={() => toggle(i)} tint={on?'rgba(166,255,0,0.1)':'rgba(255,255,255,0.03)'} edge={on?'rgba(166,255,0,0.4)':undefined} radius={18}>
               <div style={{ padding:'12px 14px', display:'flex', alignItems:'center', gap:10 }}>
                 <div style={{ width:18,height:18,borderRadius:6,border:`1.5px solid ${on?p.green:p.muted}`,background:on?p.green:'transparent',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',color:'#0a0a0a',fontSize:11,fontWeight:900,boxShadow:on?`0 0 10px ${p.green}`:'none' }}>{on?'✓':''}</div>
                 <div style={{ flex:1,fontFamily:p.bodyFont,fontWeight:600,fontSize:13,color:on?p.fg:p.muted,textTransform:'uppercase' }}>{h.n}</div>
-                <span style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim }}>×{h.s}</span>
+                {h.s > 0 && <span style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim }}>×{h.s}</span>}
                 <span style={{ fontFamily:p.monoFont,fontSize:9,color:p.green }}>+{h.xp}xp</span>
               </div>
             </NeonGlass>
           );
         })}
       </div>
-      <SectionLabel num="02" title="BAD HABITS" hint="rimozione"/>
+
+      <SectionLabel num="02" title="BAD HABITS" hint="evita · guadagna XP"/>
       <div style={{ display:'flex', flexDirection:'column', gap:6, marginTop:8 }}>
-        {badH.map((h,i) => {
-          const idx = goodH.length + i;
+        {BAD_HABITS.map((h,i) => {
+          const idx = GOOD_HABITS.length + i;
           const avoided = !!habits[idx];
           return (
             <NeonGlass key={h.n} onClick={() => toggle(idx)} tint={avoided?'rgba(166,255,0,0.08)':'rgba(255,0,64,0.08)'} edge={avoided?'rgba(166,255,0,0.3)':'rgba(255,0,64,0.3)'} radius={18}>
@@ -308,17 +419,123 @@ function HabitsTab({ data, save }: { data: DayData; save: (p: Partial<DayData>) 
   );
 }
 
+// ─── Supplements + Biohacking ─────────────────────────────────────────────────
+
+const BIOHACKING = [
+  { icon: '🔴', title: 'Luce Rossa',    desc: '10 min mattina · cortisolo e mitocondri', habit: 'Luci rosse sera' },
+  { icon: '❄️', title: 'Cold Exposure', desc: '30s acqua fredda · norepinefrina +300%',  habit: 'Doccia fredda' },
+  { icon: '💤', title: 'Sonno',          desc: 'Magnesio + melatonina + buio totale',     habit: 'Candle prima dormire' },
+  { icon: '📵', title: 'No Blue Light', desc: 'Stop scroll 1h prima del sonno',           habit: 'No scroll a letto' },
+];
+
+function SupplTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayData>) => void; uid: string | null }) {
+  const { supplements, saveSupplements } = useSupplements(uid);
+  const [showAdd, setShowAdd] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newDose, setNewDose] = useState('');
+  const [newWhen, setNewWhen] = useState<'mattina'|'sera'>('mattina');
+
+  const taken = data.supplementsTaken;
+  const toggleTaken = (id: string) => {
+    const next = taken.includes(id) ? taken.filter(x => x !== id) : [...taken, id];
+    save({ supplementsTaken: next });
+  };
+
+  const addSuppl = () => {
+    if (!newName.trim()) return;
+    const s = { id: Date.now().toString(), name: newName.trim(), dose: newDose.trim(), when: newWhen };
+    saveSupplements([...supplements, s]);
+    setNewName(''); setNewDose(''); setShowAdd(false);
+  };
+
+  const removeSuppl = (id: string) => saveSupplements(supplements.filter(s => s.id !== id));
+
+  const morning = supplements.filter(s => s.when === 'mattina');
+  const evening = supplements.filter(s => s.when === 'sera');
+
+  const renderGroup = (list: typeof supplements, label: string) => (
+    <>
+      <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim,textTransform:'uppercase',letterSpacing:0.18,marginTop:14,marginBottom:6 }}>{label}</div>
+      {list.map(s => {
+        const done = taken.includes(s.id);
+        return (
+          <NeonGlass key={s.id} onClick={() => toggleTaken(s.id)} tint={done?'rgba(166,255,0,0.08)':'rgba(255,255,255,0.03)'} edge={done?'rgba(166,255,0,0.3)':undefined} radius={16} style={{ marginBottom:6 }}>
+            <div style={{ padding:'10px 14px', display:'flex', alignItems:'center', gap:10 }}>
+              <div style={{ width:18,height:18,borderRadius:6,border:`1.5px solid ${done?p.green:p.muted}`,background:done?p.green:'transparent',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',color:'#0a0a0a',fontSize:11,fontWeight:900,boxShadow:done?`0 0 10px ${p.green}`:'none' }}>{done?'✓':''}</div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontFamily:p.bodyFont,fontWeight:600,fontSize:13,color:done?p.fg:p.muted,textTransform:'uppercase' }}>{s.name}</div>
+                {s.dose && <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim,marginTop:1 }}>{s.dose}</div>}
+              </div>
+              <button onClick={e => { e.stopPropagation(); removeSuppl(s.id); }} style={{ background:'transparent',border:'none',color:p.dim,cursor:'pointer',fontSize:14,padding:'0 4px' }}>×</button>
+            </div>
+          </NeonGlass>
+        );
+      })}
+      {list.length === 0 && <div style={{ fontFamily:p.monoFont,fontSize:10,color:p.dim,padding:'4px 0' }}>nessuno</div>}
+    </>
+  );
+
+  return (
+    <div>
+      <SectionLabel num="01" title="INTEGRATORI" hint={`${taken.length}/${supplements.length} presi`}/>
+      {renderGroup(morning, '☀ MATTINA')}
+      {renderGroup(evening, '🌙 SERA')}
+
+      {showAdd ? (
+        <NeonGlass style={{ marginTop:12 }} tint="rgba(255,106,0,0.08)" edge="rgba(255,106,0,0.3)" radius={18}>
+          <div style={{ padding:'14px 16px' }}>
+            <input value={newName} onChange={e=>setNewName(e.target.value)} placeholder="Nome integratore" style={{ width:'100%',background:'transparent',border:'none',borderBottom:`1px solid ${p.border}`,outline:'none',color:p.fg,fontFamily:p.bodyFont,fontSize:15,padding:'5px 0',marginBottom:10 }}/>
+            <input value={newDose} onChange={e=>setNewDose(e.target.value)} placeholder="Dosaggio (es. 400mg)" style={{ width:'100%',background:'transparent',border:'none',borderBottom:`1px solid ${p.border}`,outline:'none',color:p.fg,fontFamily:p.bodyFont,fontSize:13,padding:'5px 0',marginBottom:12 }}/>
+            <div style={{ display:'flex',gap:6,marginBottom:12 }}>
+              {(['mattina','sera'] as const).map(w => (
+                <button key={w} onClick={()=>setNewWhen(w)} style={{ flex:1,padding:'8px',borderRadius:12,border:`1px solid ${newWhen===w?p.orange:p.border}`,background:newWhen===w?'rgba(255,106,0,0.15)':'transparent',color:newWhen===w?p.orange:p.muted,cursor:'pointer',fontFamily:p.monoFont,fontSize:9,textTransform:'uppercase' }}>{w}</button>
+              ))}
+            </div>
+            <div style={{ display:'flex',gap:8 }}>
+              <button onClick={()=>setShowAdd(false)} style={{ padding:'10px 18px',borderRadius:12,border:'none',background:'rgba(255,255,255,0.08)',color:p.fg,fontFamily:p.monoFont,fontSize:10,textTransform:'uppercase',cursor:'pointer' }}>Annulla</button>
+              <button onClick={addSuppl} style={{ flex:1,padding:'10px',borderRadius:12,border:'none',background:p.orange,color:'#0a0a0a',fontFamily:p.monoFont,fontSize:10,textTransform:'uppercase',cursor:'pointer',fontWeight:800 }}>+ Aggiungi</button>
+            </div>
+          </div>
+        </NeonGlass>
+      ) : (
+        <NeonGlass style={{ marginTop:10 }} radius={14} tint="rgba(255,106,0,0.06)" onClick={()=>setShowAdd(true)}>
+          <div style={{ padding:'10px 16px',fontFamily:p.monoFont,fontSize:10,color:p.orange,textTransform:'uppercase',textAlign:'center' }}>+ AGGIUNGI INTEGRATORE</div>
+        </NeonGlass>
+      )}
+
+      <SectionLabel num="02" title="BIOHACKING" hint="tips"/>
+      <div style={{ display:'flex',flexDirection:'column',gap:6,marginTop:8 }}>
+        {BIOHACKING.map(tip => (
+          <NeonGlass key={tip.title} tint="rgba(107,0,255,0.08)" edge="rgba(107,0,255,0.2)" radius={18}>
+            <div style={{ padding:'12px 14px',display:'flex',alignItems:'center',gap:12 }}>
+              <div style={{ fontSize:22,flexShrink:0 }}>{tip.icon}</div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontFamily:p.bodyFont,fontWeight:700,fontSize:13,textTransform:'uppercase',color:p.fg }}>{tip.title}</div>
+                <div style={{ fontFamily:p.monoFont,fontSize:9.5,color:p.muted,marginTop:2 }}>{tip.desc}</div>
+                {tip.habit && <div style={{ fontFamily:p.monoFont,fontSize:8.5,color:'#a78bfa',marginTop:3 }}>→ {tip.habit}</div>}
+              </div>
+            </div>
+          </NeonGlass>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── MeScreen ──────────────────────────────────────────────────────────────────
 
 export function MeScreen() {
-  const [tab, setTab] = useState<'cibo'|'fitness'|'mood'|'habits'>('cibo');
+  const [tab, setTab] = useState<'cibo'|'fitness'|'mood'|'habits'|'suppl'>('cibo');
   const { user } = useAuth();
   const { data, save } = useDayStore(user?.uid ?? null);
   const { prs, savePr } = useUserProfile(user?.uid ?? null);
-  const tabs = [{id:'cibo',l:'CIBO'},{id:'fitness',l:'FIT'},{id:'mood',l:'MOOD'},{id:'habits',l:'HABIT'}] as const;
+  const tabs = [
+    {id:'cibo',l:'CIBO'},{id:'fitness',l:'FIT'},{id:'mood',l:'MOOD'},
+    {id:'habits',l:'HABIT'},{id:'suppl',l:'SUPPL'},
+  ] as const;
 
   return (
-    <div style={{ position:'absolute', inset:0, overflow:'auto', background:p.bg, color:p.fg, fontFamily:p.bodyFont }}>
+    <div style={{ position:'absolute', inset:0, overflowY:'auto', overflowX:'hidden', background:p.bg, color:p.fg, fontFamily:p.bodyFont }}>
       {[{t:-80,r:-80,w:280,c:'#ff14b8',o:0.55},{t:350,l:-80,w:260,c:'#ff6a00',o:0.4}].map((orb,i) => (
         <div key={i} style={{ position:'absolute', top:orb.t, left:'l' in orb ? orb.l : undefined, right:'r' in orb ? (orb as {r:number}).r : undefined, width:orb.w, height:orb.w, borderRadius:'50%', background:`radial-gradient(circle, ${orb.c} 0%, transparent 65%)`, filter:'blur(65px)', opacity:orb.o, zIndex:0, pointerEvents:'none' }} />
       ))}
@@ -331,15 +548,16 @@ export function MeScreen() {
             AARON<br/><span style={{ color:p.magenta }}>84.8 KG.</span>
           </div>
         </div>
-        <div style={{ display:'flex', gap:5, marginTop:18 }}>
+        <div style={{ display:'flex', gap:4, marginTop:18 }}>
           {tabs.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)} style={{ flex:1,padding:'9px 4px',borderRadius:14,border:`1px solid ${tab===t.id?p.magenta:'rgba(255,255,255,0.1)'}`,background:tab===t.id?'rgba(255,20,184,0.18)':'transparent',color:tab===t.id?p.fg:p.muted,cursor:'pointer',fontFamily:p.monoFont,fontSize:9,letterSpacing:0.12,textTransform:'uppercase' }}>{t.l}</button>
+            <button key={t.id} onClick={() => setTab(t.id)} style={{ flex:1,padding:'8px 2px',borderRadius:13,border:`1px solid ${tab===t.id?p.magenta:'rgba(255,255,255,0.1)'}`,background:tab===t.id?'rgba(255,20,184,0.18)':'transparent',color:tab===t.id?p.fg:p.muted,cursor:'pointer',fontFamily:p.monoFont,fontSize:8.5,letterSpacing:0.06,textTransform:'uppercase' }}>{t.l}</button>
           ))}
         </div>
         {tab==='cibo'    && <CiboTab    data={data} save={save}/>}
-        {tab==='fitness' && <FitnessTab data={data} save={save} prs={prs} savePr={savePr}/>}
-        {tab==='mood'    && <MoodTab    data={data} save={save}/>}
+        {tab==='fitness' && <FitnessTab data={data} save={save} prs={prs} savePr={savePr} uid={user?.uid ?? null}/>}
+        {tab==='mood'    && <MoodTab    data={data} save={save} uid={user?.uid ?? null}/>}
         {tab==='habits'  && <HabitsTab  data={data} save={save}/>}
+        {tab==='suppl'   && <SupplTab   data={data} save={save} uid={user?.uid ?? null}/>}
       </div>
     </div>
   );
