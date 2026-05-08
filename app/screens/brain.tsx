@@ -11,6 +11,64 @@ const TAGS = ['idea','progetto','fitness','lavoro','personale','mindfulness'] as
 type Tag = typeof TAGS[number];
 const TC: Record<Tag, string> = { idea:p.cyan, progetto:p.orange, fitness:p.green, lavoro:'#ffd400', personale:p.magenta, mindfulness:'#a78bfa' };
 
+// ─── Mindfulness / Reflection Prompts ────────────────────────────────────────
+
+interface Prompt { cat: 'mindfulness'|'emotive'|'creative'|'strategica'|'personale'; q: string }
+
+const PROMPTS: Prompt[] = [
+  // mindfulness — body & attention
+  { cat:'mindfulness', q:'Fai caso a come risponde il tuo corpo dopo il primo caffè mattutino.' },
+  { cat:'mindfulness', q:'Nota la tua postura adesso. Cambia qualcosa se serve.' },
+  { cat:'mindfulness', q:'Tre respiri profondi. Cosa noti dopo?' },
+  { cat:'mindfulness', q:'Dove senti tensione nel corpo in questo momento?' },
+  { cat:'mindfulness', q:'Quando hai mangiato l\'ultima volta senza distrazioni?' },
+  { cat:'mindfulness', q:'Che suoni stai sentendo proprio ora? Fai caso ai più sottili.' },
+  // emotive
+  { cat:'emotive', q:'Quale emozione hai evitato oggi?' },
+  { cat:'emotive', q:'A cosa hai detto sì che avresti voluto rifiutare?' },
+  { cat:'emotive', q:'Cosa ti ha davvero acceso nelle ultime 24h?' },
+  { cat:'emotive', q:'Chi ti ha drenato energia questa settimana? Perché?' },
+  { cat:'emotive', q:'Quando ti sei sentito più vivo questa settimana?' },
+  { cat:'emotive', q:'Quale paura ricorre? Quanto è realistica?' },
+  // creative
+  { cat:'creative', q:'Se la tua giornata fosse un titolo di film, quale sarebbe?' },
+  { cat:'creative', q:'Cosa creeresti se sapessi che nessuno la giudicherà?' },
+  { cat:'creative', q:'Combina due idee a caso: lavoro × hobby. Cosa esce?' },
+  { cat:'creative', q:'Dieci usi non ovvi dell\'ultima cosa che hai comprato.' },
+  { cat:'creative', q:'Riscrivi la tua to-do list come una storia di 3 frasi.' },
+  // strategica
+  { cat:'strategica', q:'Quale 20% delle tue azioni produce l\'80% dei risultati?' },
+  { cat:'strategica', q:'Cosa stai accettando come normale che non dovresti?' },
+  { cat:'strategica', q:'Se dovessi tagliare una sola cosa dalla tua settimana, quale?' },
+  { cat:'strategica', q:'Quale decisione stai rimandando da troppo tempo?' },
+  { cat:'strategica', q:'Cosa farai meno il mese prossimo per fare di più la cosa giusta?' },
+  { cat:'strategica', q:'Tre persone che ammiri: cosa hanno in comune?' },
+  // personale
+  { cat:'personale', q:'Cosa diresti a te stesso di 5 anni fa?' },
+  { cat:'personale', q:'Qual è la cosa più piccola che ti rende fiero oggi?' },
+  { cat:'personale', q:'Per cosa sei grato adesso, in modo specifico?' },
+  { cat:'personale', q:'Qual è il prossimo livello che vuoi sbloccare?' },
+  { cat:'personale', q:'Cosa ti distingue, davvero, dalla persona media?' },
+  { cat:'personale', q:'Se questa settimana fosse un test, cosa ti starebbe insegnando?' },
+];
+
+const CAT_COLORS: Record<Prompt['cat'], string> = {
+  mindfulness: '#a78bfa',
+  emotive: p.magenta,
+  creative: p.cyan,
+  strategica: p.orange,
+  personale: p.green,
+};
+
+function dayOfYear(d: Date): number {
+  const start = new Date(d.getFullYear(), 0, 0);
+  return Math.floor((d.getTime() - start.getTime()) / 86400000);
+}
+
+function getDailyPrompt(): Prompt {
+  return PROMPTS[dayOfYear(new Date()) % PROMPTS.length];
+}
+
 const PIN_KEY = 'gifts_pin_hash';
 function hashPin(pin: string): string { return btoa(pin + 'pgapp_salt'); }
 function verifyPin(pin: string): boolean {
@@ -272,19 +330,25 @@ export function BrainScreen() {
         {/* ── BRAIN TAB ── */}
         {section === 'brain' && (
           <>
-            <NeonGlass style={{ marginTop:16 }} tint="linear-gradient(135deg,rgba(107,0,255,0.28),rgba(0,240,255,0.14))" edge="rgba(107,0,255,0.5)" glow="#6b00ff" radius={22}>
-              <div style={{ padding:'14px 16px' }}>
-                <div style={{ fontFamily:p.monoFont, fontSize:9.5, color:'#a78bfa', letterSpacing:0.2, textTransform:'uppercase', marginBottom:8, display:'flex', alignItems:'center', gap:6 }}>
-                  <MarkerStar4 size={10} color="#a78bfa"/> MINDFULNESS DI OGGI
-                </div>
-                <div style={{ fontFamily:p.bodyFont, fontSize:14, color:p.fg, lineHeight:1.4, fontStyle:'italic' }}>
-                  "Fai caso a come risponde il tuo corpo dopo il primo caffè mattutino."
-                </div>
-                <NeonGlass style={{ marginTop:12 }} radius={12} tint="rgba(107,0,255,0.2)" edge="rgba(107,0,255,0.4)" onClick={() => setShowNew(true)}>
-                  <div style={{ padding:'9px 14px', fontFamily:p.monoFont, fontSize:10, color:'#a78bfa', textAlign:'center', textTransform:'uppercase' }}>↵ Rispondi nel brain</div>
+            {(() => {
+              const prompt = getDailyPrompt();
+              const c = CAT_COLORS[prompt.cat];
+              return (
+                <NeonGlass style={{ marginTop:16 }} tint={`linear-gradient(135deg,${c}44,${c}22)`} edge={`${c}80`} glow={c} radius={22}>
+                  <div style={{ padding:'14px 16px' }}>
+                    <div style={{ fontFamily:p.monoFont, fontSize:9.5, color:c, letterSpacing:0.2, textTransform:'uppercase', marginBottom:8, display:'flex', alignItems:'center', gap:6 }}>
+                      <MarkerStar4 size={10} color={c}/> {prompt.cat.toUpperCase()} · OGGI
+                    </div>
+                    <div style={{ fontFamily:p.bodyFont, fontSize:14, color:p.fg, lineHeight:1.4, fontStyle:'italic' }}>
+                      &ldquo;{prompt.q}&rdquo;
+                    </div>
+                    <NeonGlass style={{ marginTop:12 }} radius={12} tint={`${c}33`} edge={`${c}66`} onClick={() => { setNewBody(`${prompt.q}\n\n`); setNewTags(['mindfulness']); setShowNew(true); }}>
+                      <div style={{ padding:'9px 14px', fontFamily:p.monoFont, fontSize:10, color:c, textAlign:'center', textTransform:'uppercase' }}>↵ Rispondi nel brain</div>
+                    </NeonGlass>
+                  </div>
                 </NeonGlass>
-              </div>
-            </NeonGlass>
+              );
+            })()}
 
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cerca nel brain…"
               style={{ width:'100%', padding:'12px 16px', borderRadius:16, border:`1px solid ${p.border}`, background:'rgba(255,255,255,0.05)', color:p.fg, fontFamily:p.bodyFont, fontSize:15, outline:'none', marginTop:16 }} />

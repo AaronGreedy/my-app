@@ -1,6 +1,6 @@
 export interface MealOption {
-  label: string;
-  desc: string;
+  label: string;     // titolo grande (es. "Riso e pollo")
+  desc: string;      // dettaglio piccolo (es. "80g riso + 150g pollo + verdure")
   kcal: number;
   pr: number;
   c: number;
@@ -12,31 +12,49 @@ export interface Meal {
   options: MealOption[];
 }
 
+const SNACKS: MealOption[] = [
+  { label: 'Banana + whey',     desc: '1 banana + 25g whey',           kcal: 210, pr: 21, c: 29, g: 2  },
+  { label: 'Noccioline + whey', desc: '15g noccioline + 25g whey',     kcal: 190, pr: 24, c: 5,  g: 9  },
+];
+
 export const MEALS: Meal[] = [
   {
     name: 'COLAZIONE',
     options: [
-      { label: 'OPZ. A', desc: '250g albume · 80g avena · banana · BA · miele', kcal: 520, pr: 42, c: 68, g: 12 },
-      { label: 'OPZ. B', desc: '70g cereali · 30g whey · 200g latte · BA', kcal: 480, pr: 38, c: 65, g: 13 },
+      { label: 'Cereali',          desc: '70g cereali Kellogs Extra + 30g whey + 200g latte p.scremato + 15g BA', kcal: 580, pr: 42, c: 64, g: 17 },
+      { label: 'Pancake proteico', desc: '80g avena + 25g whey + 250g albume + cannella',                          kcal: 525, pr: 58, c: 58, g: 8  },
+      { label: 'Albumi e avena',   desc: '250g albume + 80g avena + 1 banana + 20g BA + 8g miele',                 kcal: 685, pr: 44, c: 92, g: 17 },
+      { label: 'Yogurt + granola', desc: '200g yogurt greco 0% + 40g granola + 20g BA',                            kcal: 415, pr: 29, c: 39, g: 17 },
     ],
   },
   {
-    name: 'MERENDA',
-    options: [
-      { label: 'OPZ. A', desc: '1 banana + 25g whey', kcal: 195, pr: 19, c: 29, g: 1 },
-      { label: 'OPZ. B', desc: '15g noccioline + 25g whey', kcal: 185, pr: 21, c: 4, g: 10 },
-    ],
+    name: 'MERENDA MATTINA',
+    options: SNACKS,
   },
   {
     name: 'PRANZO',
     options: [
-      { label: 'RISO + PROTEINA', desc: '80g riso · 150g proteina cruda · verdure', kcal: 620, pr: 58, c: 74, g: 18 },
+      { label: 'Riso e pollo',         desc: '80g riso + 150g pollo + verdure',          kcal: 505, pr: 43, c: 72, g: 4  },
+      { label: 'Riso e tacchino',      desc: '80g riso + 150g macinata tacchino + verdure', kcal: 490, pr: 39, c: 72, g: 4  },
+      { label: 'Riso e salmone',       desc: '80g riso + 150g salmone + verdure',        kcal: 655, pr: 38, c: 72, g: 22 },
+      { label: 'Riso e macinata',      desc: '80g riso + 150g macinata scelta + verdure', kcal: 565, pr: 38, c: 72, g: 12 },
+      { label: 'Couscous e pollo',     desc: '80g couscous + 150g pollo + verdure',      kcal: 495, pr: 46, c: 66, g: 5  },
+      { label: 'Couscous e tacchino',  desc: '80g couscous + 150g macinata tacchino + verdure', kcal: 480, pr: 42, c: 66, g: 4  },
+      { label: 'Couscous e salmone',   desc: '80g couscous + 150g salmone + verdure',    kcal: 645, pr: 41, c: 66, g: 22 },
+      { label: 'Couscous e macinata',  desc: '80g couscous + 150g macinata scelta + verdure', kcal: 555, pr: 41, c: 66, g: 12 },
     ],
+  },
+  {
+    name: 'MERENDA POMERIGGIO',
+    options: SNACKS,
   },
   {
     name: 'CENA',
     options: [
-      { label: 'PROTEINA + INSALATA', desc: '150g proteina cruda + insalata', kcal: 460, pr: 52, c: 38, g: 14 },
+      { label: 'Pollo + insalata',     desc: '150g pollo + insalata',                 kcal: 195, pr: 36, c: 5, g: 4  },
+      { label: 'Tacchino + insalata',  desc: '150g macinata tacchino + insalata',     kcal: 180, pr: 32, c: 5, g: 3  },
+      { label: 'Salmone + insalata',   desc: '150g salmone + insalata',               kcal: 345, pr: 31, c: 5, g: 22 },
+      { label: 'Macinata + insalata',  desc: '150g macinata scelta + insalata',       kcal: 255, pr: 31, c: 5, g: 12 },
     ],
   },
 ];

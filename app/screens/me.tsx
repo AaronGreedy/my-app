@@ -78,12 +78,13 @@ function CiboTab({ data, save }: { data: DayData; save: (p: Partial<DayData>) =>
                 {meal.options.map((opt, oi) => {
                   const active = mealSelected[mi] === String(oi);
                   return (
-                    <button key={oi} onClick={() => selectMeal(mi, oi)} style={{ padding:'10px 12px',borderRadius:12,border:`1px solid ${active?p.green:'rgba(255,255,255,0.1)'}`,background:active?'rgba(166,255,0,0.12)':'transparent',cursor:'pointer',textAlign:'left',boxShadow:active?`0 0 16px rgba(166,255,0,0.3)`:'none' }}>
-                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                        <span style={{ fontFamily:p.monoFont, fontSize:9, color:active?p.green:p.muted, textTransform:'uppercase', fontWeight:700 }}>{opt.label}</span>
-                        <span style={{ fontFamily:p.monoFont, fontSize:9, color:active?p.fg:p.dim }}>{opt.kcal} kcal · P{opt.pr} C{opt.c} G{opt.g}</span>
+                    <button key={oi} onClick={() => selectMeal(mi, oi)} style={{ padding:'12px 14px',borderRadius:14,border:`1px solid ${active?p.green:'rgba(255,255,255,0.1)'}`,background:active?'rgba(166,255,0,0.12)':'transparent',cursor:'pointer',textAlign:'left',boxShadow:active?`0 0 16px rgba(166,255,0,0.3)`:'none' }}>
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', gap:8 }}>
+                        <span style={{ fontFamily:p.bodyFont, fontSize:16, color:active?p.fg:p.fg, fontWeight:700, letterSpacing:-0.2, lineHeight:1.15 }}>{opt.label}</span>
+                        <span style={{ fontFamily:p.monoFont, fontSize:9, color:active?p.green:p.dim, flexShrink:0 }}>{opt.kcal} kcal</span>
                       </div>
-                      <div style={{ fontFamily:p.bodyFont, fontSize:11, color:p.dim, marginTop:3 }}>{opt.desc}</div>
+                      <div style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim, marginTop:4 }}>P{opt.pr} · C{opt.c} · G{opt.g}</div>
+                      <div style={{ fontFamily:p.bodyFont, fontSize:11.5, color:p.muted, marginTop:6, lineHeight:1.3 }}>{opt.desc}</div>
                     </button>
                   );
                 })}

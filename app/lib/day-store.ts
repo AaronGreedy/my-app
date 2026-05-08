@@ -28,6 +28,8 @@ export interface DayData {
 
 const EMPTY_ME_HABITS = Array(10).fill(false) as boolean[];
 
+const EMPTY_MEALS = [null, null, null, null, null] as (string|null)[];
+
 const EMPTY: DayData = {
   water: 0,
   mood: null,
@@ -38,7 +40,7 @@ const EMPTY: DayData = {
   moodNoteM: '',
   moodNoteE: '',
   meHabits: EMPTY_ME_HABITS,
-  mealSelected: [null, null, null, null],
+  mealSelected: EMPTY_MEALS,
   caffeine: 0,
   dietMode: 'cut',
   workouts: [],
@@ -47,6 +49,11 @@ const EMPTY: DayData = {
   todayDeadline: '',
   todayDone: false,
 };
+
+function padMeals(arr: (string|null)[], len: number): (string|null)[] {
+  if (arr.length >= len) return arr.slice(0, len);
+  return [...arr, ...Array(len - arr.length).fill(null)];
+}
 
 function todayKey(): string {
   const d = new Date();
@@ -77,7 +84,7 @@ export function useDayStore(uid: string | null) {
           moodNoteM:        typeof d.moodNoteM === 'string'   ? d.moodNoteM        : '',
           moodNoteE:        typeof d.moodNoteE === 'string'   ? d.moodNoteE        : '',
           meHabits:         Array.isArray(d.meHabits)         ? padHabits(d.meHabits, 10) : EMPTY_ME_HABITS,
-          mealSelected:     Array.isArray(d.mealSelected)     ? d.mealSelected     : [null,null,null,null],
+          mealSelected:     Array.isArray(d.mealSelected)     ? padMeals(d.mealSelected, 5) : EMPTY_MEALS,
           caffeine:         typeof d.caffeine === 'number'    ? d.caffeine         : 0,
           dietMode:         d.dietMode ?? 'cut',
           workouts:         Array.isArray(d.workouts)         ? d.workouts         : [],

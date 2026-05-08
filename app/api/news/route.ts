@@ -93,13 +93,49 @@ async function fetchFeed(feed: Feed): Promise<NewsItem[]> {
   }
 }
 
+async function translateTitlesIT(items: NewsItem[]): Promise<NewsItem[]> {
+  const key = process.env.GROQ_API_KEY;
+  if (!key || items.length === 0) return items;
+  try {
+    const list = items.map((it, i) => `${i + 1}. ${it.title}`).join('\n');
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'system', content: 'Translate the following English news headlines to natural Italian. Keep them tight and idiomatic. Output ONLY a JSON array of strings, same order, same length, nothing else. No code fences, no commentary.' },
+          { role: 'user', content: list },
+        ],
+        temperature: 0.2,
+        max_tokens: 2048,
+      }),
+    });
+    if (!res.ok) return items;
+    const data = await res.json();
+    const raw: string = data?.choices?.[0]?.message?.content ?? '';
+    const m = raw.match(/\[[\s\S]*\]/);
+    if (!m) return items;
+    const arr = JSON.parse(m[0]) as unknown;
+    if (!Array.isArray(arr) || arr.length !== items.length) return items;
+    return items.map((it, i) => ({
+      ...it,
+      title: typeof arr[i] === 'string' && (arr[i] as string).trim() ? (arr[i] as string).trim() : it.title,
+    }));
+  } catch {
+    return items;
+  }
+}
+
 export async function GET(_req: NextRequest) {
   const all = await Promise.all(FEEDS.map(fetchFeed));
   const merged = all.flat()
     .sort((a, b) => b.pubDate - a.pubDate)
     .slice(0, 30);
 
-  return Response.json({ items: merged }, {
+  const translated = await translateTitlesIT(merged);
+
+  return Response.json({ items: translated }, {
     headers: { 'Cache-Control': 'public, s-maxage=900, stale-while-revalidate=3600' },
   });
 }

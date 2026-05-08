@@ -309,7 +309,6 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
 
   const waterMl  = data.water;
   const habits   = data.habits;
-  const mood     = data.mood;
 
   const WATER_TARGET = data.workouts.length > 0 ? 4000 : 3000;
 
@@ -328,15 +327,16 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
     if (!wasOn) addXP(HABITS[i][2]);
   };
 
-  const chooseMood = (m: MoodId) => {
-    const hadMood = !!mood;
-    save({ mood: m });
-    if (!hadMood) addXP(10);
-  };
-
   const now = new Date();
   const timeStr  = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
   const isMorning = now.getHours() < 14;
+
+  const currentMood = isMorning ? data.moodMorning : data.moodEvening;
+  const chooseMood = (m: MoodId) => {
+    const hadMood = !!currentMood;
+    save(isMorning ? { moodMorning: m } : { moodEvening: m });
+    if (!hadMood) addXP(10);
+  };
 
   const todayXP = computeTodayXP(habits, data.moodMorning, data.moodEvening, data.mealSelected, waterMl, data.workouts);
 
@@ -461,21 +461,26 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
         <SectionLabel num="—" title="NEWS" hint="ai · design · tech"/>
         <NewsFeed/>
 
-        {/* Mood */}
-        <SectionLabel num="01" title="MOOD CHECK" hint={isMorning ? 'mattina' : 'sera'} />
-        <NeonGlass style={{ marginTop: 8 }} tint="linear-gradient(135deg, rgba(255,106,0,0.18), rgba(166,255,0,0.14))" radius={24}>
-          <div style={{ padding: '20px 14px 16px' }}>
+        {/* Mood — time-based: solo mattina prima delle 14, solo sera dopo */}
+        <SectionLabel num="01" title="MOOD CHECK" hint={isMorning ? '☀ mattina' : '🌙 sera'} />
+        <NeonGlass style={{ marginTop: 8 }} tint={isMorning ? 'linear-gradient(135deg, rgba(255,212,0,0.18), rgba(255,106,0,0.12))' : 'linear-gradient(135deg, rgba(107,0,255,0.18), rgba(0,240,255,0.10))'} radius={24}>
+          <div style={{ padding: '18px 14px 14px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
               {MOODS.map(m => {
-                const active = mood === m.id;
+                const active = currentMood === m.id;
                 return (
-                  <button key={m.id} onClick={() => chooseMood(m.id)} style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, opacity: active ? 1 : (mood ? 0.38 : 0.92), transform: active ? 'scale(1.2) translateY(-3px)' : 'scale(1)', transition: 'all .22s cubic-bezier(.2,.8,.3,1.2)', filter: active ? `drop-shadow(0 6px 16px ${m.c}aa)` : 'none' }}>
+                  <button key={m.id} onClick={() => chooseMood(m.id)} style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, opacity: active ? 1 : (currentMood ? 0.38 : 0.92), transform: active ? 'scale(1.2) translateY(-3px)' : 'scale(1)', transition: 'all .22s cubic-bezier(.2,.8,.3,1.2)', filter: active ? `drop-shadow(0 6px 16px ${m.c}aa)` : 'none' }}>
                     <MoodFace mood={m.id} bg={m.c} color="#0a0a0a" size={42} />
                     <div style={{ fontFamily: p.monoFont, fontSize: 8.5, letterSpacing: 0.22, color: active ? m.c : p.dim, fontWeight: 700 }}>{m.label}</div>
                   </button>
                 );
               })}
             </div>
+            {currentMood && (
+              <div style={{ marginTop: 10, fontFamily: p.monoFont, fontSize: 9, color: p.dim, textAlign: 'center', textTransform: 'uppercase', letterSpacing: 0.15 }}>
+                Per il journal completo · vai in Me → Mood
+              </div>
+            )}
           </div>
         </NeonGlass>
 
