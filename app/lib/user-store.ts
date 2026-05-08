@@ -116,6 +116,7 @@ export interface Countdown {
   label: string;
   date: string; // YYYY-MM-DD
   note: string;
+  done?: boolean;
 }
 
 export function daysUntil(dateStr: string): number {

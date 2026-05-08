@@ -21,6 +21,9 @@ export interface DayData {
   dietMode: 'bulk' | 'cut' | 'mantenimento';
   workouts: string[];
   supplementsTaken: string[];
+  todayThing: string;         // "la cosa di oggi" task text
+  todayDeadline: string;      // HH:MM (es. "18:00") — '' = nessuna
+  todayDone: boolean;
 }
 
 const EMPTY_ME_HABITS = Array(10).fill(false) as boolean[];
@@ -40,6 +43,9 @@ const EMPTY: DayData = {
   dietMode: 'cut',
   workouts: [],
   supplementsTaken: [],
+  todayThing: '',
+  todayDeadline: '',
+  todayDone: false,
 };
 
 function todayKey(): string {
@@ -76,6 +82,9 @@ export function useDayStore(uid: string | null) {
           dietMode:         d.dietMode ?? 'cut',
           workouts:         Array.isArray(d.workouts)         ? d.workouts         : [],
           supplementsTaken: Array.isArray(d.supplementsTaken) ? d.supplementsTaken : [],
+          todayThing:       typeof d.todayThing   === 'string' ? d.todayThing      : '',
+          todayDeadline:    typeof d.todayDeadline === 'string'? d.todayDeadline   : '',
+          todayDone:        typeof d.todayDone    === 'boolean'? d.todayDone       : false,
         });
       } else {
         setData(EMPTY);

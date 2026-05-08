@@ -47,25 +47,39 @@ function CountdownEditor({ countdowns, saveCountdowns, onClose }: {
 
   const add = () => {
     if (!label.trim() || !date) return;
-    setList(prev => [...prev, { id: Date.now().toString(), label: label.trim(), date, note: note.trim() }]);
+    setList(prev => [...prev, { id: Date.now().toString(), label: label.trim(), date, note: note.trim(), done: false }]);
     setLabel(''); setDate(''); setNote('');
   };
+
+  const toggleDone = (id: string) => setList(prev => prev.map(c => c.id === id ? { ...c, done: !c.done } : c));
+  const active    = list.filter(c => !c.done);
+  const completed = list.filter(c =>  c.done);
+
+  const renderCard = (c: Countdown) => (
+    <div key={c.id} style={{ display:'flex',alignItems:'center',gap:10,marginBottom:8,padding:'10px 14px',borderRadius:14,background:c.done?'rgba(166,255,0,0.08)':'rgba(255,255,255,0.05)',border:c.done?`1px solid rgba(166,255,0,0.3)`:'1px solid transparent' }}>
+      <button onClick={() => toggleDone(c.id)} title={c.done?'Riapri':'Segna come fatto'} style={{ width:22,height:22,borderRadius:7,border:`1.5px solid ${c.done?p.green:p.muted}`,background:c.done?p.green:'transparent',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',color:'#0a0a0a',fontSize:13,fontWeight:900,cursor:'pointer',boxShadow:c.done?`0 0 10px ${p.green}`:'none' }}>{c.done?'✓':''}</button>
+      <div style={{ flex:1,opacity:c.done?0.6:1 }}>
+        <div style={{ fontFamily:p.displayFont,fontWeight:700,fontSize:14,textTransform:'uppercase',textDecoration:c.done?'line-through':'none' }}>{c.label}</div>
+        <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.muted,marginTop:2 }}>{c.date}{c.note ? ` · ${c.note}` : ''}</div>
+      </div>
+      {!c.done && <div style={{ fontFamily:p.displayFont,fontWeight:800,fontSize:22,color:p.orange,minWidth:36,textAlign:'right' }}>{daysUntil(c.date)}<span style={{ fontFamily:p.monoFont,fontSize:9,color:p.muted }}>g</span></div>}
+      <button onClick={() => setList(prev => prev.filter(x => x.id !== c.id))} style={{ background:'transparent',border:'none',color:p.red,cursor:'pointer',fontSize:18,padding:'0 4px' }}>×</button>
+    </div>
+  );
 
   return (
     <div onClick={onClose} style={{ position:'absolute',inset:0,zIndex:100,background:'rgba(0,0,0,0.7)',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',display:'flex',alignItems:'flex-end' }}>
       <div onClick={e => e.stopPropagation()} style={{ width:'100%',padding:'24px 20px 48px',background:'rgba(10,8,6,0.96)',borderTop:`1px solid ${p.border}`,borderTopLeftRadius:28,borderTopRightRadius:28,maxHeight:'80vh',overflowY:'auto' }}>
         <div style={{ fontFamily:p.monoFont,fontSize:10,color:p.orange,textTransform:'uppercase',letterSpacing:0.2,marginBottom:16 }}>⏱ COUNTDOWN · GESTISCI</div>
 
-        {list.map(c => (
-          <div key={c.id} style={{ display:'flex',alignItems:'center',gap:10,marginBottom:8,padding:'10px 14px',borderRadius:14,background:'rgba(255,255,255,0.05)' }}>
-            <div style={{ flex:1 }}>
-              <div style={{ fontFamily:p.displayFont,fontWeight:700,fontSize:14,textTransform:'uppercase' }}>{c.label}</div>
-              <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.muted,marginTop:2 }}>{c.date}{c.note ? ` · ${c.note}` : ''}</div>
-            </div>
-            <div style={{ fontFamily:p.displayFont,fontWeight:800,fontSize:22,color:p.orange,minWidth:36,textAlign:'right' }}>{daysUntil(c.date)}<span style={{ fontFamily:p.monoFont,fontSize:9,color:p.muted }}>g</span></div>
-            <button onClick={() => setList(prev => prev.filter(x => x.id !== c.id))} style={{ background:'transparent',border:'none',color:p.red,cursor:'pointer',fontSize:18,padding:'0 4px' }}>×</button>
-          </div>
-        ))}
+        {active.map(renderCard)}
+
+        {completed.length > 0 && (
+          <>
+            <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim,textTransform:'uppercase',letterSpacing:0.18,marginTop:14,marginBottom:6 }}>✓ COMPLETATI · {completed.length}</div>
+            {completed.map(renderCard)}
+          </>
+        )}
 
         <div style={{ marginTop:14,padding:'14px 16px',borderRadius:16,background:'rgba(255,106,0,0.08)',border:`1px solid rgba(255,106,0,0.3)` }}>
           <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim,textTransform:'uppercase',marginBottom:10 }}>+ NUOVO</div>
@@ -138,11 +152,35 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
 
   const todayXP = computeTodayXP(habits, data.moodMorning, data.moodEvening, data.mealSelected, waterMl, data.workouts);
 
-  // Sort countdowns by date ascending, pick upcoming ones
+  // Sort active countdowns by date ascending, pick upcoming ones
   const sorted = [...countdowns]
+    .filter(c => !c.done)
     .map(c => ({ ...c, days: daysUntil(c.date) }))
     .sort((a, b) => a.days - b.days);
   const nearest = sorted[0] ?? null;
+
+  const [showTodayEditor, setShowTodayEditor] = useState(false);
+  const [todayDraft, setTodayDraft] = useState('');
+  const [todayDeadlineDraft, setTodayDeadlineDraft] = useState('');
+
+  const openTodayEditor = () => {
+    setTodayDraft(data.todayThing);
+    setTodayDeadlineDraft(data.todayDeadline);
+    setShowTodayEditor(true);
+  };
+
+  const saveTodayThing = () => {
+    save({ todayThing: todayDraft.trim(), todayDeadline: todayDeadlineDraft, todayDone: false });
+    setShowTodayEditor(false);
+  };
+
+  const toggleTodayDone = () => {
+    const wasDone = data.todayDone;
+    save({ todayDone: !wasDone });
+    if (!wasDone && data.todayThing.trim()) addXP(20);
+  };
+
+  const hasTodayTask = data.todayThing.trim().length > 0;
 
   return (
     <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', overflowX: 'hidden', background: p.bg, color: p.fg, fontFamily: p.bodyFont }}>
@@ -176,22 +214,53 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
         </div>
 
         {/* La cosa di oggi */}
-        <NeonGlass style={{ marginTop: 22 }} tint="linear-gradient(135deg, rgba(255,0,64,0.32), rgba(255,20,184,0.18))" edge="rgba(255,0,64,0.75)" glow="#ff0040" radius={26}>
+        <NeonGlass
+          style={{ marginTop: 22 }}
+          tint={data.todayDone
+            ? 'linear-gradient(135deg, rgba(166,255,0,0.28), rgba(0,240,255,0.16))'
+            : hasTodayTask
+              ? 'linear-gradient(135deg, rgba(255,0,64,0.32), rgba(255,20,184,0.18))'
+              : 'rgba(255,255,255,0.04)'}
+          edge={data.todayDone ? 'rgba(166,255,0,0.6)' : hasTodayTask ? 'rgba(255,0,64,0.75)' : p.border}
+          glow={data.todayDone ? '#a6ff00' : hasTodayTask ? '#ff0040' : undefined}
+          radius={26}
+        >
           <div style={{ padding: '18px 18px 16px', position: 'relative' }}>
-            <div style={{ position: 'absolute', top: 0, right: 0, padding: '5px 10px', background: p.red, color: '#0a0a0a', fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.25, fontWeight: 800, borderBottomLeftRadius: 12 }}>!! WARN</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: p.monoFont, fontSize: 10, letterSpacing: 0.2, color: p.red, textTransform: 'uppercase', fontWeight: 700 }}>
-              <MarkerTarget size={11} color={p.red} />
-              LA COSA DI OGGI · scad. 18:00
+            {!data.todayDone && hasTodayTask && (
+              <div style={{ position: 'absolute', top: 0, right: 0, padding: '5px 10px', background: p.red, color: '#0a0a0a', fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.25, fontWeight: 800, borderBottomLeftRadius: 12 }}>!! WARN</div>
+            )}
+            {data.todayDone && (
+              <div style={{ position: 'absolute', top: 0, right: 0, padding: '5px 10px', background: p.green, color: '#0a0a0a', fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.25, fontWeight: 800, borderBottomLeftRadius: 12 }}>✓ DONE</div>
+            )}
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: p.monoFont, fontSize: 10, letterSpacing: 0.2, color: data.todayDone ? p.green : hasTodayTask ? p.red : p.muted, textTransform: 'uppercase', fontWeight: 700 }}>
+              <MarkerTarget size={11} color={data.todayDone ? p.green : hasTodayTask ? p.red : p.muted} />
+              LA COSA DI OGGI{hasTodayTask && data.todayDeadline ? ` · scad. ${data.todayDeadline}` : ''}
             </div>
-            <div style={{ fontFamily: p.displayFont, fontWeight: 700, fontSize: 26, lineHeight: 1.02, letterSpacing: -0.5, textTransform: 'uppercase', marginTop: 8 }}>
-              Finire deck<br/>progetto Q2
-            </div>
+
+            {hasTodayTask ? (
+              <div onClick={openTodayEditor} style={{ cursor:'pointer', fontFamily: p.displayFont, fontWeight: 700, fontSize: 26, lineHeight: 1.02, letterSpacing: -0.5, textTransform: 'uppercase', marginTop: 8, color: data.todayDone ? p.muted : p.fg, textDecoration: data.todayDone ? 'line-through' : 'none' }}>
+                {data.todayThing}
+              </div>
+            ) : (
+              <div onClick={openTodayEditor} style={{ cursor:'pointer', fontFamily: p.displayFont, fontWeight: 700, fontSize: 18, lineHeight: 1.1, marginTop: 8, color: p.muted, textTransform: 'uppercase' }}>
+                Tap per impostare il task del giorno
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-              <NeonGlass style={{ flex: 1 }} tint="linear-gradient(90deg, rgba(255,0,64,0.45), rgba(255,20,184,0.4))" edge="rgba(255,0,64,0.7)" radius={14} onClick={() => onNavigate?.('focus')}>
-                <div style={{ padding: '11px 12px', textAlign: 'center', fontFamily: p.monoFont, fontSize: 10.5, letterSpacing: 0.2, fontWeight: 700, color: p.fg, textTransform: 'uppercase' }}>→ Avvia Focus</div>
-              </NeonGlass>
-              <NeonGlass style={{ width: 96 }} radius={14}>
-                <div style={{ padding: '11px 12px', textAlign: 'center', fontFamily: p.monoFont, fontSize: 10.5, letterSpacing: 0.2, color: p.muted, textTransform: 'uppercase' }}>RINVIA</div>
+              {hasTodayTask && (
+                <NeonGlass style={{ flex: 1 }} tint={data.todayDone ? 'rgba(166,255,0,0.18)' : 'linear-gradient(90deg, rgba(255,0,64,0.45), rgba(255,20,184,0.4))'} edge={data.todayDone ? 'rgba(166,255,0,0.5)' : 'rgba(255,0,64,0.7)'} radius={14} onClick={toggleTodayDone}>
+                  <div style={{ padding: '11px 12px', textAlign: 'center', fontFamily: p.monoFont, fontSize: 10.5, letterSpacing: 0.2, fontWeight: 700, color: p.fg, textTransform: 'uppercase' }}>{data.todayDone ? '↺ Riapri' : '✓ Fatto · +20XP'}</div>
+                </NeonGlass>
+              )}
+              {hasTodayTask && !data.todayDone && (
+                <NeonGlass style={{ width: 110 }} radius={14} onClick={() => onNavigate?.('focus')}>
+                  <div style={{ padding: '11px 12px', textAlign: 'center', fontFamily: p.monoFont, fontSize: 10.5, letterSpacing: 0.2, color: p.muted, textTransform: 'uppercase' }}>→ Focus</div>
+                </NeonGlass>
+              )}
+              <NeonGlass style={{ width: hasTodayTask ? 60 : '100%' as unknown as number }} radius={14} onClick={openTodayEditor}>
+                <div style={{ padding: '11px 12px', textAlign: 'center', fontFamily: p.monoFont, fontSize: 10.5, letterSpacing: 0.2, color: p.muted, textTransform: 'uppercase' }}>{hasTodayTask ? 'EDIT' : '+ TASK'}</div>
               </NeonGlass>
             </div>
           </div>
@@ -330,6 +399,37 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
 
       {showEditor && (
         <CountdownEditor countdowns={countdowns} saveCountdowns={saveCountdowns} onClose={() => setShowEditor(false)} />
+      )}
+
+      {showTodayEditor && (
+        <div onClick={() => setShowTodayEditor(false)} style={{ position:'absolute',inset:0,zIndex:100,background:'rgba(0,0,0,0.7)',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',display:'flex',alignItems:'flex-end' }}>
+          <div onClick={e => e.stopPropagation()} style={{ width:'100%',padding:'24px 20px 48px',background:'rgba(10,8,6,0.96)',borderTop:`1px solid ${p.border}`,borderTopLeftRadius:28,borderTopRightRadius:28 }}>
+            <div style={{ fontFamily:p.monoFont,fontSize:10,color:p.red,textTransform:'uppercase',letterSpacing:0.2,marginBottom:14,display:'flex',alignItems:'center',gap:8 }}>
+              <MarkerTarget size={11} color={p.red}/> LA COSA DI OGGI
+            </div>
+            <textarea
+              value={todayDraft}
+              onChange={e => setTodayDraft(e.target.value)}
+              placeholder="Cos'è la cosa più importante da fare oggi?"
+              rows={3}
+              autoFocus
+              style={{ width:'100%',resize:'none',outline:'none',background:'rgba(255,255,255,0.04)',border:`1px solid ${p.border}`,borderRadius:14,padding:'12px 14px',color:p.fg,fontFamily:p.bodyFont,fontSize:16,lineHeight:1.3 }}
+            />
+            <div style={{ display:'flex',gap:10,marginTop:12,alignItems:'center' }}>
+              <div style={{ fontFamily:p.monoFont,fontSize:10,color:p.dim,textTransform:'uppercase' }}>Scadenza</div>
+              <input type="time" value={todayDeadlineDraft} onChange={e => setTodayDeadlineDraft(e.target.value)} style={{ background:'rgba(255,255,255,0.06)',border:`1px solid ${p.border}`,borderRadius:10,padding:'8px 12px',color:p.fg,fontFamily:p.monoFont,fontSize:14,outline:'none',colorScheme:'dark' }}/>
+              {todayDeadlineDraft && <button onClick={() => setTodayDeadlineDraft('')} style={{ background:'transparent',border:'none',color:p.dim,cursor:'pointer',fontFamily:p.monoFont,fontSize:10,textTransform:'uppercase' }}>×</button>}
+            </div>
+            <div style={{ display:'flex',gap:8,marginTop:18 }}>
+              <button onClick={() => setShowTodayEditor(false)} style={{ padding:'12px 20px',borderRadius:14,border:'none',background:'rgba(255,255,255,0.08)',color:p.fg,fontFamily:p.monoFont,fontSize:11,textTransform:'uppercase',cursor:'pointer' }}>Annulla</button>
+              {hasTodayTask && (
+                <button onClick={() => { save({ todayThing:'', todayDeadline:'', todayDone:false }); setShowTodayEditor(false); }} style={{ padding:'12px 16px',borderRadius:14,border:`1px solid rgba(255,0,64,0.4)`,background:'rgba(255,0,64,0.1)',color:p.red,fontFamily:p.monoFont,fontSize:11,textTransform:'uppercase',cursor:'pointer' }}>Rimuovi</button>
+              )}
+              <div style={{ flex:1 }}/>
+              <button onClick={saveTodayThing} disabled={!todayDraft.trim()} style={{ padding:'12px 22px',borderRadius:14,border:'none',background:p.red,color:'#0a0a0a',fontFamily:p.monoFont,fontSize:11,textTransform:'uppercase',cursor:todayDraft.trim()?'pointer':'not-allowed',fontWeight:800,opacity:todayDraft.trim()?1:0.4 }}>↵ Salva</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
