@@ -1,10 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { p } from '@/lib/design';
 import { NeonGlass } from '@/components/neon-glass';
 import { MarkerDiamond, MarkerStar4 } from '@/components/markers';
 import { useAuth } from '@/lib/auth-context';
+import { auth } from '@/lib/firebase';
+import { initGsiSignIn, renderGsiButton } from '@/lib/google-signin';
 
 const ORBS = [
   { t: -100, l: -80,  w: 380, c: '#ff6a00', o: 0.8 },
@@ -27,8 +29,33 @@ export function LoginScreen() {
   const { signInGoogle } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [gsiReady, setGsiReady] = useState(false);
+  const gsiBtnRef = useRef<HTMLDivElement>(null);
 
-  const handleGoogle = async () => {
+  // Init GIS + render Google button. Più affidabile su iOS PWA standalone.
+  useEffect(() => {
+    if (!auth) return;
+    let cancelled = false;
+    (async () => {
+      const ok = await initGsiSignIn(auth, (msg) => {
+        if (!cancelled) setError(msg);
+      });
+      if (cancelled || !ok) return;
+      setGsiReady(true);
+      // Wait a tick so the ref is mounted
+      requestAnimationFrame(() => {
+        if (cancelled || !gsiBtnRef.current) return;
+        const w = Math.min(gsiBtnRef.current.clientWidth || 280, 360);
+        renderGsiButton(gsiBtnRef.current, w).catch(() => {
+          if (!cancelled) setGsiReady(false);
+        });
+      });
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Fallback: il bottone custom (popup/redirect via Firebase) se GIS non parte.
+  const handleGoogleFallback = async () => {
     setLoading(true);
     setError(null);
     try {
@@ -90,29 +117,39 @@ export function LoginScreen() {
           Accedi per salvare i tuoi dati
         </div>
 
-        {/* Google button */}
-        <NeonGlass
-          style={{ width: '100%' }}
-          tint="rgba(255,255,255,0.07)"
-          edge="rgba(255,255,255,0.2)"
-          radius={20}
-          onClick={handleGoogle}
-        >
-          <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-            {loading ? (
-              <div style={{ fontFamily: p.monoFont, fontSize: 11, color: p.muted, textTransform: 'uppercase', letterSpacing: 0.15 }}>
-                Accesso in corso…
-              </div>
-            ) : (
-              <>
-                <GoogleIcon />
-                <span style={{ fontFamily: p.monoFont, fontSize: 12, fontWeight: 700, color: p.fg, letterSpacing: 0.1, textTransform: 'uppercase' }}>
-                  Continua con Google
-                </span>
-              </>
-            )}
-          </div>
-        </NeonGlass>
+        {/* Google button — GIS-rendered (affidabile in PWA), fallback al custom */}
+        <div ref={gsiBtnRef} style={{
+          width: '100%',
+          minHeight: gsiReady ? 44 : 0,
+          display: gsiReady ? 'flex' : 'none',
+          justifyContent: 'center', alignItems: 'center',
+          colorScheme: 'dark',
+        }} />
+
+        {!gsiReady && (
+          <NeonGlass
+            style={{ width: '100%' }}
+            tint="rgba(255,255,255,0.07)"
+            edge="rgba(255,255,255,0.2)"
+            radius={20}
+            onClick={handleGoogleFallback}
+          >
+            <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+              {loading ? (
+                <div style={{ fontFamily: p.monoFont, fontSize: 11, color: p.muted, textTransform: 'uppercase', letterSpacing: 0.15 }}>
+                  Accesso in corso…
+                </div>
+              ) : (
+                <>
+                  <GoogleIcon />
+                  <span style={{ fontFamily: p.monoFont, fontSize: 12, fontWeight: 700, color: p.fg, letterSpacing: 0.1, textTransform: 'uppercase' }}>
+                    Continua con Google
+                  </span>
+                </>
+              )}
+            </div>
+          </NeonGlass>
+        )}
 
         {error && (
           <div style={{ marginTop: 12, fontFamily: p.monoFont, fontSize: 10, color: p.red, textAlign: 'center' }}>

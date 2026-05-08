@@ -10,6 +10,44 @@ import { useDayStore, MoodId } from '@/lib/day-store';
 import { getMealTotals } from '@/lib/meals';
 import { useXP, useCountdowns, useWeeklyChallenge, daysUntil, Countdown } from '@/lib/user-store';
 
+// ─── Refresh button + build stamp ─────────────────────────────────────────────
+
+const BUILD_SHA = process.env.NEXT_PUBLIC_BUILD_SHA ?? 'dev';
+
+function RefreshButton() {
+  const [spin, setSpin] = useState(false);
+  const onClick = () => {
+    setSpin(true);
+    setTimeout(() => window.location.reload(), 120);
+  };
+  return (
+    <>
+      <button
+        onClick={onClick}
+        aria-label="Aggiorna"
+        style={{
+          position: 'fixed',
+          top: 'calc(env(safe-area-inset-top, 0px) + 12px)',
+          right: 14,
+          zIndex: 100,
+          width: 32, height: 32, borderRadius: '50%',
+          border: '1px solid rgba(255,255,255,0.25)',
+          background: 'rgba(255,255,255,0.08)',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
+          color: '#fff',
+          fontFamily: p.monoFont, fontSize: 16, fontWeight: 500,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer', padding: 0,
+        }}
+      >
+        <span style={{ display: 'inline-block', animation: spin ? 'rfSpin 0.6s linear infinite' : 'none' }}>↻</span>
+        <style>{`@keyframes rfSpin { to { transform: rotate(360deg); } }`}</style>
+      </button>
+    </>
+  );
+}
+
 // ─── Weather (Bolzano) ────────────────────────────────────────────────────────
 
 interface WeatherData {
@@ -374,6 +412,8 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
   return (
     <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', overflowX: 'hidden', background: p.bg, color: p.fg, fontFamily: p.bodyFont }}>
 
+      <RefreshButton />
+
       {ORBS.map((orb, i) => (
         <div key={i} style={{ position: 'absolute', top: 't' in orb ? orb.t : undefined, bottom: 'b' in orb ? orb.b : undefined, left: 'l' in orb ? orb.l : undefined, right: 'r' in orb ? orb.r : undefined, width: orb.w, height: orb.w, borderRadius: '50%', background: `radial-gradient(circle, ${orb.c} 0%, transparent 65%)`, filter: 'blur(65px)', opacity: orb.o, zIndex: 0, pointerEvents: 'none' } as CSSProperties} />
       ))}
@@ -399,6 +439,7 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
           <div style={{ fontFamily: p.monoFont, fontSize: 11, letterSpacing: 0.22, color: p.dim, textAlign: 'right', lineHeight: 1.5, marginLeft: 18, flexShrink: 0 }}>
             {now.toLocaleDateString('it-IT',{weekday:'short',day:'2-digit',month:'short'}).toUpperCase()}<br/>
             {now.getFullYear()}
+            <div style={{ fontSize: 8, opacity: 0.55, marginTop: 4, letterSpacing: 0.25 }}>build·{BUILD_SHA}</div>
           </div>
         </div>
 
