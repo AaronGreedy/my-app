@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, ReactNode } from 'react';
+import { useState, ReactNode } from 'react';
 import { p } from '@/lib/design';
 import { useAuth } from '@/lib/auth-context';
 import { LoginScreen } from '@/screens/login';
@@ -12,93 +12,72 @@ import { FocusScreen } from '@/screens/focus';
 import { BottomNav } from './bottom-nav';
 import { MarkerDiamond } from './markers';
 
-const PTR_THRESHOLD = 70;
+const BUILD_SHA  = process.env.NEXT_PUBLIC_BUILD_SHA  ?? 'dev';
+const BUILD_TIME = process.env.NEXT_PUBLIC_BUILD_TIME ?? '';
 
-function PullToRefresh() {
-  const [pull, setPull] = useState(0);
-  const [refreshing, setRefreshing] = useState(false);
-  const pullRef = useRef(0);
-  const startYRef = useRef(0);
-  const pullingRef = useRef(false);
+function buildLabel(): string {
+  if (!BUILD_TIME) return BUILD_SHA;
+  const d = new Date(BUILD_TIME);
+  if (isNaN(d.getTime())) return BUILD_SHA;
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mi = String(d.getMinutes()).padStart(2, '0');
+  return `${BUILD_SHA} · ${dd}/${mm} ${hh}:${mi}`;
+}
 
-  useEffect(() => {
-    const findScrollParent = (el: HTMLElement | null): HTMLElement | null => {
-      while (el && el !== document.body) {
-        const s = getComputedStyle(el);
-        if ((s.overflowY === 'auto' || s.overflowY === 'scroll') && el.scrollHeight > el.clientHeight) return el;
-        el = el.parentElement;
-      }
-      return null;
-    };
+function RefreshFab() {
+  const [spinning, setSpinning] = useState(false);
+  const onClick = () => {
+    setSpinning(true);
+    setTimeout(() => window.location.reload(), 120);
+  };
+  return (
+    <button
+      onClick={onClick}
+      aria-label="Aggiorna app"
+      style={{
+        position: 'fixed',
+        top: 'calc(env(safe-area-inset-top, 0px) + 10px)',
+        right: 12,
+        zIndex: 100,
+        width: 36, height: 36, borderRadius: '50%',
+        border: '1px solid rgba(0,240,255,0.45)',
+        background: 'rgba(10,10,12,0.55)',
+        backdropFilter: 'blur(10px)',
+        WebkitBackdropFilter: 'blur(10px)',
+        color: p.cyan,
+        fontFamily: p.monoFont, fontSize: 18, fontWeight: 700,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        cursor: 'pointer',
+        boxShadow: '0 0 14px rgba(0,240,255,0.25)',
+      }}
+    >
+      <span style={{
+        display: 'inline-block',
+        animation: spinning ? 'ptrSpin 0.6s linear infinite' : 'none',
+      }}>↻</span>
+      <style>{`@keyframes ptrSpin { to { transform: rotate(360deg); } }`}</style>
+    </button>
+  );
+}
 
-    const onStart = (e: TouchEvent) => {
-      if (refreshing) return;
-      const sc = findScrollParent(e.target as HTMLElement);
-      if (!sc || sc.scrollTop > 0) { pullingRef.current = false; return; }
-      startYRef.current = e.touches[0].clientY;
-      pullingRef.current = true;
-    };
-
-    const onMove = (e: TouchEvent) => {
-      if (!pullingRef.current) return;
-      const dy = e.touches[0].clientY - startYRef.current;
-      if (dy > 0) {
-        const damped = Math.min(dy * 0.55, 110);
-        pullRef.current = damped;
-        setPull(damped);
-      } else {
-        pullRef.current = 0;
-        setPull(0);
-      }
-    };
-
-    const onEnd = () => {
-      if (!pullingRef.current) return;
-      pullingRef.current = false;
-      if (pullRef.current > PTR_THRESHOLD) {
-        setRefreshing(true);
-        setTimeout(() => window.location.reload(), 180);
-      } else {
-        pullRef.current = 0;
-        setPull(0);
-      }
-    };
-
-    window.addEventListener('touchstart', onStart, { passive: true });
-    window.addEventListener('touchmove', onMove, { passive: true });
-    window.addEventListener('touchend', onEnd, { passive: true });
-    window.addEventListener('touchcancel', onEnd, { passive: true });
-    return () => {
-      window.removeEventListener('touchstart', onStart);
-      window.removeEventListener('touchmove', onMove);
-      window.removeEventListener('touchend', onEnd);
-      window.removeEventListener('touchcancel', onEnd);
-    };
-  }, [refreshing]);
-
-  if (pull === 0 && !refreshing) return null;
-
-  const ready = pull > PTR_THRESHOLD;
-  const label = refreshing ? '↻ AGGIORNO…' : ready ? '↑ RILASCIA' : '↓ TIRA';
-  const color = ready || refreshing ? p.cyan : p.dim;
-  const height = refreshing ? 60 : pull;
-
+function BuildStamp() {
   return (
     <div style={{
-      position: 'fixed', top: 0, left: 0, right: 0,
-      height,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      zIndex: 9999, pointerEvents: 'none',
-      transition: refreshing ? 'height 0.2s' : 'none',
-      background: 'linear-gradient(180deg, rgba(0,240,255,0.08), transparent)',
+      position: 'fixed',
+      bottom: 'calc(env(safe-area-inset-bottom, 0px) + 80px)',
+      left: 8,
+      zIndex: 50,
+      pointerEvents: 'none',
+      fontFamily: p.monoFont,
+      fontSize: 8.5,
+      letterSpacing: 0.3,
+      color: p.dim,
+      opacity: 0.55,
+      textTransform: 'uppercase',
     }}>
-      <div style={{
-        fontFamily: p.monoFont, fontSize: 11, fontWeight: 700, letterSpacing: 0.32,
-        color, textTransform: 'uppercase',
-        textShadow: ready || refreshing ? '0 0 10px rgba(0,240,255,0.55)' : 'none',
-      }}>
-        {label}
-      </div>
+      build · {buildLabel()}
     </div>
   );
 }
@@ -139,7 +118,8 @@ export function AppShell() {
           setScreen={setScreen as (s: NavScreen) => void}
         />
       )}
-      <PullToRefresh />
+      <RefreshFab />
+      <BuildStamp />
     </div>
   );
 }
