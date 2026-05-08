@@ -1,5 +1,5 @@
 // Personal Growth App — service worker
-// Minimal: handles client-triggered notifications via showNotification + click routing
+// Handles client-triggered notifications + Web Push from server.
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -7,6 +7,23 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
+});
+
+self.addEventListener('push', (event) => {
+  let payload = { title: 'Personal Growth', body: '', tag: 'general', url: '/' };
+  if (event.data) {
+    try { payload = { ...payload, ...event.data.json() }; }
+    catch { payload.body = event.data.text(); }
+  }
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      tag: payload.tag,
+      icon: '/favicon.ico',
+      badge: '/favicon.ico',
+      data: { url: payload.url || '/' },
+    })
+  );
 });
 
 self.addEventListener('notificationclick', (event) => {

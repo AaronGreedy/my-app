@@ -48,7 +48,7 @@ function localDateKeyD(d: Date): string {
 }
 
 function NotificationsSection({ uid }: { uid: string | null }) {
-  const { prefs, permission, savePrefs, requestPermission } = useNotifications(uid);
+  const { prefs, permission, savePrefs, requestPermission, serverPushStatus, serverPushError } = useNotifications(uid);
   const supported = typeof window !== 'undefined' && 'Notification' in window;
 
   if (!supported) {
@@ -100,8 +100,19 @@ function NotificationsSection({ uid }: { uid: string | null }) {
                 />
               </div>
             ))}
-            <div style={{ fontFamily:p.monoFont, fontSize:8.5, color:p.dim, lineHeight:1.5, marginTop:4 }}>
-              ⚠ iOS limita notifiche con app chiusa. Affidabili solo se aggiungi alla Home Screen e apri la PWA almeno una volta nelle ultime ore.
+            <div style={{ marginTop:8, padding:'8px 10px', borderRadius:10, background:'rgba(0,240,255,0.06)', border:`1px solid rgba(0,240,255,0.18)` }}>
+              <div style={{ fontFamily:p.monoFont, fontSize:9, color:p.cyan, textTransform:'uppercase', letterSpacing:0.15, marginBottom:3 }}>
+                {serverPushStatus === 'subscribed' ? '✓ Push server attive' : serverPushStatus === 'error' ? '⚠ Push server non attive' : '◌ Push server'}
+              </div>
+              {serverPushStatus === 'subscribed' && (
+                <div style={{ fontFamily:p.monoFont, fontSize:8.5, color:p.dim, lineHeight:1.4 }}>Cron Vercel ti notifica anche con app chiusa (richiede env: NEXT_PUBLIC_VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, FIREBASE_PROJECT_ID/CLIENT_EMAIL/PRIVATE_KEY)</div>
+              )}
+              {serverPushStatus === 'error' && (
+                <div style={{ fontFamily:p.monoFont, fontSize:8.5, color:p.red, lineHeight:1.4 }}>{serverPushError ?? 'Setup VAPID/Firebase Admin mancante su Vercel — solo notifiche client-side attive'}</div>
+              )}
+            </div>
+            <div style={{ fontFamily:p.monoFont, fontSize:8.5, color:p.dim, lineHeight:1.5, marginTop:6 }}>
+              ⚠ Su iOS, push reali richiedono PWA (Aggiungi a Home Screen) e iOS 16.4+
             </div>
           </div>
         )}

@@ -3,6 +3,66 @@
 import { useEffect, useState } from 'react';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
+import { auth } from './firebase';
+
+function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
+  const padding = '='.repeat((4 - base64.length % 4) % 4);
+  const b64 = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(b64);
+  const buf = new ArrayBuffer(raw.length);
+  const arr = new Uint8Array(buf);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+
+async function subscribeServerPush(): Promise<{ ok: boolean; error?: string }> {
+  const vapidPublic = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  if (!vapidPublic) return { ok: false, error: 'VAPID public key non configurata' };
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    return { ok: false, error: 'Push non supportato dal browser' };
+  }
+  if (!auth?.currentUser) return { ok: false, error: 'Non loggato' };
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidPublic),
+      });
+    }
+    const token = await auth.currentUser.getIdToken();
+    const subJson = sub.toJSON();
+    const res = await fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ sub: { endpoint: subJson.endpoint, keys: subJson.keys } }),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      return { ok: false, error: j.error ?? `HTTP ${res.status}` };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Errore push subscribe' };
+  }
+}
+
+async function unsubscribeServerPush(): Promise<void> {
+  if (!('serviceWorker' in navigator)) return;
+  if (!auth?.currentUser) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) await sub.unsubscribe();
+    const token = await auth.currentUser.getIdToken();
+    await fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ unsub: true }),
+    });
+  } catch { /* swallow */ }
+}
 
 export interface NotifPrefs {
   enabled: boolean;
@@ -87,12 +147,27 @@ export function useNotifications(uid: string | null) {
     setDoc(doc(db, 'users', uid), { notifPrefs: merged }, { merge: true }).catch(console.error);
   };
 
+  const [serverPushStatus, setServerPushStatus] = useState<'unknown'|'subscribed'|'unsupported'|'error'>('unknown');
+  const [serverPushError, setServerPushError]   = useState<string | null>(null);
+
   const requestPermission = async (): Promise<NotificationPermission> => {
     if (typeof window === 'undefined' || !('Notification' in window)) return 'denied';
     const r = await Notification.requestPermission();
     setPermission(r);
-    if (r === 'granted') savePrefs({ enabled: true });
+    if (r === 'granted') {
+      savePrefs({ enabled: true });
+      // Try to register Web Push subscription with server
+      const sub = await subscribeServerPush();
+      if (sub.ok) setServerPushStatus('subscribed');
+      else { setServerPushStatus('error'); setServerPushError(sub.error ?? null); }
+    }
     return r;
+  };
+
+  const disableServerPush = async () => {
+    await unsubscribeServerPush();
+    setServerPushStatus('unknown');
+    setServerPushError(null);
   };
 
   // Scheduler: poll every 30s while app is active. Fires once per slot per day.
@@ -123,5 +198,5 @@ export function useNotifications(uid: string | null) {
     return () => { stopped = true; clearInterval(id); };
   }, [prefs, permission]);
 
-  return { prefs, permission, savePrefs, requestPermission };
+  return { prefs, permission, savePrefs, requestPermission, serverPushStatus, serverPushError, disableServerPush };
 }
