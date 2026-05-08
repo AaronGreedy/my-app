@@ -8,6 +8,7 @@ import { MoodFace } from '@/components/mood-face';
 import { useAuth } from '@/lib/auth-context';
 import { useDayStore, MoodId, DayData, useMonthData } from '@/lib/day-store';
 import { useUserProfile, useSupplements, useWeightLog, useNotes, useXP, DEFAULT_PRS } from '@/lib/user-store';
+import { useNotifications } from '@/lib/notifications';
 import { MEALS, getMealTotals } from '@/lib/meals';
 
 // ─── Achievements ─────────────────────────────────────────────────────────────
@@ -44,6 +45,69 @@ const CAT_COL: Record<AchievementDef['cat'], string> = {
 
 function localDateKeyD(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function NotificationsSection({ uid }: { uid: string | null }) {
+  const { prefs, permission, savePrefs, requestPermission } = useNotifications(uid);
+  const supported = typeof window !== 'undefined' && 'Notification' in window;
+
+  if (!supported) {
+    return (
+      <NeonGlass style={{ marginTop: 8 }} radius={16} tint="rgba(255,255,255,0.03)">
+        <div style={{ padding:'10px 14px', fontFamily:p.monoFont, fontSize:10, color:p.dim }}>
+          Notifiche non supportate da questo browser.
+        </div>
+      </NeonGlass>
+    );
+  }
+
+  return (
+    <NeonGlass style={{ marginTop: 8 }} tint="rgba(255,255,255,0.04)" radius={18}>
+      <div style={{ padding:'14px 16px' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
+          <span style={{ fontSize:18 }}>🔔</span>
+          <div style={{ flex:1 }}>
+            <div style={{ fontFamily:p.bodyFont, fontSize:13, fontWeight:700, color:p.fg, textTransform:'uppercase' }}>Promemoria</div>
+            <div style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim, marginTop:1 }}>
+              {permission === 'granted'
+                ? (prefs.enabled ? 'Attivi · funzionano con app aperta o standalone PWA' : 'Permesso ok · attiva sotto')
+                : permission === 'denied' ? 'Permesso negato · cambia da Impostazioni browser'
+                : 'Permesso non chiesto'}
+            </div>
+          </div>
+          {permission !== 'granted' ? (
+            <button onClick={requestPermission} disabled={permission === 'denied'} style={{ padding:'8px 12px', borderRadius:10, border:`1px solid rgba(0,240,255,0.4)`, background:'rgba(0,240,255,0.1)', color:p.cyan, fontFamily:p.monoFont, fontSize:9, textTransform:'uppercase', cursor:permission==='denied'?'not-allowed':'pointer', opacity:permission==='denied'?0.4:1 }}>ABILITA</button>
+          ) : (
+            <button onClick={() => savePrefs({ enabled: !prefs.enabled })} style={{ padding:'8px 12px', borderRadius:10, border:`1px solid ${prefs.enabled?p.green:p.border}`, background:prefs.enabled?'rgba(166,255,0,0.1)':'transparent', color:prefs.enabled?p.green:p.muted, fontFamily:p.monoFont, fontSize:9, textTransform:'uppercase', cursor:'pointer' }}>{prefs.enabled?'ON':'OFF'}</button>
+          )}
+        </div>
+
+        {permission === 'granted' && prefs.enabled && (
+          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+            {([
+              { key:'morning', icon:'☀',  label:'Mood mattina'   },
+              { key:'task',    icon:'🎯', label:'Cosa di oggi'    },
+              { key:'evening', icon:'🌙', label:'Mood sera'       },
+            ] as const).map(row => (
+              <div key={row.key} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 10px', borderRadius:12, background:'rgba(255,255,255,0.04)' }}>
+                <span style={{ fontSize:14 }}>{row.icon}</span>
+                <span style={{ flex:1, fontFamily:p.bodyFont, fontSize:13, color:p.fg }}>{row.label}</span>
+                <input
+                  type="time"
+                  value={prefs[row.key]}
+                  onChange={e => savePrefs({ [row.key]: e.target.value } as Partial<typeof prefs>)}
+                  style={{ background:'rgba(255,255,255,0.06)', border:`1px solid ${p.border}`, borderRadius:8, padding:'5px 8px', color:p.fg, fontFamily:p.monoFont, fontSize:13, outline:'none', colorScheme:'dark' }}
+                />
+              </div>
+            ))}
+            <div style={{ fontFamily:p.monoFont, fontSize:8.5, color:p.dim, lineHeight:1.5, marginTop:4 }}>
+              ⚠ iOS limita notifiche con app chiusa. Affidabili solo se aggiungi alla Home Screen e apri la PWA almeno una volta nelle ultime ore.
+            </div>
+          </div>
+        )}
+      </div>
+    </NeonGlass>
+  );
 }
 
 function AchievementsSection({ data, uid }: { data: DayData; uid: string | null }) {
@@ -108,7 +172,7 @@ function AchievementsSection({ data, uid }: { data: DayData; uid: string | null 
 
   return (
     <>
-      <SectionLabel num="03" title="ACHIEVEMENTS" hint={`${unlocked.size}/${ACHIEVEMENTS.length}`}/>
+      <SectionLabel num="04" title="ACHIEVEMENTS" hint={`${unlocked.size}/${ACHIEVEMENTS.length}`}/>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginTop:8 }}>
         {ACHIEVEMENTS.map(a => {
           const on = unlocked.has(a.id);
@@ -708,6 +772,9 @@ function HabitsTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayDa
           );
         })}
       </div>
+
+      <SectionLabel num="03" title="PROMEMORIA" hint="orari notifiche"/>
+      <NotificationsSection uid={uid}/>
 
       <AchievementsSection data={data} uid={uid}/>
     </div>

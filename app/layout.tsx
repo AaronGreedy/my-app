@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
+import { SwRegister } from "@/components/sw-register";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -25,6 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <AuthProvider>
+          <SwRegister/>
           {children}
         </AuthProvider>
       </body>
