@@ -13,14 +13,10 @@ interface AuthCtx {
 
 const AuthContext = createContext<AuthCtx | null>(null);
 
-function isMobile(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  const ua = navigator.userAgent;
-  const isStandalone = (typeof window !== 'undefined') && (
-    window.matchMedia('(display-mode: standalone)').matches ||
-    (window.navigator as Navigator & { standalone?: boolean }).standalone === true
-  );
-  return /iPhone|iPad|iPod|Android|Mobi/i.test(ua) || isStandalone;
+function isStandalonePWA(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.matchMedia?.('(display-mode: standalone)').matches === true ||
+    (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -45,20 +41,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInGoogle = async () => {
     if (!auth) throw new Error('Firebase non configurato');
     const provider = new GoogleAuthProvider();
-    if (isMobile()) {
+
+    // PWA standalone (es. iOS aggiunto a Home Screen): popup non funziona,
+    // serve redirect per forza.
+    if (isStandalonePWA()) {
       await signInWithRedirect(auth, provider);
       return;
     }
+
+    // Default: popup ovunque (Safari mobile, Chrome, Firefox, desktop).
+    // Più affidabile del redirect su iOS Safari (no terze-parti cookie).
     try {
       await signInWithPopup(auth, provider);
     } catch (err) {
       const code = (err as { code?: string })?.code ?? '';
-      // Popup blocked / closed / unsupported → fall back to redirect.
+      // Solo i casi in cui il popup è bloccato/non supportato → redirect.
+      // popup-closed-by-user o cancelled-popup-request = utente ha annullato,
+      // re-throw così l'UI mostra (o nasconde) errore senza sorprese.
       if (
         code === 'auth/popup-blocked' ||
-        code === 'auth/popup-closed-by-user' ||
-        code === 'auth/cancelled-popup-request' ||
-        code === 'auth/operation-not-supported-in-this-environment'
+        code === 'auth/operation-not-supported-in-this-environment' ||
+        code === 'auth/web-storage-unsupported'
       ) {
         await signInWithRedirect(auth, provider);
         return;
