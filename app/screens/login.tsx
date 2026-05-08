@@ -9,9 +9,10 @@ import { auth } from '@/lib/firebase';
 import { initGsiSignIn, renderGsiButton } from '@/lib/google-signin';
 
 const ORBS = [
-  { t: -100, l: -80,  w: 380, c: '#ff6a00', o: 0.8 },
-  { t:  300, r: -120, w: 340, c: '#ff14b8', o: 0.6 },
-  { b:    0, l: -80,  w: 340, c: '#a6ff00', o: 0.5 },
+  { t: -120, l: -80,  w: 420, c: '#ff6a00', o: 0.85 },
+  { t:  240, r: -140, w: 380, c: '#ff14b8', o: 0.65 },
+  { b: -100, l: -120, w: 420, c: '#a6ff00', o: 0.55 },
+  { b: -140, r: -120, w: 380, c: '#00f0ff', o: 0.45 },
 ] as const;
 
 function GoogleIcon() {
