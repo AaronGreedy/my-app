@@ -333,6 +333,66 @@ export function useWeeklyChallenge(uid: string | null) {
   return { weekKey, challenge, completed, markComplete };
 }
 
+// ─── Work Tracker ─────────────────────────────────────────────────────────────
+
+export interface WorkItem {
+  id: string;
+  title: string;
+  notes: string;
+  createdAt: number;       // ms epoch
+  lastTouchedAt: number;   // ms epoch (sollecito)
+  status: 'open' | 'wip' | 'done';
+}
+
+export function useWorkItems(uid: string | null) {
+  const [items, setItems] = useState<WorkItem[]>([]);
+
+  useEffect(() => {
+    if (!uid || !db) return;
+    const ref = doc(db, 'users', uid);
+    return onSnapshot(ref, snap => {
+      if (snap.exists() && Array.isArray(snap.data().workItems)) {
+        setItems(snap.data().workItems as WorkItem[]);
+      } else {
+        setItems([]);
+      }
+    });
+  }, [uid]);
+
+  const save = (next: WorkItem[]) => {
+    setItems(next);
+    if (!uid || !db) return;
+    setDoc(doc(db, 'users', uid), { workItems: next }, { merge: true }).catch(console.error);
+  };
+
+  const add = (title: string, notes: string) => {
+    if (!title.trim()) return;
+    const now = Date.now();
+    save([...items, {
+      id: now.toString(),
+      title: title.trim(),
+      notes: notes.trim(),
+      createdAt: now,
+      lastTouchedAt: now,
+      status: 'open',
+    }]);
+  };
+
+  const update = (id: string, patch: Partial<WorkItem>) => {
+    save(items.map(w => w.id === id ? { ...w, ...patch } : w));
+  };
+
+  const touch = (id: string) => {
+    update(id, { lastTouchedAt: Date.now() });
+  };
+
+  const remove = (id: string) => {
+    save(items.filter(w => w.id !== id));
+  };
+
+  return { items, add, update, touch, remove };
+}
+
 // ─── Weight Log ───────────────────────────────────────────────────────────────
 
 export interface WeightEntry {
