@@ -258,6 +258,10 @@ function MoodTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayData
   const noteE    = data.moodNoteE;
   const { addNote } = useNotes(uid);
 
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiResponse, setAiResponse] = useState('');
+  const [aiError, setAiError] = useState('');
+
   const now = new Date();
   const currMonthData = useMonthData(uid, now.getFullYear(), now.getMonth());
   const prevMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
@@ -275,6 +279,55 @@ function MoodTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayData
       return (dd?.moodEvening ?? dd?.mood ?? null) as MoodId | null;
     })
   );
+
+  const analyzePattern = async () => {
+    if (aiLoading) return;
+    setAiLoading(true); setAiError(''); setAiResponse('');
+    try {
+      const today = new Date(); today.setHours(0,0,0,0);
+      const lines: string[] = [];
+      for (let i = 29; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(today.getDate() - i);
+        const key = localDateKey(d);
+        const dd = allDays[key];
+        if (!dd) continue;
+        const m = dd.moodMorning ?? '—';
+        const e = dd.moodEvening ?? '—';
+        const w = (dd.workouts ?? []).join('+') || '—';
+        const noteM = (dd.moodNoteM ?? '').trim().slice(0, 200);
+        const noteE = (dd.moodNoteE ?? '').trim().slice(0, 200);
+        let line = `${key} · M:${m} S:${e} · workout:${w}`;
+        if (noteM) line += `\n  ☀ ${noteM}`;
+        if (noteE) line += `\n  🌙 ${noteE}`;
+        lines.push(line);
+      }
+      if (lines.length < 3) {
+        setAiError('Servono almeno 3 giorni di log per analizzare pattern.');
+        setAiLoading(false);
+        return;
+      }
+      const system = `Sei uno psicologo e coach di Aaron. Analizza il suo log mood + journal + allenamenti degli ultimi 30 giorni. Identifica pattern concreti (es. "i giorni di Pull stai meglio la sera", "dopo 2 giorni senza workout l'umore mattina cala", "tema ricorrente nelle note: …"). Rispondi in italiano, conciso (5-8 punti bullet), evita banalità tipo "fai più sport". Sii specifico citando date/correlazioni reali.\n\nDATI (ordine cronologico, ultimi 30gg loggati):\n${lines.join('\n')}`;
+      const res = await fetch('/api/groq', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ system, messages: [{ role: 'user', content: 'Analizza i pattern di umore, allenamento e pensieri.' }] }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+      setAiResponse(json.content ?? '');
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : 'Errore di rete');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const saveAiAsNote = async () => {
+    if (!aiResponse.trim()) return;
+    const dateStr = localDateKey(new Date());
+    await addNote(`AI Mood Pattern · ${dateStr}\n\n${aiResponse}`, ['personale']);
+  };
 
   const saveMorningNote = () => {
     if (!noteM.trim()) return;
@@ -345,6 +398,31 @@ function MoodTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayData
               </div>
             ))}
           </div>
+        </div>
+      </NeonGlass>
+
+      <SectionLabel num="03" title="AI · PATTERN" hint="ultimi 30 giorni"/>
+      <NeonGlass style={{ marginTop:8 }} tint="linear-gradient(135deg,rgba(0,240,255,0.16),rgba(107,0,255,0.12))" edge="rgba(0,240,255,0.4)" radius={22}>
+        <div style={{ padding:'14px 16px' }}>
+          <div style={{ fontFamily:p.bodyFont, fontSize:12, color:p.muted, lineHeight:1.4, marginBottom:10 }}>
+            Groq analizza umore, allenamenti e journal — trova correlazioni reali, non frasi fatte.
+          </div>
+          <button onClick={analyzePattern} disabled={aiLoading} style={{ width:'100%',padding:'12px',borderRadius:14,border:'none',background:aiLoading?'rgba(0,240,255,0.2)':p.cyan,color:'#0a0a0a',fontFamily:p.monoFont,fontSize:11,textTransform:'uppercase',cursor:aiLoading?'not-allowed':'pointer',fontWeight:800,letterSpacing:0.15 }}>
+            {aiLoading ? '· · · ANALIZZO ·  · ·' : '↵ Analizza pattern'}
+          </button>
+
+          {aiError && (
+            <div style={{ marginTop:12, padding:'10px 14px', borderRadius:12, border:`1px solid rgba(255,0,64,0.4)`, background:'rgba(255,0,64,0.08)', color:p.red, fontFamily:p.monoFont, fontSize:10 }}>
+              {aiError}
+            </div>
+          )}
+
+          {aiResponse && (
+            <div style={{ marginTop:12, padding:'12px 14px', borderRadius:14, background:'rgba(255,255,255,0.04)', border:`1px solid ${p.border}` }}>
+              <div style={{ fontFamily:p.bodyFont, fontSize:13, color:p.fg, lineHeight:1.5, whiteSpace:'pre-wrap' }}>{aiResponse}</div>
+              <button onClick={saveAiAsNote} style={{ marginTop:10,padding:'8px 14px',borderRadius:12,border:`1px solid rgba(0,240,255,0.3)`,background:'rgba(0,240,255,0.08)',color:p.cyan,fontFamily:p.monoFont,fontSize:9.5,textTransform:'uppercase',cursor:'pointer' }}>↵ Salva nel Brain</button>
+            </div>
+          )}
         </div>
       </NeonGlass>
     </div>

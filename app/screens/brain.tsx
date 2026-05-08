@@ -183,6 +183,44 @@ export function BrainScreen() {
   const [newTags, setNewTags] = useState<Tag[]>([]);
   const [newItem, setNewItem] = useState('');
 
+  const [showAi, setShowAi] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiResponse, setAiResponse] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState('');
+
+  const askAi = async () => {
+    const q = aiPrompt.trim();
+    if (!q || aiLoading) return;
+    setAiLoading(true); setAiError(''); setAiResponse('');
+    try {
+      const ctx = notes.slice(0, 30).map(n => {
+        const date = new Date(n.createdAt).toLocaleDateString('it-IT');
+        const tags = n.tags.length ? ` [${n.tags.join(', ')}]` : '';
+        return `· ${date}${tags} ${n.title}\n  ${n.body.slice(0, 240)}`;
+      }).join('\n');
+      const system = `Sei l'AI del Second Brain di Aaron. Rispondi in italiano, breve e diretto, senza fronzoli. Se ti chiede di riorganizzare/cercare/collegare/sintetizzare le note, usa SOLO il contesto qui sotto. Se non c'è abbastanza materiale, dillo chiaramente invece di inventare.${ctx ? `\n\nNOTE (più recenti, max 30):\n${ctx}` : '\n\n(Nessuna nota ancora.)'}`;
+      const res = await fetch('/api/groq', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ system, messages: [{ role: 'user', content: q }] }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+      setAiResponse(json.content ?? '');
+    } catch (e) {
+      setAiError(e instanceof Error ? e.message : 'Errore di rete');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const saveAiAsNote = async () => {
+    if (!aiResponse.trim()) return;
+    await addNote(`AI · ${aiPrompt.trim().slice(0, 50)}\n\n${aiResponse}`, ['idea']);
+    setShowAi(false); setAiPrompt(''); setAiResponse(''); setAiError('');
+  };
+
   const filtered = notes.filter(n => {
     const ms = !search || n.title.toLowerCase().includes(search.toLowerCase()) || n.body.toLowerCase().includes(search.toLowerCase());
     const mt = !activeTag || n.tags.includes(activeTag);
@@ -287,7 +325,7 @@ export function BrainScreen() {
               ))}
             </div>
 
-            <NeonGlass style={{ marginTop:16 }} tint="linear-gradient(90deg,rgba(0,240,255,0.18),rgba(107,0,255,0.14))" edge="rgba(0,240,255,0.4)" glow="#00f0ff" radius={18}>
+            <NeonGlass style={{ marginTop:16 }} tint="linear-gradient(90deg,rgba(0,240,255,0.18),rgba(107,0,255,0.14))" edge="rgba(0,240,255,0.4)" glow="#00f0ff" radius={18} onClick={() => setShowAi(true)}>
               <div style={{ padding:'14px 18px', display:'flex', alignItems:'center', gap:12 }}>
                 <MarkerHex size={16} color={p.cyan}/>
                 <div style={{ flex:1 }}>
@@ -348,6 +386,49 @@ export function BrainScreen() {
         {section === 'regali' && <GiftsSection uid={user?.uid ?? null} />}
 
       </div>
+
+      {/* AI modal */}
+      {showAi && (
+        <div onClick={() => { if (!aiLoading) setShowAi(false); }} style={{ position:'absolute',inset:0,zIndex:100,background:'rgba(0,0,0,0.65)',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',display:'flex',alignItems:'flex-end' }}>
+          <div onClick={e => e.stopPropagation()} style={{ width:'100%',maxHeight:'88%',overflowY:'auto',padding:'24px 20px 110px',background:'rgba(10,8,6,0.94)',borderTop:`1px solid ${p.border}`,borderTopLeftRadius:28,borderTopRightRadius:28 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:14 }}>
+              <MarkerHex size={14} color={p.cyan}/>
+              <div style={{ fontFamily:p.monoFont, fontSize:10, color:p.cyan, letterSpacing:0.18, textTransform:'uppercase' }}>AI GROQ · {notes.length} note nel contesto</div>
+            </div>
+            <textarea
+              value={aiPrompt}
+              onChange={e => setAiPrompt(e.target.value)}
+              onKeyDown={e => { if(e.key==='Enter' && (e.metaKey || e.ctrlKey)) askAi(); }}
+              placeholder={`Es. "Riassumi le idee su fitness", "Trova pattern nelle note di mindfulness", "Suggerisci 3 azioni concrete dalle ultime note"…`}
+              rows={4}
+              disabled={aiLoading}
+              style={{ width:'100%',resize:'none',outline:'none',background:'rgba(255,255,255,0.04)',border:`1px solid ${p.border}`,borderRadius:14,padding:'12px 14px',color:p.fg,fontFamily:p.bodyFont,fontSize:15,lineHeight:1.4 }}
+            />
+
+            <div style={{ display:'flex', gap:8, marginTop:10 }}>
+              <button onClick={() => { setShowAi(false); setAiResponse(''); setAiError(''); }} disabled={aiLoading} style={{ padding:'11px 18px',borderRadius:14,border:'none',cursor:aiLoading?'not-allowed':'pointer',background:'rgba(255,255,255,0.08)',color:p.fg,fontFamily:p.monoFont,fontSize:11,textTransform:'uppercase',opacity:aiLoading?0.5:1 }}>Esc</button>
+              <div style={{ flex:1 }}/>
+              <button onClick={askAi} disabled={aiLoading || !aiPrompt.trim()} style={{ padding:'11px 22px',borderRadius:14,border:'none',cursor:(aiLoading||!aiPrompt.trim())?'not-allowed':'pointer',background:p.cyan,color:'#0a0a0a',fontFamily:p.monoFont,fontSize:11,textTransform:'uppercase',fontWeight:800,opacity:(aiLoading||!aiPrompt.trim())?0.5:1 }}>{aiLoading ? '· · ·' : '↵ Chiedi'}</button>
+            </div>
+
+            {aiError && (
+              <div style={{ marginTop:14, padding:'10px 14px', borderRadius:12, border:`1px solid rgba(255,0,64,0.4)`, background:'rgba(255,0,64,0.08)', color:p.red, fontFamily:p.monoFont, fontSize:11 }}>
+                {aiError}
+              </div>
+            )}
+
+            {aiResponse && (
+              <NeonGlass style={{ marginTop:14 }} tint="rgba(0,240,255,0.06)" edge="rgba(0,240,255,0.25)" radius={18}>
+                <div style={{ padding:'14px 16px' }}>
+                  <div style={{ fontFamily:p.monoFont, fontSize:9.5, color:p.cyan, textTransform:'uppercase', letterSpacing:0.18, marginBottom:8 }}>Risposta</div>
+                  <div style={{ fontFamily:p.bodyFont, fontSize:14, color:p.fg, lineHeight:1.5, whiteSpace:'pre-wrap' }}>{aiResponse}</div>
+                  <button onClick={saveAiAsNote} style={{ marginTop:12,padding:'9px 14px',borderRadius:12,border:`1px solid rgba(0,240,255,0.3)`,background:'rgba(0,240,255,0.08)',color:p.cyan,fontFamily:p.monoFont,fontSize:9.5,textTransform:'uppercase',cursor:'pointer' }}>↵ Salva come nota</button>
+                </div>
+              </NeonGlass>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* New note modal */}
       {showNew && (
