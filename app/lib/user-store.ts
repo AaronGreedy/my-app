@@ -93,7 +93,7 @@ export function useUserProfile(uid: string | null) {
 
   useEffect(() => {
     if (!uid || !db) return;
-    const ref = doc(db, 'users', uid, 'profile');
+    const ref = doc(db, 'users', uid);
     return onSnapshot(ref, snap => {
       if (snap.exists() && snap.data().prs) setPrs(snap.data().prs);
     });
@@ -103,7 +103,7 @@ export function useUserProfile(uid: string | null) {
     if (!uid || !db) return;
     const next = { ...prs, [name]: value };
     setPrs(next);
-    setDoc(doc(db, 'users', uid, 'profile'), { prs: next }, { merge: true }).catch(console.error);
+    setDoc(doc(db, 'users', uid), { prs: next }, { merge: true }).catch(console.error);
   };
 
   return { prs, savePr };
@@ -137,7 +137,7 @@ export function useCountdowns(uid: string | null) {
 
   useEffect(() => {
     if (!uid || !db) return;
-    const ref = doc(db, 'users', uid, 'profile');
+    const ref = doc(db, 'users', uid);
     return onSnapshot(ref, snap => {
       if (snap.exists() && Array.isArray(snap.data().countdowns)) {
         setCountdowns(snap.data().countdowns);
@@ -148,7 +148,7 @@ export function useCountdowns(uid: string | null) {
   const saveCountdowns = (list: Countdown[]) => {
     setCountdowns(list);
     if (!uid || !db) return;
-    setDoc(doc(db, 'users', uid, 'profile'), { countdowns: list }, { merge: true }).catch(console.error);
+    setDoc(doc(db, 'users', uid), { countdowns: list }, { merge: true }).catch(console.error);
   };
 
   return { countdowns, saveCountdowns };
@@ -181,7 +181,7 @@ export function useXP(uid: string | null) {
 
   useEffect(() => {
     if (!uid || !db) return;
-    const ref = doc(db, 'users', uid, 'profile');
+    const ref = doc(db, 'users', uid);
     return onSnapshot(ref, snap => {
       if (snap.exists() && typeof snap.data().xp === 'number') setTotalXP(snap.data().xp);
     });
@@ -191,7 +191,7 @@ export function useXP(uid: string | null) {
     const next = totalXP + amount;
     setTotalXP(next);
     if (!uid || !db) return;
-    setDoc(doc(db, 'users', uid, 'profile'), { xp: next }, { merge: true }).catch(console.error);
+    setDoc(doc(db, 'users', uid), { xp: next }, { merge: true }).catch(console.error);
   };
 
   return { totalXP, addXP, ...levelInfo(totalXP) };
@@ -218,7 +218,7 @@ export function useSupplements(uid: string | null) {
 
   useEffect(() => {
     if (!uid || !db) return;
-    const ref = doc(db, 'users', uid, 'profile');
+    const ref = doc(db, 'users', uid);
     return onSnapshot(ref, snap => {
       if (snap.exists() && Array.isArray(snap.data().supplements)) {
         setSupplements(snap.data().supplements);
@@ -229,7 +229,7 @@ export function useSupplements(uid: string | null) {
   const saveSupplements = (list: Supplement[]) => {
     setSupplements(list);
     if (!uid || !db) return;
-    setDoc(doc(db, 'users', uid, 'profile'), { supplements: list }, { merge: true }).catch(console.error);
+    setDoc(doc(db, 'users', uid), { supplements: list }, { merge: true }).catch(console.error);
   };
 
   return { supplements, saveSupplements };
@@ -277,7 +277,7 @@ export function useWeightLog(uid: string | null) {
 
   useEffect(() => {
     if (!uid || !db) return;
-    const ref = doc(db, 'users', uid, 'profile');
+    const ref = doc(db, 'users', uid);
     return onSnapshot(ref, snap => {
       if (snap.exists() && Array.isArray(snap.data().weightLog)) {
         const sorted = [...snap.data().weightLog].sort((a: WeightEntry, b: WeightEntry) => a.date.localeCompare(b.date));
@@ -292,7 +292,7 @@ export function useWeightLog(uid: string | null) {
     const next = [...entries.filter(e => e.date !== date), { date, weight }].sort((a,b) => a.date.localeCompare(b.date));
     setEntries(next);
     if (!uid || !db) return;
-    setDoc(doc(db, 'users', uid, 'profile'), { weightLog: next }, { merge: true }).catch(console.error);
+    setDoc(doc(db, 'users', uid), { weightLog: next }, { merge: true }).catch(console.error);
   };
 
   return { entries, logWeight };
