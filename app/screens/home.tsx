@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, CSSProperties } from 'react';
+import { useEffect, useState, CSSProperties } from 'react';
 import { p, NOISE_SVG } from '@/lib/design';
 import { NeonGlass, SectionLabel, MetricHead } from '@/components/neon-glass';
 import { MoodFace } from '@/components/mood-face';
@@ -9,6 +9,194 @@ import { useAuth } from '@/lib/auth-context';
 import { useDayStore, MoodId } from '@/lib/day-store';
 import { getMealTotals } from '@/lib/meals';
 import { useXP, useCountdowns, daysUntil, Countdown } from '@/lib/user-store';
+
+// ─── Weather (Bolzano) ────────────────────────────────────────────────────────
+
+interface WeatherData {
+  current: { temperature_2m: number; apparent_temperature: number; weather_code: number; relative_humidity_2m: number; wind_speed_10m: number; is_day: number };
+  daily:   { temperature_2m_max: number[]; temperature_2m_min: number[]; precipitation_probability_max: number[]; weather_code: number[] };
+}
+
+function wmoEmoji(code: number, isDay = 1): string {
+  if (code === 0) return isDay ? '☀️' : '🌙';
+  if (code <= 2)  return isDay ? '🌤' : '☁️';
+  if (code === 3) return '☁️';
+  if (code === 45 || code === 48) return '🌫';
+  if (code >= 51 && code <= 57)   return '🌦';
+  if (code >= 61 && code <= 67)   return '🌧';
+  if (code >= 71 && code <= 77)   return '🌨';
+  if (code >= 80 && code <= 82)   return '🌧';
+  if (code >= 85 && code <= 86)   return '🌨';
+  if (code >= 95)                 return '⛈';
+  return '🌡';
+}
+
+function wmoLabel(code: number): string {
+  if (code === 0)                 return 'Sereno';
+  if (code <= 2)                  return 'Poco nuvoloso';
+  if (code === 3)                 return 'Nuvoloso';
+  if (code === 45 || code === 48) return 'Nebbia';
+  if (code >= 51 && code <= 57)   return 'Pioviggine';
+  if (code >= 61 && code <= 65)   return 'Pioggia';
+  if (code === 66 || code === 67) return 'Pioggia gelata';
+  if (code >= 71 && code <= 75)   return 'Neve';
+  if (code === 77)                return 'Granuli neve';
+  if (code >= 80 && code <= 82)   return 'Rovesci';
+  if (code >= 85 && code <= 86)   return 'Rovesci neve';
+  if (code === 95)                return 'Temporale';
+  if (code >= 96)                 return 'Temporale forte';
+  return '—';
+}
+
+function WeatherCard() {
+  const [w, setW] = useState<WeatherData | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetch('/api/weather')
+      .then(r => r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`))
+      .then(d => { if (alive) setW(d as WeatherData); })
+      .catch(e => { if (alive) setErr(typeof e === 'string' ? e : 'Errore meteo'); });
+    return () => { alive = false; };
+  }, []);
+
+  if (err) {
+    return (
+      <NeonGlass style={{ marginTop: 12 }} radius={18} tint="rgba(255,255,255,0.03)">
+        <div style={{ padding:'12px 16px', fontFamily:p.monoFont, fontSize:10, color:p.dim }}>Meteo non disponibile · {err}</div>
+      </NeonGlass>
+    );
+  }
+  if (!w) {
+    return (
+      <NeonGlass style={{ marginTop: 12 }} radius={18} tint="rgba(255,255,255,0.03)">
+        <div style={{ padding:'12px 16px', fontFamily:p.monoFont, fontSize:10, color:p.dim }}>Carico meteo Bolzano…</div>
+      </NeonGlass>
+    );
+  }
+
+  const cur = w.current;
+  const max = Math.round(w.daily.temperature_2m_max[0]);
+  const min = Math.round(w.daily.temperature_2m_min[0]);
+  const rain = w.daily.precipitation_probability_max[0] ?? 0;
+  const emoji = wmoEmoji(cur.weather_code, cur.is_day);
+  const label = wmoLabel(cur.weather_code);
+
+  return (
+    <NeonGlass style={{ marginTop: 12 }} tint="linear-gradient(135deg, rgba(0,240,255,0.18), rgba(166,255,0,0.08))" edge="rgba(0,240,255,0.4)" radius={20}>
+      <div style={{ padding:'14px 16px', display:'flex', alignItems:'center', gap:14 }}>
+        <div style={{ fontSize:46, lineHeight:1, flexShrink:0, filter:'drop-shadow(0 4px 12px rgba(0,240,255,0.4))' }}>{emoji}</div>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontFamily:p.monoFont, fontSize:9.5, color:p.cyan, textTransform:'uppercase', letterSpacing:0.18 }}>BOLZANO · METEO</div>
+          <div style={{ display:'flex', alignItems:'baseline', gap:8, marginTop:3 }}>
+            <div style={{ fontFamily:p.displayFont, fontWeight:800, fontSize:34, letterSpacing:-1.2, lineHeight:1 }}>{Math.round(cur.temperature_2m)}<span style={{ fontSize:16, color:p.muted }}>°</span></div>
+            <div style={{ fontFamily:p.bodyFont, fontSize:13, color:p.muted }}>{label}</div>
+          </div>
+          <div style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim, marginTop:4, display:'flex', gap:10, flexWrap:'wrap' }}>
+            <span>perc {Math.round(cur.apparent_temperature)}°</span>
+            <span style={{ color:p.green }}>↓{min}°</span>
+            <span style={{ color:p.orange }}>↑{max}°</span>
+            <span>💧{rain}%</span>
+            <span>{Math.round(cur.wind_speed_10m)} km/h</span>
+          </div>
+        </div>
+      </div>
+    </NeonGlass>
+  );
+}
+
+// ─── News Feed ────────────────────────────────────────────────────────────────
+
+interface NewsItem {
+  title: string;
+  link: string;
+  source: string;
+  pubDate: number;
+  description: string;
+}
+
+function timeAgo(ts: number): string {
+  const diff = Date.now() - ts;
+  const m = Math.round(diff / 60000);
+  if (m < 60) return `${Math.max(1, m)}m`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h`;
+  const d = Math.round(h / 24);
+  if (d < 7)  return `${d}g`;
+  return new Date(ts).toLocaleDateString('it-IT', { day:'2-digit', month:'short' });
+}
+
+const SRC_COLOR: Record<string, string> = {
+  'TechCrunch AI': '#a6ff00',
+  'The Verge':     '#ff14b8',
+  'Hacker News':   '#ff6a00',
+  'Smashing':      '#00f0ff',
+};
+
+function NewsFeed() {
+  const [items, setItems]     = useState<NewsItem[] | null>(null);
+  const [err, setErr]         = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    fetch('/api/news')
+      .then(r => r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`))
+      .then(d => { if (alive) setItems((d.items ?? []) as NewsItem[]); })
+      .catch(e => { if (alive) setErr(typeof e === 'string' ? e : 'Errore news'); });
+    return () => { alive = false; };
+  }, []);
+
+  if (err) {
+    return (
+      <NeonGlass style={{ marginTop: 8 }} radius={18} tint="rgba(255,255,255,0.03)">
+        <div style={{ padding:'12px 16px', fontFamily:p.monoFont, fontSize:10, color:p.dim }}>News non disponibili · {err}</div>
+      </NeonGlass>
+    );
+  }
+  if (!items) {
+    return (
+      <NeonGlass style={{ marginTop: 8 }} radius={18} tint="rgba(255,255,255,0.03)">
+        <div style={{ padding:'12px 16px', fontFamily:p.monoFont, fontSize:10, color:p.dim }}>Carico news…</div>
+      </NeonGlass>
+    );
+  }
+
+  const visible = expanded ? items.slice(0, 30) : items.slice(0, 5);
+
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+        {visible.map((it, i) => {
+          const c = SRC_COLOR[it.source] ?? p.cyan;
+          return (
+            <a key={`${i}-${it.link}`} href={it.link} target="_blank" rel="noopener noreferrer" style={{ display:'block', textDecoration:'none' }}>
+              <NeonGlass tint="rgba(255,255,255,0.03)" radius={14}>
+                <div style={{ padding:'10px 12px', display:'flex', gap:10, alignItems:'flex-start' }}>
+                  <div style={{ width:3, alignSelf:'stretch', background:c, borderRadius:2, flexShrink:0, boxShadow:`0 0 6px ${c}` }}/>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', gap:8, alignItems:'center', marginBottom:3 }}>
+                      <span style={{ fontFamily:p.monoFont, fontSize:8.5, color:c, textTransform:'uppercase', letterSpacing:0.18, fontWeight:700 }}>{it.source}</span>
+                      <span style={{ fontFamily:p.monoFont, fontSize:8.5, color:p.dim }}>{timeAgo(it.pubDate)}</span>
+                    </div>
+                    <div style={{ fontFamily:p.bodyFont, fontWeight:600, fontSize:13, color:p.fg, lineHeight:1.3 }}>{it.title}</div>
+                  </div>
+                </div>
+              </NeonGlass>
+            </a>
+          );
+        })}
+      </div>
+
+      {items.length > 5 && (
+        <button onClick={() => setExpanded(e => !e)} style={{ width:'100%', marginTop:6, padding:'9px', borderRadius:12, border:`1px solid ${p.border}`, background:'transparent', color:p.muted, fontFamily:p.monoFont, fontSize:9.5, textTransform:'uppercase', letterSpacing:0.15, cursor:'pointer' }}>
+          {expanded ? '↑ Riduci' : `↓ Mostra altre ${Math.min(items.length, 30) - 5}`}
+        </button>
+      )}
+    </div>
+  );
+}
 
 const MOODS = [
   { id: 'awful' as MoodId, c: '#ff0040', label: 'GIÙ' },
@@ -265,6 +453,13 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
             </div>
           </div>
         </NeonGlass>
+
+        {/* Weather Bolzano */}
+        <WeatherCard/>
+
+        {/* News Feed */}
+        <SectionLabel num="—" title="NEWS" hint="ai · design · tech"/>
+        <NewsFeed/>
 
         {/* Mood */}
         <SectionLabel num="01" title="MOOD CHECK" hint={isMorning ? 'mattina' : 'sera'} />
