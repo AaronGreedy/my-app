@@ -66,16 +66,17 @@ function BuildStamp() {
   return (
     <div style={{
       position: 'fixed',
-      bottom: 'calc(env(safe-area-inset-bottom, 0px) + 80px)',
-      left: 8,
+      top: 'calc(env(safe-area-inset-top, 0px) + 52px)',
+      right: 12,
       zIndex: 50,
       pointerEvents: 'none',
       fontFamily: p.monoFont,
       fontSize: 8.5,
       letterSpacing: 0.3,
-      color: p.dim,
-      opacity: 0.55,
+      color: p.cyan,
+      opacity: 0.7,
       textTransform: 'uppercase',
+      textAlign: 'right',
     }}>
       build · {buildLabel()}
     </div>
