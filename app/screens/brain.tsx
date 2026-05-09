@@ -6,6 +6,7 @@ import { NeonGlass, SectionLabel } from '@/components/neon-glass';
 import { MarkerDiamond, MarkerStar4, MarkerHex } from '@/components/markers';
 import { useAuth } from '@/lib/auth-context';
 import { useNotes, useShoppingList, useGifts, Gift, BrainNote } from '@/lib/user-store';
+import { useToast } from '@/lib/toast';
 
 // ─── Note linking utilities ──────────────────────────────────────────────────
 
@@ -113,9 +114,9 @@ function forceLayout(notes: BrainNote[], edges: [string, string][], W: number, H
   return nodes;
 }
 
-const TAGS = ['idea','progetto','fitness','lavoro','personale','mindfulness'] as const;
+const TAGS = ['idea','progetto','fitness','lavoro','personale','mindfulness','mood'] as const;
 type Tag = typeof TAGS[number];
-const TC: Record<Tag, string> = { idea:p.cyan, progetto:p.orange, fitness:p.green, lavoro:'#ffd400', personale:p.magenta, mindfulness:'#a78bfa' };
+const TC: Record<Tag, string> = { idea:p.cyan, progetto:p.orange, fitness:p.green, lavoro:'#ffd400', personale:p.magenta, mindfulness:'#a78bfa', mood:'#ff14b8' };
 
 // ─── Mindfulness / Reflection Prompts ────────────────────────────────────────
 
@@ -173,6 +174,19 @@ function dayOfYear(d: Date): number {
 
 function getDailyPrompt(): Prompt {
   return PROMPTS[dayOfYear(new Date()) % PROMPTS.length];
+}
+
+// Returns 3 prompts of different categories for today, deterministic per day-of-year
+function getDailyPrompts(): Prompt[] {
+  const day = dayOfYear(new Date());
+  const cats: Prompt['cat'][] = ['mindfulness', 'creative', 'strategica', 'emotive', 'personale'];
+  // Rotate which 3 categories show today (slide window by 1 each day)
+  const start = day % cats.length;
+  const todayCats: Prompt['cat'][] = [cats[start], cats[(start + 2) % cats.length], cats[(start + 4) % cats.length]];
+  return todayCats.map((cat, i) => {
+    const inCat = PROMPTS.filter(pr => pr.cat === cat);
+    return inCat[(day + i * 7) % inCat.length];
+  });
 }
 
 const PIN_KEY = 'gifts_pin_hash';
@@ -319,7 +333,7 @@ function GiftsSection({ uid }: { uid: string | null }) {
                 <div style={{ fontFamily:p.bodyFont,fontWeight:600,fontSize:14,color:g.done?p.muted:p.fg,textDecoration:g.done?'line-through':'none' }}>{g.label}</div>
                 {g.note && <div style={{ fontFamily:p.monoFont,fontSize:10,color:p.dim,marginTop:2 }}>{g.note}</div>}
               </div>
-              <button onClick={() => remove(g.id)} style={{ background:'transparent',border:'none',color:p.dim,cursor:'pointer',fontSize:16,padding:'0 4px' }}>×</button>
+              <button onClick={() => { if (g.done || confirm(`Rimuovere idea "${g.label}"?`)) remove(g.id); }} style={{ background:'transparent',border:'none',color:p.dim,cursor:'pointer',fontSize:16,padding:'0 4px' }}>×</button>
             </div>
           </NeonGlass>
         ))}
@@ -336,8 +350,9 @@ function GiftsSection({ uid }: { uid: string | null }) {
 
 export function BrainScreen() {
   const { user } = useAuth();
+  const toast = useToast();
   const { notes, addNote, deleteNote } = useNotes(user?.uid ?? null);
-  const { items, addItem, toggleItem, removeItem } = useShoppingList(user?.uid ?? null);
+  const { items, addItem, toggleItem, removeItem, moveItem, clearAll } = useShoppingList(user?.uid ?? null);
 
   const [section, setSection] = useState<'brain'|'spesa'|'regali'>('brain');
   const [view, setView]     = useState<'list'|'graph'>('list');
@@ -346,6 +361,7 @@ export function BrainScreen() {
   const [showNew, setShowNew] = useState(false);
   const [newBody, setNewBody] = useState('');
   const [newTags, setNewTags] = useState<Tag[]>([]);
+  const [newHeader, setNewHeader] = useState<string>('');
   const [newItem, setNewItem] = useState('');
 
   const linkGraph = useMemo(() => buildLinkGraph(notes), [notes]);
@@ -410,10 +426,28 @@ export function BrainScreen() {
   });
 
   const handleSave = async () => {
-    await addNote(newBody, newTags);
+    const body = newHeader ? `❝${newHeader}❞\n\n${newBody}`.trim() : newBody;
+    await addNote(body, newTags);
     setNewBody('');
     setNewTags([]);
+    setNewHeader('');
     setShowNew(false);
+    toast.ok('Nota salvata');
+  };
+
+  const closeNew = () => {
+    setShowNew(false);
+    setNewBody('');
+    setNewTags([]);
+    setNewHeader('');
+  };
+
+  const submitItem = () => {
+    const parts = newItem.split(/[,\n]+/).map(s => s.trim()).filter(Boolean);
+    if (parts.length === 0) return;
+    addItem(newItem);
+    setNewItem('');
+    toast.ok(parts.length === 1 ? 'Aggiunto alla lista' : `+${parts.length} alla lista`);
   };
 
   const formatDate = (ts: number) => new Date(ts).toLocaleDateString('it-IT',{day:'2-digit',month:'short'}).toUpperCase();
@@ -423,7 +457,7 @@ export function BrainScreen() {
       {[{t:-80,l:-60,w:260,c:'#6b00ff',o:0.55},{t:400,r:-80,w:280,c:'#00f0ff',o:0.4}].map((orb,i) => (
         <div key={i} style={{ position:'absolute', top:orb.t, left:'l' in orb ? orb.l : undefined, right:'r' in orb ? (orb as {r:number}).r : undefined, width:orb.w, height:orb.w, borderRadius:'50%', background:`radial-gradient(circle, ${orb.c} 0%, transparent 65%)`, filter:'blur(65px)', opacity:orb.o, zIndex:0, pointerEvents:'none' }} />
       ))}
-      <div style={{ position:'relative', zIndex:2, padding:'56px 18px 130px' }}>
+      <div style={{ position:'relative', zIndex:2, padding:'calc(env(safe-area-inset-top, 0px) + 14px) 18px calc(env(safe-area-inset-bottom, 0px) + 130px)' }}>
 
         {/* Header */}
         <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', marginTop:8 }}>
@@ -454,25 +488,26 @@ export function BrainScreen() {
         {/* ── BRAIN TAB ── */}
         {section === 'brain' && (
           <>
-            {(() => {
-              const prompt = getDailyPrompt();
-              const c = CAT_COLORS[prompt.cat];
-              return (
-                <NeonGlass style={{ marginTop:16 }} tint={`linear-gradient(135deg,${c}44,${c}22)`} edge={`${c}80`} glow={c} radius={22}>
-                  <div style={{ padding:'14px 16px' }}>
-                    <div style={{ fontFamily:p.monoFont, fontSize:9.5, color:c, letterSpacing:0.2, textTransform:'uppercase', marginBottom:8, display:'flex', alignItems:'center', gap:6 }}>
-                      <MarkerStar4 size={10} color={c}/> {prompt.cat.toUpperCase()} · OGGI
+            <div style={{ marginTop:16, display:'flex', flexDirection:'column', gap:8 }}>
+              {getDailyPrompts().map((prompt, i) => {
+                const c = CAT_COLORS[prompt.cat];
+                return (
+                  <NeonGlass key={i} tint={`linear-gradient(135deg,${c}33,${c}14)`} edge={`${c}66`} glow={c} radius={20}>
+                    <div style={{ padding:'12px 14px' }}>
+                      <div style={{ fontFamily:p.monoFont, fontSize:9, color:c, letterSpacing:0.2, textTransform:'uppercase', marginBottom:6, display:'flex', alignItems:'center', gap:6 }}>
+                        <MarkerStar4 size={9} color={c}/> {prompt.cat.toUpperCase()} · {i+1}/3
+                      </div>
+                      <div style={{ fontFamily:p.bodyFont, fontSize:13.5, color:p.fg, lineHeight:1.35, fontStyle:'italic' }}>
+                        &ldquo;{prompt.q}&rdquo;
+                      </div>
+                      <NeonGlass style={{ marginTop:10 }} radius={11} tint={`${c}26`} edge={`${c}55`} onClick={() => { setNewHeader(prompt.q); setNewBody(''); setNewTags(['mindfulness']); setShowNew(true); }}>
+                        <div style={{ padding:'7px 12px', fontFamily:p.monoFont, fontSize:9.5, color:c, textAlign:'center', textTransform:'uppercase' }}>↵ Rispondi nel brain</div>
+                      </NeonGlass>
                     </div>
-                    <div style={{ fontFamily:p.bodyFont, fontSize:14, color:p.fg, lineHeight:1.4, fontStyle:'italic' }}>
-                      &ldquo;{prompt.q}&rdquo;
-                    </div>
-                    <NeonGlass style={{ marginTop:12 }} radius={12} tint={`${c}33`} edge={`${c}66`} onClick={() => { setNewBody(`${prompt.q}\n\n`); setNewTags(['mindfulness']); setShowNew(true); }}>
-                      <div style={{ padding:'9px 14px', fontFamily:p.monoFont, fontSize:10, color:c, textAlign:'center', textTransform:'uppercase' }}>↵ Rispondi nel brain</div>
-                    </NeonGlass>
-                  </div>
-                </NeonGlass>
-              );
-            })()}
+                  </NeonGlass>
+                );
+              })}
+            </div>
 
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cerca nel brain…"
               style={{ width:'100%', padding:'12px 16px', borderRadius:16, border:`1px solid ${p.border}`, background:'rgba(255,255,255,0.05)', color:p.fg, fontFamily:p.bodyFont, fontSize:15, outline:'none', marginTop:16 }} />
@@ -549,7 +584,7 @@ export function BrainScreen() {
                           <div style={{ fontFamily:p.displayFont, fontWeight:700, fontSize:16, textTransform:'uppercase', letterSpacing:-0.2, flex:1 }}>{note.title}</div>
                           <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                             <span style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim, flexShrink:0 }}>{formatDate(note.createdAt)}</span>
-                            <button onClick={() => deleteNote(note.id)} style={{ background:'transparent', border:'none', color:p.dim, cursor:'pointer', fontSize:14, padding:'0 2px' }}>×</button>
+                            <button onClick={() => { if (confirm(`Eliminare la nota "${note.title}"?`)) deleteNote(note.id); }} style={{ background:'transparent', border:'none', color:p.dim, cursor:'pointer', fontSize:14, padding:'0 2px' }}>×</button>
                           </div>
                         </div>
                         <div style={{ fontFamily:p.bodyFont, fontSize:13, color:p.muted, marginTop:4, lineHeight:1.35, whiteSpace:'pre-wrap' }}>
@@ -609,13 +644,16 @@ export function BrainScreen() {
               <input
                 value={newItem}
                 onChange={e => setNewItem(e.target.value)}
-                onKeyDown={e => { if(e.key==='Enter'){ addItem(newItem); setNewItem(''); } }}
-                placeholder="Aggiungi prodotto…"
+                onKeyDown={e => { if(e.key==='Enter'){ submitItem(); } }}
+                placeholder="banane, latte, cereali…"
                 style={{ flex:1, padding:'12px 16px', borderRadius:14, border:`1px solid ${p.border}`, background:'rgba(255,255,255,0.05)', color:p.fg, fontFamily:p.bodyFont, fontSize:15, outline:'none' }}
               />
-              <NeonGlass radius={14} tint="rgba(0,240,255,0.12)" edge="rgba(0,240,255,0.4)" onClick={() => { addItem(newItem); setNewItem(''); }}>
+              <NeonGlass radius={14} tint="rgba(0,240,255,0.12)" edge="rgba(0,240,255,0.4)" onClick={submitItem}>
                 <div style={{ padding:'12px 18px', fontFamily:p.monoFont, fontSize:11, color:p.cyan }}>+</div>
               </NeonGlass>
+            </div>
+            <div style={{ fontFamily:p.monoFont, fontSize:8.5, color:p.dim, marginTop:5 }}>
+              tip: separa con virgole per aggiungere più prodotti in un colpo
             </div>
 
             {items.length === 0 && (
@@ -625,12 +663,14 @@ export function BrainScreen() {
             )}
 
             <div style={{ display:'flex', flexDirection:'column', gap:6, marginTop:12 }}>
-              {items.map(item => (
+              {items.map((item, i) => (
                 <NeonGlass key={item.id} tint={item.done?'rgba(166,255,0,0.06)':'rgba(255,255,255,0.03)'} edge={item.done?'rgba(166,255,0,0.2)':undefined} radius={16}>
-                  <div style={{ padding:'12px 14px', display:'flex', alignItems:'center', gap:10 }}>
+                  <div style={{ padding:'12px 14px', display:'flex', alignItems:'center', gap:8 }}>
                     <button onClick={() => toggleItem(item.id)} style={{ width:20,height:20,borderRadius:6,border:`1.5px solid ${item.done?p.green:p.muted}`,background:item.done?p.green:'transparent',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',color:'#0a0a0a',fontSize:12,fontWeight:900,cursor:'pointer',boxShadow:item.done?`0 0 8px ${p.green}`:'none' }}>{item.done?'✓':''}</button>
                     <span style={{ flex:1, fontFamily:p.bodyFont, fontSize:14, color:item.done?p.muted:p.fg, textDecoration:item.done?'line-through':'none' }}>{item.text}</span>
-                    <button onClick={() => removeItem(item.id)} style={{ background:'transparent',border:'none',color:p.dim,cursor:'pointer',fontSize:16,padding:'0 4px' }}>×</button>
+                    <button onClick={() => moveItem(item.id, -1)} disabled={i === 0} style={{ background:'transparent',border:'none',color:i===0?p.dim:p.muted,cursor:i===0?'not-allowed':'pointer',fontSize:13,padding:'0 3px',opacity:i===0?0.3:0.7 }}>↑</button>
+                    <button onClick={() => moveItem(item.id, 1)} disabled={i === items.length - 1} style={{ background:'transparent',border:'none',color:i===items.length-1?p.dim:p.muted,cursor:i===items.length-1?'not-allowed':'pointer',fontSize:13,padding:'0 3px',opacity:i===items.length-1?0.3:0.7 }}>↓</button>
+                    <button onClick={() => { if (item.done || confirm(`Rimuovere "${item.text}"?`)) removeItem(item.id); }} style={{ background:'transparent',border:'none',color:p.dim,cursor:'pointer',fontSize:16,padding:'0 2px' }}>×</button>
                   </div>
                 </NeonGlass>
               ))}
@@ -640,6 +680,12 @@ export function BrainScreen() {
               <NeonGlass style={{ marginTop:12 }} radius={14} tint="rgba(255,0,64,0.08)" onClick={() => items.filter(i=>i.done).forEach(i=>removeItem(i.id))}>
                 <div style={{ padding:'10px 16px', textAlign:'center', fontFamily:p.monoFont, fontSize:9.5, color:p.red, textTransform:'uppercase' }}>Elimina completati</div>
               </NeonGlass>
+            )}
+
+            {items.length > 0 && (
+              <button onClick={() => { if (confirm(`Svuotare tutta la lista (${items.length} prodotti)?`)) clearAll(); }} style={{ marginTop:8, width:'100%', padding:'9px', borderRadius:14, border:`1px dashed ${p.border}`, background:'transparent', color:p.dim, fontFamily:p.monoFont, fontSize:9, textTransform:'uppercase', letterSpacing:0.15, cursor:'pointer' }}>
+                Svuota tutto
+              </button>
             )}
           </>
         )}
@@ -674,8 +720,20 @@ export function BrainScreen() {
             </div>
 
             {aiError && (
-              <div style={{ marginTop:14, padding:'10px 14px', borderRadius:12, border:`1px solid rgba(255,0,64,0.4)`, background:'rgba(255,0,64,0.08)', color:p.red, fontFamily:p.monoFont, fontSize:11 }}>
-                {aiError}
+              <div style={{ marginTop:14, padding:'12px 14px', borderRadius:12, border:`1px solid rgba(255,0,64,0.4)`, background:'rgba(255,0,64,0.08)', color:p.red, fontFamily:p.monoFont, fontSize:11 }}>
+                {aiError.toLowerCase().includes('groq_api_key') || aiError.toLowerCase().includes('non configurata') ? (
+                  <>
+                    <div style={{ fontWeight:700, marginBottom:6 }}>⚠ Groq non configurata</div>
+                    <div style={{ color:p.fg, fontSize:10.5, lineHeight:1.5, fontFamily:p.bodyFont }}>
+                      Per attivare l&apos;AI:<br/>
+                      1. crea una key gratuita su <span style={{ color:p.cyan }}>console.groq.com/keys</span><br/>
+                      2. Vercel → Settings → Environment Variables → aggiungi <code style={{ color:p.orange }}>GROQ_API_KEY</code><br/>
+                      3. Redeploy
+                    </div>
+                  </>
+                ) : (
+                  aiError
+                )}
               </div>
             )}
 
@@ -694,10 +752,16 @@ export function BrainScreen() {
 
       {/* New note modal */}
       {showNew && (
-        <div onClick={() => setShowNew(false)} style={{ position:'absolute',inset:0,zIndex:100,background:'rgba(0,0,0,0.65)',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',display:'flex',alignItems:'flex-end' }}>
+        <div onClick={closeNew} style={{ position:'absolute',inset:0,zIndex:100,background:'rgba(0,0,0,0.65)',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',display:'flex',alignItems:'flex-end' }}>
           <div onClick={e => e.stopPropagation()} style={{ width:'100%',padding:'24px 20px 110px',background:'rgba(10,8,6,0.92)',borderTop:`1px solid ${p.border}`,borderTopLeftRadius:28,borderTopRightRadius:28 }}>
             <div style={{ fontFamily:p.monoFont, fontSize:10, color:p.cyan, textTransform:'uppercase', marginBottom:14 }}>+ NUOVA NOTA</div>
-            <textarea value={newBody} onChange={e => setNewBody(e.target.value)} placeholder="Scrivi qui…" rows={5}
+            {newHeader && (
+              <div style={{ marginBottom:12, padding:'10px 14px', borderRadius:14, background:'rgba(0,240,255,0.06)', border:`1px solid rgba(0,240,255,0.25)` }}>
+                <div style={{ fontFamily:p.monoFont, fontSize:9, color:p.cyan, letterSpacing:0.2, textTransform:'uppercase', marginBottom:4 }}>↳ Domanda</div>
+                <div style={{ fontFamily:p.bodyFont, fontSize:13, color:p.fg, lineHeight:1.35, fontStyle:'italic' }}>&ldquo;{newHeader}&rdquo;</div>
+              </div>
+            )}
+            <textarea autoFocus value={newBody} onChange={e => setNewBody(e.target.value)} placeholder={newHeader ? "Scrivi la tua risposta…" : "Scrivi qui…"} rows={5}
               style={{ width:'100%',resize:'none',border:'none',outline:'none',background:'transparent',color:p.fg,fontFamily:p.bodyFont,fontSize:16,lineHeight:1.4 }}/>
             <div style={{ display:'flex', gap:5, flexWrap:'wrap', marginTop:10 }}>
               {TAGS.map(t => (
@@ -705,9 +769,9 @@ export function BrainScreen() {
               ))}
             </div>
             <div style={{ display:'flex', gap:8, marginTop:14 }}>
-              <button onClick={() => setShowNew(false)} style={{ padding:'11px 18px',borderRadius:14,border:'none',cursor:'pointer',background:'rgba(255,255,255,0.08)',color:p.fg,fontFamily:p.monoFont,fontSize:11,textTransform:'uppercase' }}>Esc</button>
+              <button onClick={closeNew} style={{ padding:'11px 18px',borderRadius:14,border:'none',cursor:'pointer',background:'rgba(255,255,255,0.08)',color:p.fg,fontFamily:p.monoFont,fontSize:11,textTransform:'uppercase' }}>Esc</button>
               <div style={{ flex:1 }}/>
-              <button onClick={handleSave} style={{ padding:'11px 22px',borderRadius:14,border:'none',cursor:'pointer',background:p.cyan,color:'#0a0a0a',fontFamily:p.monoFont,fontSize:11,textTransform:'uppercase',fontWeight:800 }}>↵ Salva</button>
+              <button onClick={handleSave} disabled={!newBody.trim()} style={{ padding:'11px 22px',borderRadius:14,border:'none',cursor:newBody.trim()?'pointer':'not-allowed',background:p.cyan,color:'#0a0a0a',fontFamily:p.monoFont,fontSize:11,textTransform:'uppercase',fontWeight:800,opacity:newBody.trim()?1:0.4 }}>↵ Salva</button>
             </div>
           </div>
         </div>

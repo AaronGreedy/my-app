@@ -7,7 +7,7 @@ import { LoginScreen } from '@/screens/login';
 import { HomeScreen } from '@/screens/home';
 import { CalendarScreen } from '@/screens/calendar';
 import { BrainScreen } from '@/screens/brain';
-import { MeScreen } from '@/screens/me';
+import { MeScreen, MeTab } from '@/screens/me';
 import { FocusScreen } from '@/screens/focus';
 import { BottomNav } from './bottom-nav';
 import { MarkerDiamond } from './markers';
@@ -27,15 +27,21 @@ function LoadingScreen() {
 export function AppShell() {
   const { user, loading } = useAuth();
   const [screen, setScreen] = useState<Screen>('home');
+  const [meTab, setMeTab] = useState<MeTab | undefined>(undefined);
 
   if (loading) return <LoadingScreen />;
   if (!user)   return <LoginScreen />;
 
+  const navigate = (s: Screen, opts?: { meTab?: MeTab }) => {
+    if (opts?.meTab) setMeTab(opts.meTab);
+    setScreen(s);
+  };
+
   const content: Record<Screen, ReactNode> = {
-    home:  <HomeScreen onNavigate={setScreen} />,
+    home:  <HomeScreen onNavigate={navigate} />,
     cal:   <CalendarScreen />,
     brain: <BrainScreen />,
-    me:    <MeScreen />,
+    me:    <MeScreen initialTab={meTab} />,
     focus: <FocusScreen onBack={() => setScreen('home')} />,
   };
 
@@ -45,7 +51,7 @@ export function AppShell() {
       {screen !== 'focus' && (
         <BottomNav
           screen={screen as NavScreen}
-          setScreen={setScreen as (s: NavScreen) => void}
+          setScreen={(s, opts) => navigate(s, opts)}
         />
       )}
     </div>

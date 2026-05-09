@@ -164,7 +164,7 @@ export function FocusScreen({ onBack }: { onBack: () => void }) {
         <div key={i} style={{ position:'absolute', top:'t' in orb ? orb.t : undefined, left:'l' in orb ? orb.l : undefined, right:'r' in orb ? (orb as {r:number}).r : undefined, width:orb.w, height:orb.w, borderRadius:'50%', background:`radial-gradient(circle, ${orb.c} 0%, transparent 65%)`, filter:'blur(65px)', opacity:orb.o, zIndex:0, pointerEvents:'none' }} />
       ))}
 
-      <div style={{ position:'relative', zIndex:2, padding:'56px 18px 50px' }}>
+      <div style={{ position:'relative', zIndex:2, padding:'calc(env(safe-area-inset-top, 0px) + 14px) 18px calc(env(safe-area-inset-bottom, 0px) + 50px)' }}>
         <div style={{ display:'flex', alignItems:'center', marginBottom:8 }}>
           <button onClick={onBack} style={{ border:0, background:'transparent', cursor:'pointer', color:p.muted, fontFamily:p.monoFont, fontSize:11, letterSpacing:0.15, textTransform:'uppercase' }}>← BACK</button>
           <div style={{ flex:1 }}/>

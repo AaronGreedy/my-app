@@ -183,7 +183,7 @@ function AchievementsSection({ data, uid }: { data: DayData; uid: string | null 
 
   return (
     <>
-      <SectionLabel num="04" title="ACHIEVEMENTS" hint={`${unlocked.size}/${ACHIEVEMENTS.length}`}/>
+      <SectionLabel num="05" title="ACHIEVEMENTS" hint={`${unlocked.size}/${ACHIEVEMENTS.length}`}/>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginTop:8 }}>
         {ACHIEVEMENTS.map(a => {
           const on = unlocked.has(a.id);
@@ -287,16 +287,23 @@ function CiboTab({ data, save }: { data: DayData; save: (p: Partial<DayData>) =>
         ))}
       </div>
 
-      <SectionLabel num="04" title="CAFFEINA" hint="max 3"/>
+      <SectionLabel num="04" title="CAFFEINA" hint="max 400mg"/>
       <NeonGlass style={{ marginTop:8 }} tint="rgba(255,255,255,0.04)" radius={18}>
-        <div style={{ padding:'12px 16px', display:'flex', gap:8, alignItems:'center' }}>
-          {['☕ Caffè','🍵 Tè','⚡ Monster'].map(label => (
-            <button key={label} onClick={() => save({ caffeine: Math.min(5, caffeine + 1) })} style={{ flex:1,padding:'10px 4px',borderRadius:14,border:`1px solid ${caffeine>=3?'rgba(255,0,64,0.4)':'rgba(255,212,0,0.3)'}`,background:caffeine>=3?'rgba(255,0,64,0.1)':'rgba(255,212,0,0.08)',color:p.fg,cursor:'pointer',fontFamily:p.monoFont,fontSize:9.5,textTransform:'uppercase' }}>{label}</button>
+        <div style={{ padding:'12px 16px', display:'flex', gap:6, alignItems:'center' }}>
+          {([
+            { label:'☕ Caffè',   mg:80 },
+            { label:'🍵 Tè',     mg:40 },
+            { label:'⚡ Monster', mg:160 },
+          ]).map(b => (
+            <button key={b.label} onClick={() => save({ caffeine: caffeine + b.mg })} style={{ flex:1,padding:'10px 4px',borderRadius:14,border:`1px solid ${caffeine>=400?'rgba(255,0,64,0.4)':'rgba(255,212,0,0.3)'}`,background:caffeine>=400?'rgba(255,0,64,0.1)':'rgba(255,212,0,0.08)',color:p.fg,cursor:'pointer',fontFamily:p.monoFont,fontSize:9,textTransform:'uppercase',display:'flex',flexDirection:'column',gap:2,alignItems:'center' }}>
+              <span>{b.label}</span>
+              <span style={{ fontSize:8, color:p.dim }}>+{b.mg}mg</span>
+            </button>
           ))}
-          <button onClick={() => save({ caffeine: Math.max(0, caffeine - 1) })} style={{ padding:'10px 10px',borderRadius:14,border:`1px solid ${p.border}`,background:'transparent',color:p.muted,cursor:'pointer',fontFamily:p.monoFont,fontSize:14 }}>−</button>
-          <div style={{ fontFamily:p.displayFont,fontSize:26,fontWeight:800,color:caffeine>=3?p.red:p.fg,minWidth:28,textAlign:'center' }}>{caffeine}</div>
+          <button onClick={() => save({ caffeine: 0 })} title="Reset" style={{ padding:'10px 10px',borderRadius:14,border:`1px solid ${p.border}`,background:'transparent',color:p.muted,cursor:'pointer',fontFamily:p.monoFont,fontSize:11 }}>↺</button>
+          <div style={{ fontFamily:p.displayFont,fontSize:22,fontWeight:800,color:caffeine>=400?p.red:p.fg,minWidth:54,textAlign:'right',lineHeight:1 }}>{caffeine}<span style={{ fontFamily:p.monoFont,fontSize:9,color:p.muted,marginLeft:2 }}>mg</span></div>
         </div>
-        {caffeine >= 3 && <div style={{ padding:'0 16px 10px',fontFamily:p.monoFont,fontSize:9,color:p.red,textTransform:'uppercase' }}>⚠ LIMITE RAGGIUNTO</div>}
+        {caffeine >= 400 && <div style={{ padding:'0 16px 10px',fontFamily:p.monoFont,fontSize:9,color:p.red,textTransform:'uppercase' }}>⚠ OLTRE LIMITE RACCOMANDATO (400mg)</div>}
       </NeonGlass>
     </div>
   );
@@ -551,6 +558,8 @@ function MoodTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayData
   const [aiLoading, setAiLoading] = useState(false);
   const [aiResponse, setAiResponse] = useState('');
   const [aiError, setAiError] = useState('');
+  const [savingNote, setSavingNote] = useState<'M'|'E'|null>(null);
+  const [savedFlash, setSavedFlash] = useState<'M'|'E'|null>(null);
 
   const now = new Date();
   const currMonthData = useMonthData(uid, now.getFullYear(), now.getMonth());
@@ -619,16 +628,32 @@ function MoodTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayData
     await addNote(`AI Mood Pattern · ${dateStr}\n\n${aiResponse}`, ['personale']);
   };
 
-  const saveMorningNote = () => {
-    if (!noteM.trim()) return;
+  const saveMorningNote = async () => {
+    if (!noteM.trim() || savingNote === 'M') return;
+    setSavingNote('M');
     const dateStr = localDateKey(new Date());
-    addNote(`MATTINA ${dateStr} · ${noteM.trim().slice(0,50)}`, ['personale']);
+    try {
+      await addNote(`☀ ${dateStr} · ${noteM.trim().slice(0,50)}\n\n${noteM.trim()}`, ['mood']);
+      save({ moodNoteM: '' });
+      setSavedFlash('M');
+      setTimeout(() => setSavedFlash(null), 1400);
+    } finally {
+      setSavingNote(null);
+    }
   };
 
-  const saveEveningNote = () => {
-    if (!noteE.trim()) return;
+  const saveEveningNote = async () => {
+    if (!noteE.trim() || savingNote === 'E') return;
+    setSavingNote('E');
     const dateStr = localDateKey(new Date());
-    addNote(`SERA ${dateStr} · ${noteE.trim().slice(0,50)}`, ['personale']);
+    try {
+      await addNote(`🌙 ${dateStr} · ${noteE.trim().slice(0,50)}\n\n${noteE.trim()}`, ['mood']);
+      save({ moodNoteE: '' });
+      setSavedFlash('E');
+      setTimeout(() => setSavedFlash(null), 1400);
+    } finally {
+      setSavingNote(null);
+    }
   };
 
   const MoodPicker = ({ value, onChange, label }: { value: MoodId|null; onChange: (v: MoodId) => void; label: string }) => (
@@ -656,14 +681,14 @@ function MoodTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayData
           <MoodPicker value={morning} onChange={v => save({ moodMorning: v })} label="☀ MATTINA"/>
           <textarea value={noteM} onChange={e => save({ moodNoteM: e.target.value })} placeholder="Come stai stamattina? Cosa senti?" rows={3}
             style={{ width:'100%',resize:'none',border:`1px solid ${p.border}`,outline:'none',borderRadius:14,marginTop:10,padding:'10px 14px',background:'rgba(255,255,255,0.04)',color:p.fg,fontFamily:p.bodyFont,fontSize:14 }}/>
-          <button onClick={saveMorningNote} style={{ marginTop:8,padding:'8px 16px',borderRadius:12,border:`1px solid rgba(0,240,255,0.3)`,background:'rgba(0,240,255,0.08)',color:p.cyan,fontFamily:p.monoFont,fontSize:9.5,textTransform:'uppercase',cursor:'pointer' }}>↵ Salva nel Brain</button>
+          <button onClick={saveMorningNote} disabled={!noteM.trim() || savingNote === 'M'} style={{ marginTop:8,padding:'8px 16px',borderRadius:12,border:`1px solid ${savedFlash==='M'?'rgba(166,255,0,0.5)':'rgba(0,240,255,0.3)'}`,background:savedFlash==='M'?'rgba(166,255,0,0.12)':'rgba(0,240,255,0.08)',color:savedFlash==='M'?p.green:p.cyan,fontFamily:p.monoFont,fontSize:9.5,textTransform:'uppercase',cursor:noteM.trim()&&savingNote!=='M'?'pointer':'not-allowed',opacity:noteM.trim()&&savingNote!=='M'?1:0.5 }}>{savedFlash==='M'?'✓ SALVATO':savingNote==='M'?'· · ·':'↵ Salva nel Brain'}</button>
 
           <div style={{ height:1,background:p.border,margin:'16px 0' }}/>
 
           <MoodPicker value={evening} onChange={v => save({ moodEvening: v })} label="🌙 SERA"/>
           <textarea value={noteE} onChange={e => save({ moodNoteE: e.target.value })} placeholder="Com'è andata oggi? Rifletti sulla giornata." rows={3}
             style={{ width:'100%',resize:'none',border:`1px solid ${p.border}`,outline:'none',borderRadius:14,marginTop:10,padding:'10px 14px',background:'rgba(255,255,255,0.04)',color:p.fg,fontFamily:p.bodyFont,fontSize:14 }}/>
-          <button onClick={saveEveningNote} style={{ marginTop:8,padding:'8px 16px',borderRadius:12,border:`1px solid rgba(0,240,255,0.3)`,background:'rgba(0,240,255,0.08)',color:p.cyan,fontFamily:p.monoFont,fontSize:9.5,textTransform:'uppercase',cursor:'pointer' }}>↵ Salva nel Brain</button>
+          <button onClick={saveEveningNote} disabled={!noteE.trim() || savingNote === 'E'} style={{ marginTop:8,padding:'8px 16px',borderRadius:12,border:`1px solid ${savedFlash==='E'?'rgba(166,255,0,0.5)':'rgba(0,240,255,0.3)'}`,background:savedFlash==='E'?'rgba(166,255,0,0.12)':'rgba(0,240,255,0.08)',color:savedFlash==='E'?p.green:p.cyan,fontFamily:p.monoFont,fontSize:9.5,textTransform:'uppercase',cursor:noteE.trim()&&savingNote!=='E'?'pointer':'not-allowed',opacity:noteE.trim()&&savingNote!=='E'?1:0.5 }}>{savedFlash==='E'?'✓ SALVATO':savingNote==='E'?'· · ·':'↵ Salva nel Brain'}</button>
         </div>
       </NeonGlass>
 
@@ -702,8 +727,16 @@ function MoodTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayData
           </button>
 
           {aiError && (
-            <div style={{ marginTop:12, padding:'10px 14px', borderRadius:12, border:`1px solid rgba(255,0,64,0.4)`, background:'rgba(255,0,64,0.08)', color:p.red, fontFamily:p.monoFont, fontSize:10 }}>
-              {aiError}
+            <div style={{ marginTop:12, padding:'12px 14px', borderRadius:12, border:`1px solid rgba(255,0,64,0.4)`, background:'rgba(255,0,64,0.08)', color:p.red, fontFamily:p.monoFont, fontSize:10 }}>
+              {aiError.toLowerCase().includes('groq_api_key') || aiError.toLowerCase().includes('non configurata') ? (
+                <>
+                  <div style={{ fontWeight:700, marginBottom:5 }}>⚠ Groq non configurata</div>
+                  <div style={{ color:p.fg, fontSize:10.5, lineHeight:1.5, fontFamily:p.bodyFont }}>
+                    Crea una key su <span style={{ color:p.cyan }}>console.groq.com/keys</span> →
+                    Vercel · Settings · Environment Variables · <code style={{ color:p.orange }}>GROQ_API_KEY</code> → Redeploy
+                  </div>
+                </>
+              ) : aiError}
             </div>
           )}
 
@@ -722,20 +755,88 @@ function MoodTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayData
 // ─── Habits ────────────────────────────────────────────────────────────────────
 
 const GOOD_HABITS = [
-  {n:'Stretching',         s:28, xp:15},
-  {n:'No scroll a letto',  s:14, xp:20},
-  {n:'Luci rosse sera',    s:6,  xp:10},
-  {n:'Candle prima dormire',s:3,  xp:10},
-  {n:'Meditazione 5 min',  s:0,  xp:15},
-  {n:'Lettura 15 min',     s:0,  xp:10},
-  {n:'Doccia fredda',      s:0,  xp:20},
-  {n:'Allenamento',        s:0,  xp:30},
+  {n:'Stretching',          xp:15},
+  {n:'No scroll a letto',   xp:20},
+  {n:'Luci rosse sera',     xp:10},
+  {n:'Candle prima dormire',xp:10},
+  {n:'Meditazione 5 min',   xp:15},
+  {n:'Lettura 15 min',      xp:10},
+  {n:'Doccia fredda',       xp:20},
+  {n:'Allenamento',         xp:30},
 ];
 
 const BAD_HABITS = [
   {n:'No Fap',   xp:50},
   {n:'Junk food',xp:30},
 ];
+
+// Compute streak for me-habits (slot index in meHabits array, 0-9)
+function computeMeHabitStreak(allDays: Record<string, Partial<DayData>>, slot: number): number {
+  const today = new Date(); today.setHours(0,0,0,0);
+  let s = 0;
+  for (let d = 0; d < 60; d++) {
+    const dt = new Date(today); dt.setDate(today.getDate() - d);
+    const key = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+    if (allDays[key]?.meHabits?.[slot]) s++; else break;
+  }
+  return s;
+}
+
+// 4-week aggregated heatmap (10 habit slots; cell intensity ∝ habits done that day)
+function HabitsHeatmap({ allDays }: { allDays: Record<string, Partial<DayData>> }) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const weeks: { key: string; count: number; date: Date }[][] = Array.from({ length: 4 }, (_, w) =>
+    Array.from({ length: 7 }, (_, d) => {
+      const date = new Date(today);
+      date.setDate(today.getDate() - 27 + w * 7 + d);
+      const key = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+      const dd = allDays[key];
+      const count = (dd?.meHabits ?? []).filter(Boolean).length;
+      return { key, count, date };
+    })
+  );
+
+  const colorFor = (count: number, future: boolean): string => {
+    if (future) return 'rgba(255,255,255,0.03)';
+    if (count === 0) return 'rgba(255,255,255,0.05)';
+    // 1-10 → progressive green→cyan gradient
+    const intensity = Math.min(1, count / 10);
+    const opacity = 0.18 + intensity * 0.55;
+    return count >= 8 ? `rgba(0,240,255,${opacity})` : `rgba(166,255,0,${opacity})`;
+  };
+
+  return (
+    <NeonGlass style={{ marginTop:8 }} tint="rgba(255,255,255,0.04)" radius={20}>
+      <div style={{ padding:'12px 14px' }}>
+        <div style={{ display:'flex', gap:3, marginBottom:5 }}>
+          {['LU','MA','ME','GI','VE','SA','DO'].map(d => <div key={d} style={{ flex:1, textAlign:'center', fontFamily:p.monoFont, fontSize:8, color:p.dim }}>{d}</div>)}
+        </div>
+        {weeks.map((week, wi) => (
+          <div key={wi} style={{ display:'flex', gap:3, marginBottom:3 }}>
+            {week.map((cell, di) => {
+              const future = cell.date > today;
+              const isToday = cell.date.getTime() === today.getTime();
+              return (
+                <div key={di} title={`${cell.key} · ${cell.count}/10 habits`} style={{ flex:1, height:22, borderRadius:5, background:colorFor(cell.count, future), border:isToday?`1px solid ${p.fg}`:'1px solid transparent', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:p.monoFont, fontSize:8, color: cell.count > 0 ? '#0a0a0a' : 'transparent', fontWeight: 700 }}>
+                  {cell.count > 0 && cell.count}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+        <div style={{ display:'flex', gap:8, marginTop:8, alignItems:'center' }}>
+          <span style={{ fontFamily:p.monoFont, fontSize:8, color:p.dim }}>0</span>
+          {[2,4,6,8,10].map(n => (
+            <div key={n} style={{ width:14, height:8, borderRadius:2, background:colorFor(n, false) }}/>
+          ))}
+          <span style={{ fontFamily:p.monoFont, fontSize:8, color:p.dim }}>10</span>
+          <span style={{ flex:1 }}/>
+          <span style={{ fontFamily:p.monoFont, fontSize:8, color:p.dim }}>habit done/giorno</span>
+        </div>
+      </div>
+    </NeonGlass>
+  );
+}
 
 function HabitsTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayData>) => void; uid: string | null }) {
   const habits = data.meHabits;
@@ -747,18 +848,26 @@ function HabitsTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayDa
     return acc + (h?.xp ?? 0);
   }, 0);
 
+  const now = new Date();
+  const currHM = useMonthData(uid, now.getFullYear(), now.getMonth());
+  const prevMHM = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
+  const prevYHM = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+  const prevHM = useMonthData(uid, prevYHM, prevMHM);
+  const allDaysHM = { ...prevHM, ...currHM };
+
   return (
     <div>
       <SectionLabel num="01" title="GOOD HABITS" hint={`+${totalXP} XP oggi`}/>
       <div style={{ display:'flex', flexDirection:'column', gap:6, marginTop:8 }}>
         {GOOD_HABITS.map((h,i) => {
           const on = !!habits[i];
+          const streak = computeMeHabitStreak(allDaysHM, i);
           return (
             <NeonGlass key={h.n} onClick={() => toggle(i)} tint={on?'rgba(166,255,0,0.1)':'rgba(255,255,255,0.03)'} edge={on?'rgba(166,255,0,0.4)':undefined} radius={18}>
               <div style={{ padding:'12px 14px', display:'flex', alignItems:'center', gap:10 }}>
                 <div style={{ width:18,height:18,borderRadius:6,border:`1.5px solid ${on?p.green:p.muted}`,background:on?p.green:'transparent',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',color:'#0a0a0a',fontSize:11,fontWeight:900,boxShadow:on?`0 0 10px ${p.green}`:'none' }}>{on?'✓':''}</div>
                 <div style={{ flex:1,fontFamily:p.bodyFont,fontWeight:600,fontSize:13,color:on?p.fg:p.muted,textTransform:'uppercase' }}>{h.n}</div>
-                {h.s > 0 && <span style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim }}>×{h.s}</span>}
+                {streak > 0 && <span style={{ fontFamily:p.monoFont,fontSize:9,color:on?p.green:p.dim }}>🔥{streak}</span>}
                 <span style={{ fontFamily:p.monoFont,fontSize:9,color:p.green }}>+{h.xp}xp</span>
               </div>
             </NeonGlass>
@@ -771,11 +880,13 @@ function HabitsTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayDa
         {BAD_HABITS.map((h,i) => {
           const idx = GOOD_HABITS.length + i;
           const avoided = !!habits[idx];
+          const streak = computeMeHabitStreak(allDaysHM, idx);
           return (
             <NeonGlass key={h.n} onClick={() => toggle(idx)} tint={avoided?'rgba(166,255,0,0.08)':'rgba(255,0,64,0.08)'} edge={avoided?'rgba(166,255,0,0.3)':'rgba(255,0,64,0.3)'} radius={18}>
               <div style={{ padding:'12px 14px', display:'flex', alignItems:'center', gap:10 }}>
                 <div style={{ width:18,height:18,borderRadius:6,border:`1.5px solid ${avoided?p.green:p.red}`,background:'transparent',flexShrink:0 }}/>
                 <div style={{ flex:1,fontFamily:p.bodyFont,fontWeight:600,fontSize:13,color:p.fg,textTransform:'uppercase' }}>{h.n}</div>
+                {streak > 0 && <span style={{ fontFamily:p.monoFont,fontSize:9,color:avoided?p.green:p.dim }}>🔥{streak}</span>}
                 <span style={{ fontFamily:p.monoFont,fontSize:9,color:avoided?p.green:p.red }}>{avoided?'EVITATO ✓':'RESISTERE!'}</span>
                 <span style={{ fontFamily:p.monoFont,fontSize:9,color:p.green }}>+{h.xp}xp</span>
               </div>
@@ -784,7 +895,10 @@ function HabitsTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayDa
         })}
       </div>
 
-      <SectionLabel num="03" title="PROMEMORIA" hint="orari notifiche"/>
+      <SectionLabel num="03" title="HEATMAP" hint="4 settimane · habits/giorno"/>
+      <HabitsHeatmap allDays={allDaysHM}/>
+
+      <SectionLabel num="04" title="PROMEMORIA" hint="orari notifiche"/>
       <NotificationsSection uid={uid}/>
 
       <AchievementsSection data={data} uid={uid}/>
@@ -823,23 +937,39 @@ function SupplTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayDat
 
   const removeSuppl = (id: string) => saveSupplements(supplements.filter(s => s.id !== id));
 
+  const moveSuppl = (id: string, dir: 1 | -1) => {
+    const target = supplements.find(s => s.id === id);
+    if (!target) return;
+    const sameGroup = supplements.filter(s => s.when === target.when);
+    const localIdx = sameGroup.findIndex(s => s.id === id);
+    const newLocal = localIdx + dir;
+    if (newLocal < 0 || newLocal >= sameGroup.length) return;
+    [sameGroup[localIdx], sameGroup[newLocal]] = [sameGroup[newLocal], sameGroup[localIdx]];
+    // rebuild full array preserving the other group's order
+    const otherGroup = supplements.filter(s => s.when !== target.when);
+    const combined = target.when === 'mattina' ? [...sameGroup, ...otherGroup] : [...otherGroup, ...sameGroup];
+    saveSupplements(combined);
+  };
+
   const morning = supplements.filter(s => s.when === 'mattina');
   const evening = supplements.filter(s => s.when === 'sera');
 
   const renderGroup = (list: typeof supplements, label: string) => (
     <>
       <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim,textTransform:'uppercase',letterSpacing:0.18,marginTop:14,marginBottom:6 }}>{label}</div>
-      {list.map(s => {
+      {list.map((s, i) => {
         const done = taken.includes(s.id);
         return (
           <NeonGlass key={s.id} onClick={() => toggleTaken(s.id)} tint={done?'rgba(166,255,0,0.08)':'rgba(255,255,255,0.03)'} edge={done?'rgba(166,255,0,0.3)':undefined} radius={16} style={{ marginBottom:6 }}>
-            <div style={{ padding:'10px 14px', display:'flex', alignItems:'center', gap:10 }}>
+            <div style={{ padding:'10px 12px', display:'flex', alignItems:'center', gap:8 }}>
               <div style={{ width:18,height:18,borderRadius:6,border:`1.5px solid ${done?p.green:p.muted}`,background:done?p.green:'transparent',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',color:'#0a0a0a',fontSize:11,fontWeight:900,boxShadow:done?`0 0 10px ${p.green}`:'none' }}>{done?'✓':''}</div>
-              <div style={{ flex:1 }}>
+              <div style={{ flex:1,minWidth:0 }}>
                 <div style={{ fontFamily:p.bodyFont,fontWeight:600,fontSize:13,color:done?p.fg:p.muted,textTransform:'uppercase' }}>{s.name}</div>
                 {s.dose && <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim,marginTop:1 }}>{s.dose}</div>}
               </div>
-              <button onClick={e => { e.stopPropagation(); removeSuppl(s.id); }} style={{ background:'transparent',border:'none',color:p.dim,cursor:'pointer',fontSize:14,padding:'0 4px' }}>×</button>
+              <button onClick={e => { e.stopPropagation(); moveSuppl(s.id, -1); }} disabled={i === 0} style={{ background:'transparent',border:'none',color:i===0?p.dim:p.muted,cursor:i===0?'not-allowed':'pointer',fontSize:13,padding:'0 3px',opacity:i===0?0.3:0.7 }}>↑</button>
+              <button onClick={e => { e.stopPropagation(); moveSuppl(s.id, 1); }} disabled={i === list.length - 1} style={{ background:'transparent',border:'none',color:i===list.length-1?p.dim:p.muted,cursor:i===list.length-1?'not-allowed':'pointer',fontSize:13,padding:'0 3px',opacity:i===list.length-1?0.3:0.7 }}>↓</button>
+              <button onClick={e => { e.stopPropagation(); if (confirm(`Rimuovere "${s.name}" dagli integratori?`)) removeSuppl(s.id); }} style={{ background:'transparent',border:'none',color:p.dim,cursor:'pointer',fontSize:14,padding:'0 2px' }}>×</button>
             </div>
           </NeonGlass>
         );
@@ -897,8 +1027,11 @@ function SupplTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayDat
 
 // ─── MeScreen ──────────────────────────────────────────────────────────────────
 
-export function MeScreen() {
-  const [tab, setTab] = useState<'cibo'|'fitness'|'mood'|'habits'|'suppl'>('cibo');
+export type MeTab = 'cibo'|'fitness'|'mood'|'habits'|'suppl';
+
+export function MeScreen({ initialTab }: { initialTab?: MeTab } = {}) {
+  const [tab, setTab] = useState<MeTab>(initialTab ?? 'cibo');
+  useEffect(() => { if (initialTab) setTab(initialTab); }, [initialTab]);
   const { user } = useAuth();
   const { data, save } = useDayStore(user?.uid ?? null);
   const { prs, savePr } = useUserProfile(user?.uid ?? null);
@@ -912,7 +1045,7 @@ export function MeScreen() {
       {[{t:-80,r:-80,w:280,c:'#ff14b8',o:0.55},{t:350,l:-80,w:260,c:'#ff6a00',o:0.4}].map((orb,i) => (
         <div key={i} style={{ position:'absolute', top:orb.t, left:'l' in orb ? orb.l : undefined, right:'r' in orb ? (orb as {r:number}).r : undefined, width:orb.w, height:orb.w, borderRadius:'50%', background:`radial-gradient(circle, ${orb.c} 0%, transparent 65%)`, filter:'blur(65px)', opacity:orb.o, zIndex:0, pointerEvents:'none' }} />
       ))}
-      <div style={{ position:'relative', zIndex:2, padding:'56px 18px 130px' }}>
+      <div style={{ position:'relative', zIndex:2, padding:'calc(env(safe-area-inset-top, 0px) + 14px) 18px calc(env(safe-area-inset-bottom, 0px) + 130px)' }}>
         <div style={{ marginTop:8 }}>
           <div style={{ fontFamily:p.monoFont,fontSize:10,color:p.magenta,textTransform:'uppercase',letterSpacing:0.2,display:'flex',alignItems:'center',gap:6 }}>
             <MarkerDiamond size={8} color={p.magenta}/> PROFILO · ME

@@ -68,9 +68,16 @@ export function useShoppingList(uid: string | null) {
     setDoc(doc(db, 'users', uid, 'lists', 'shopping'), { items: next }, { merge: true }).catch(console.error);
   };
 
+  // Splits on commas and newlines so "banane, latte, cereali" → 3 items
   const addItem = (text: string) => {
-    if (!text.trim()) return;
-    save([...items, { id: Date.now().toString(), text: text.trim(), done: false }]);
+    const parts = text.split(/[,\n]+/).map(s => s.trim()).filter(Boolean);
+    if (parts.length === 0) return;
+    const baseTs = Date.now();
+    const next = [
+      ...items,
+      ...parts.map((t, i) => ({ id: `${baseTs}_${i}`, text: t, done: false })),
+    ];
+    save(next);
   };
 
   const toggleItem = (id: string) =>
@@ -79,7 +86,19 @@ export function useShoppingList(uid: string | null) {
   const removeItem = (id: string) =>
     save(items.filter(i => i.id !== id));
 
-  return { items, addItem, toggleItem, removeItem };
+  const moveItem = (id: string, dir: 1 | -1) => {
+    const idx = items.findIndex(i => i.id === id);
+    if (idx === -1) return;
+    const target = idx + dir;
+    if (target < 0 || target >= items.length) return;
+    const next = [...items];
+    [next[idx], next[target]] = [next[target], next[idx]];
+    save(next);
+  };
+
+  const clearAll = () => save([]);
+
+  return { items, addItem, toggleItem, removeItem, moveItem, clearAll };
 }
 
 // ─── User Profile (PRs) ────────────────────────────────────────────────────────
@@ -128,9 +147,14 @@ export function daysUntil(dateStr: string): number {
 }
 
 const DEFAULT_COUNTDOWNS: Countdown[] = [
-  { id: 'c1', label: 'Anniversario · 3 anni', date: '2026-05-21', note: 'regalo da pensare' },
-  { id: 'c2', label: 'Fine Cut Q2', date: '2026-06-30', note: 'obiettivo 82 kg' },
+  { id: 'c1', label: 'Anniversario · 4 anni', date: '2026-12-27', note: 'dal 27 dic 2023' },
+  { id: 'c2', label: 'Fine Cut',              date: '2026-06-20', note: 'obiettivo 79–82 kg' },
+  { id: 'c3', label: 'Ultima rata macchina',  date: '2026-09-01', note: 'editabile · sostituire data reale' },
 ];
+
+// Preset facili da applicare dall'editor (l'utente esistente ha già record Firestore,
+// quindi DEFAULT_COUNTDOWNS non parte; questa lista è il bottone "PRESET AARON" nell'editor)
+export const AARON_COUNTDOWN_PRESETS: Countdown[] = DEFAULT_COUNTDOWNS;
 
 export function useCountdowns(uid: string | null) {
   const [countdowns, setCountdowns] = useState<Countdown[]>(DEFAULT_COUNTDOWNS);
@@ -272,21 +296,22 @@ export interface WeeklyChallenge {
   label: string;
   desc: string;
   xp: number;
+  target?: number;  // se presente, sfida con counter (es. 5 docce). Default = 1 (toggle)
 }
 
 const CHALLENGES: WeeklyChallenge[] = [
-  { id:'water_5x4l',    label:'Idratazione totale', desc:'Bevi 4L per 5 giorni',                 xp:80  },
-  { id:'workout_4',     label:'4 Workout',          desc:'Allena 4 volte questa settimana',      xp:100 },
-  { id:'brain_10',      label:'Brain dump',         desc:'Aggiungi 10 note al Brain',            xp:70  },
-  { id:'stretching_5',  label:'Mobilità',           desc:'5 sessioni stretching complete',       xp:60  },
-  { id:'candle_7',      label:'Sonno sacro',        desc:'Candle prima di dormire 7 sere',       xp:70  },
-  { id:'nofap_7',       label:'No Fap × 7',         desc:'7 giorni di astinenza',                xp:100 },
-  { id:'nojunk_7',      label:'No Junk',            desc:'7 giorni senza junk food',             xp:80  },
-  { id:'reading_5',     label:'Lettore',            desc:'15 min lettura × 5 giorni',            xp:60  },
-  { id:'cold_5',        label:'Doccia fredda',      desc:'5 docce fredde',                       xp:70  },
-  { id:'mood_full_7',   label:'Auto-osservazione',  desc:'Mood mattina+sera per 7 giorni',       xp:60  },
-  { id:'meditation_7',  label:'Mente quieta',       desc:'Meditazione 5 min × 7 giorni',         xp:70  },
-  { id:'red_light_7',   label:'Luce rossa serale',  desc:'Luci rosse 7 sere',                    xp:50  },
+  { id:'water_5x4l',    label:'Idratazione totale', desc:'Bevi 4L per 5 giorni',                 xp:80,  target:5 },
+  { id:'workout_4',     label:'4 Workout',          desc:'Allena 4 volte questa settimana',      xp:100, target:4 },
+  { id:'brain_10',      label:'Brain dump',         desc:'Aggiungi 10 note al Brain',            xp:70,  target:10 },
+  { id:'stretching_5',  label:'Mobilità',           desc:'5 sessioni stretching complete',       xp:60,  target:5 },
+  { id:'candle_7',      label:'Sonno sacro',        desc:'Candle prima di dormire 7 sere',       xp:70,  target:7 },
+  { id:'nofap_7',       label:'No Fap × 7',         desc:'7 giorni di astinenza',                xp:100, target:7 },
+  { id:'nojunk_7',      label:'No Junk',            desc:'7 giorni senza junk food',             xp:80,  target:7 },
+  { id:'reading_5',     label:'Lettore',            desc:'15 min lettura × 5 giorni',            xp:60,  target:5 },
+  { id:'cold_5',        label:'Doccia fredda',      desc:'5 docce fredde',                       xp:70,  target:5 },
+  { id:'mood_full_7',   label:'Auto-osservazione',  desc:'Mood mattina+sera per 7 giorni',       xp:60,  target:7 },
+  { id:'meditation_7',  label:'Mente quieta',       desc:'Meditazione 5 min × 7 giorni',         xp:70,  target:7 },
+  { id:'red_light_7',   label:'Luce rossa serale',  desc:'Luci rosse 7 sere',                    xp:50,  target:7 },
 ];
 
 function isoWeekKey(d: Date): string {
@@ -305,14 +330,15 @@ function pickChallenge(weekKey: string): WeeklyChallenge {
 }
 
 export function useWeeklyChallenge(uid: string | null) {
-  const [completedMap, setCompletedMap] = useState<Record<string, boolean>>({});
+  // Stored as Record<key, boolean | number>: legacy true = completed, number = current progress count
+  const [progressMap, setProgressMap] = useState<Record<string, boolean | number>>({});
 
   useEffect(() => {
     if (!uid || !db) return;
     const ref = doc(db, 'users', uid);
     return onSnapshot(ref, snap => {
       if (snap.exists() && snap.data().weeklyChallenges) {
-        setCompletedMap(snap.data().weeklyChallenges as Record<string, boolean>);
+        setProgressMap(snap.data().weeklyChallenges as Record<string, boolean | number>);
       }
     });
   }, [uid]);
@@ -320,17 +346,37 @@ export function useWeeklyChallenge(uid: string | null) {
   const weekKey = isoWeekKey(new Date());
   const challenge = pickChallenge(weekKey);
   const compositeKey = `${weekKey}_${challenge.id}`;
-  const completed = !!completedMap[compositeKey];
+  const target = challenge.target ?? 1;
+  const stored = progressMap[compositeKey];
+  const progress = typeof stored === 'number' ? stored : (stored === true ? target : 0);
+  const completed = progress >= target;
 
-  const markComplete = () => {
+  const incrementProgress = () => {
     if (completed) return;
-    const next = { ...completedMap, [compositeKey]: true };
-    setCompletedMap(next);
+    const next = { ...progressMap, [compositeKey]: progress + 1 };
+    setProgressMap(next);
     if (!uid || !db) return;
     setDoc(doc(db, 'users', uid), { weeklyChallenges: next }, { merge: true }).catch(console.error);
   };
 
-  return { weekKey, challenge, completed, markComplete };
+  const decrementProgress = () => {
+    if (progress <= 0) return;
+    const next = { ...progressMap, [compositeKey]: progress - 1 };
+    setProgressMap(next);
+    if (!uid || !db) return;
+    setDoc(doc(db, 'users', uid), { weeklyChallenges: next }, { merge: true }).catch(console.error);
+  };
+
+  // Backwards-compat alias
+  const markComplete = () => {
+    if (completed) return;
+    const next = { ...progressMap, [compositeKey]: target };
+    setProgressMap(next);
+    if (!uid || !db) return;
+    setDoc(doc(db, 'users', uid), { weeklyChallenges: next }, { merge: true }).catch(console.error);
+  };
+
+  return { weekKey, challenge, completed, progress, target, incrementProgress, decrementProgress, markComplete };
 }
 
 // ─── Work Tracker ─────────────────────────────────────────────────────────────

@@ -8,7 +8,16 @@ import { useNotes, useShoppingList } from '@/lib/user-store';
 import { useDayStore } from '@/lib/day-store';
 
 type Screen = 'home' | 'cal' | 'brain' | 'me';
+type MeTab = 'cibo' | 'fitness' | 'mood' | 'habits' | 'suppl';
 type Route = 'todo' | 'brain' | 'spesa' | 'problema' | 'regalo' | 'nota';
+
+const ME_TABS: { id: MeTab; label: string; emoji: string; color: string }[] = [
+  { id: 'cibo',    label: 'Cibo',  emoji: '🍴', color: '#ff6a00' },
+  { id: 'fitness', label: 'Fit',   emoji: '💪', color: '#a6ff00' },
+  { id: 'mood',    label: 'Mood',  emoji: '🌗', color: '#ff14b8' },
+  { id: 'habits',  label: 'Habit', emoji: '✅', color: '#00f0ff' },
+  { id: 'suppl',   label: 'Suppl', emoji: '💊', color: '#a78bfa' },
+];
 
 // Web Speech API types
 interface SRResult { 0: { transcript: string }; isFinal?: boolean }
@@ -71,6 +80,7 @@ function CaptureOverlay({ open, onClose, autoVoice }: { open: boolean; onClose: 
   const [done, setDone]   = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
   const [voiceErr, setVoiceErr]   = useState<string | null>(null);
+  const [presetRoute, setPresetRoute] = useState<Route | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const recRef = useRef<SRInstance | null>(null);
   const baseTextRef = useRef<string>('');
@@ -115,7 +125,7 @@ function CaptureOverlay({ open, onClose, autoVoice }: { open: boolean; onClose: 
 
   useEffect(() => {
     if (open) {
-      setText(''); setSaving(false); setDone(null); setVoiceErr(null);
+      setText(''); setSaving(false); setDone(null); setVoiceErr(null); setPresetRoute(null);
       setTimeout(() => inputRef.current?.focus(), 80);
       if (autoVoice) setTimeout(() => startVoice(), 100);
     } else {
@@ -124,7 +134,17 @@ function CaptureOverlay({ open, onClose, autoVoice }: { open: boolean; onClose: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, autoVoice]);
 
-  const route = detectRoute(text);
+  const presetMap: Record<NonNullable<typeof presetRoute>, { label: string; color: string }> = {
+    todo:     { label: 'TO-DO · oggi', color: p.orange  },
+    brain:    { label: 'NOTA',         color: p.cyan    },
+    spesa:    { label: 'SPESA',        color: p.green   },
+    problema: { label: 'PROBLEMA',     color: p.red     },
+    regalo:   { label: 'REGALO 🔒',    color: p.magenta },
+    nota:     { label: 'NOTA',         color: p.muted   },
+  };
+  const route = presetRoute
+    ? { route: presetRoute, ...presetMap[presetRoute] }
+    : detectRoute(text);
 
   const handleSave = async () => {
     if (!route || !text.trim() || saving) return;
@@ -161,13 +181,30 @@ function CaptureOverlay({ open, onClose, autoVoice }: { open: boolean; onClose: 
   return (
     <div onClick={() => !saving && onClose()} style={{ position: 'absolute', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', display: 'flex', alignItems: 'flex-end' } as CSSProperties}>
       <div onClick={e => e.stopPropagation()} style={{ width: '100%', padding: '24px 20px 110px', background: p.captureBg, borderTop: `1px solid ${p.border}`, borderTopLeftRadius: 28, borderTopRightRadius: 28 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, fontFamily: p.monoFont, fontSize: 10, letterSpacing: 0.18, color: p.muted, textTransform: 'uppercase' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontFamily: p.monoFont, fontSize: 10, letterSpacing: 0.18, color: p.muted, textTransform: 'uppercase' }}>
           <MarkerPlus size={11} color={p.orange} />
           <span>QUICK CAPTURE</span>
           <span style={{ flex: 1 }} />
           {done ? <span style={{ color: p.green, fontWeight: 700 }}>✓ SALVATO IN {done}</span>
-            : route ? <span style={{ color: route.color, fontWeight: 700 }}>→ {route.label}</span>
+            : route ? <span style={{ color: route.color, fontWeight: 700 }}>→ {route.label}{presetRoute ? ' (fix)' : ''}</span>
             : null}
+        </div>
+        <div style={{ display:'flex', gap:6, marginBottom:12, flexWrap:'wrap' }}>
+          {([
+            { id:'todo' as Route,  label:'⏰ Ricorda', c: p.orange  },
+            { id:'spesa' as Route, label:'🛒 Compra',  c: p.green   },
+            { id:'brain' as Route, label:'🧠 Nota',    c: p.cyan    },
+          ]).map(b => {
+            const active = presetRoute === b.id;
+            return (
+              <button key={b.id} onClick={() => setPresetRoute(active ? null : b.id)} disabled={saving} style={{ padding:'7px 12px', borderRadius:99, border:`1px solid ${active ? b.c : 'rgba(255,255,255,0.12)'}`, background:active ? `${b.c}26` : 'transparent', color:active ? b.c : p.muted, fontFamily:p.monoFont, fontSize:10, letterSpacing:0.1, textTransform:'uppercase', cursor:saving?'not-allowed':'pointer', fontWeight: active ? 700 : 500 }}>
+                {b.label}
+              </button>
+            );
+          })}
+          {presetRoute && (
+            <button onClick={() => setPresetRoute(null)} disabled={saving} style={{ padding:'7px 10px', borderRadius:99, border:`1px dashed ${p.border}`, background:'transparent', color:p.dim, fontFamily:p.monoFont, fontSize:9, letterSpacing:0.1, textTransform:'uppercase', cursor:'pointer' }}>auto</button>
+          )}
         </div>
         <textarea
           ref={inputRef}
@@ -176,7 +213,12 @@ function CaptureOverlay({ open, onClose, autoVoice }: { open: boolean; onClose: 
           onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') handleSave(); }}
           rows={4}
           disabled={saving}
-          placeholder="parla, scrivi, dump…  →  ricordami / brain / compra / regalo"
+          placeholder={
+            presetRoute === 'todo'  ? 'cosa devi ricordarti?' :
+            presetRoute === 'spesa' ? 'banane, latte, cereali…' :
+            presetRoute === 'brain' ? 'idea o pensiero…' :
+            'parla, scrivi, dump…  →  ricordami / brain / compra / regalo'
+          }
           style={{ width: '100%', resize: 'none', border: 0, outline: 0, background: 'transparent', color: p.fg, fontFamily: p.bodyFont, fontSize: 17, lineHeight: 1.35 }}
         />
         {voiceErr && (
@@ -220,7 +262,7 @@ const TABS = [
   { id: 'me',    label: 'Me',    icon: 'me'    },
 ] as const;
 
-export function BottomNav({ screen, setScreen }: { screen: Screen; setScreen: (s: Screen) => void }) {
+export function BottomNav({ screen, setScreen }: { screen: Screen; setScreen: (s: Screen, opts?: { meTab?: MeTab }) => void }) {
   const [capture, setCapture] = useState(false);
   const [autoVoice, setAutoVoice] = useState(false);
 
@@ -255,10 +297,89 @@ export function BottomNav({ screen, setScreen }: { screen: Screen; setScreen: (s
     isHoldRef.current = false;
   };
 
+  // ── Long-press on "me" tab → radial sub-tab menu ─────────────────────────────
+  const [meMenuOpen, setMeMenuOpen] = useState(false);
+  const [meHover, setMeHover] = useState<MeTab | null>(null);
+  const meHoldTimer = useRef<number | null>(null);
+  const meHoldFiredRef = useRef(false);
+
+  const meStart = () => {
+    meHoldFiredRef.current = false;
+    setMeHover(null);
+    meHoldTimer.current = window.setTimeout(() => {
+      meHoldFiredRef.current = true;
+      setMeMenuOpen(true);
+      if ('vibrate' in navigator) navigator.vibrate(15);
+    }, 280);
+  };
+
+  const meMove = (e: React.PointerEvent) => {
+    if (!meMenuOpen) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+    const tabId = el?.closest<HTMLElement>('[data-me-tab]')?.dataset.meTab as MeTab | undefined;
+    setMeHover(tabId ?? null);
+  };
+
+  const meEnd = (e: React.PointerEvent) => {
+    if (meHoldTimer.current) { clearTimeout(meHoldTimer.current); meHoldTimer.current = null; }
+    if (meHoldFiredRef.current) {
+      // Long-press fired:
+      //  - if user slid onto a tab and released → navigate
+      //  - if released without hovering anything → leave menu open so they can tap a tab
+      if (meHover) {
+        setScreen('me', { meTab: meHover });
+        setMeMenuOpen(false);
+        setMeHover(null);
+      }
+    } else {
+      // Quick tap → normal navigation
+      e.preventDefault();
+      setScreen('me');
+    }
+    meHoldFiredRef.current = false;
+  };
+
+  const pickMeTab = (id: MeTab) => {
+    setScreen('me', { meTab: id });
+    setMeMenuOpen(false);
+    setMeHover(null);
+  };
+
+  const meCancel = () => {
+    if (meHoldTimer.current) { clearTimeout(meHoldTimer.current); meHoldTimer.current = null; }
+    if (!meHoldFiredRef.current) meHoldFiredRef.current = false;
+  };
+
   return (
     <>
       <CaptureOverlay open={capture} onClose={() => { setCapture(false); setAutoVoice(false); }} autoVoice={autoVoice} />
-      <div style={{ position: 'absolute', left: 12, right: 12, bottom: 18, zIndex: 30, display: 'flex', alignItems: 'center', gap: 6, padding: '6px', borderRadius: 32, background: p.navBg, backdropFilter: 'blur(24px) saturate(180%)', WebkitBackdropFilter: 'blur(24px) saturate(180%)', border: p.navBorder, boxShadow: p.navShadow } as CSSProperties}>
+
+      {/* Long-press "me" sub-menu — pop-up sopra la nav */}
+      {meMenuOpen && (
+        <>
+          <div onClick={() => { setMeMenuOpen(false); setMeHover(null); }} style={{ position:'absolute', inset:0, zIndex:40, background:'rgba(0,0,0,0.55)', backdropFilter:'blur(8px)', WebkitBackdropFilter:'blur(8px)' } as CSSProperties}/>
+          <div style={{ position:'absolute', right:12, bottom:'calc(env(safe-area-inset-bottom, 0px) + 90px)', zIndex:41, display:'flex', flexDirection:'column', gap:6, padding:8, borderRadius:22, background:'rgba(20,16,12,0.95)', border:`1px solid rgba(255,20,184,0.35)`, boxShadow:'0 18px 50px rgba(255,20,184,0.45)', minWidth:160 }}>
+            <div style={{ fontFamily:p.monoFont, fontSize:8.5, color:p.dim, padding:'2px 8px 4px', textTransform:'uppercase', letterSpacing:0.18 }}>vai a · me</div>
+            {ME_TABS.map(t => {
+              const hovered = meHover === t.id;
+              return (
+                <button
+                  key={t.id}
+                  data-me-tab={t.id}
+                  onClick={() => pickMeTab(t.id)}
+                  style={{ padding:'10px 14px', borderRadius:14, background: hovered ? `${t.color}33` : 'transparent', border:`1px solid ${hovered ? t.color : 'transparent'}`, display:'flex', alignItems:'center', gap:10, fontFamily:p.monoFont, fontSize:11, color: hovered ? t.color : p.fg, textTransform:'uppercase', letterSpacing:0.1, transition:'background .12s, border-color .12s', boxShadow: hovered ? `0 0 14px ${t.color}66` : 'none', userSelect:'none', WebkitUserSelect:'none', WebkitTouchCallout:'none', cursor:'pointer', textAlign:'left', width:'100%' } as CSSProperties}
+                >
+                  <span style={{ fontSize:16 }}>{t.emoji}</span>
+                  <span style={{ flex:1 }}>{t.label}</span>
+                </button>
+              );
+            })}
+            <div style={{ fontFamily:p.monoFont, fontSize:8, color:p.dim, padding:'4px 8px 0', textAlign:'center' }}>tap o slide per saltare</div>
+          </div>
+        </>
+      )}
+
+      <div style={{ position: 'absolute', left: 12, right: 12, bottom: 'calc(env(safe-area-inset-bottom, 0px) + 14px)', zIndex: 30, display: 'flex', alignItems: 'center', gap: 6, padding: '6px', borderRadius: 32, background: p.navBg, backdropFilter: 'blur(24px) saturate(180%)', WebkitBackdropFilter: 'blur(24px) saturate(180%)', border: p.navBorder, boxShadow: p.navShadow } as CSSProperties}>
         {TABS.map(tab => {
           const active = tab.id !== 'fab' && screen === (tab.id as Screen);
           if (tab.id === 'fab') return (
@@ -268,9 +389,33 @@ export function BottomNav({ screen, setScreen }: { screen: Screen; setScreen: (s
               onPointerUp={endHold}
               onPointerLeave={cancelHold}
               onPointerCancel={cancelHold}
-              style={{ width: 56, height: 56, borderRadius: '50%', border: 0, cursor: 'pointer', flexShrink: 0, background: p.fabBg, color: '#0a0a0a', boxShadow: p.fabShadow, fontWeight: 800, fontSize: 28, marginTop: -22, display: 'flex', alignItems: 'center', justifyContent: 'center', touchAction: 'none', userSelect: 'none' }}
-              title="Tap per scrivere · Tieni premuto per dettare"
-            >+</button>
+              onContextMenu={e => e.preventDefault()}
+              aria-label="Quick capture"
+              style={{ width: 56, height: 56, borderRadius: '50%', border: 0, cursor: 'pointer', flexShrink: 0, background: p.fabBg, color: '#0a0a0a', boxShadow: p.fabShadow, marginTop: -22, display: 'flex', alignItems: 'center', justifyContent: 'center', touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none', WebkitUserDrag: 'none' as never } as CSSProperties}
+            >
+              {/* SVG plus instead of "+" char so iOS long-press doesn't fire the paste/select menu */}
+              <span style={{ pointerEvents: 'none', display: 'flex' } as CSSProperties}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <path d="M12 4 V20 M4 12 H20" stroke="#0a0a0a" strokeWidth="3" strokeLinecap="round"/>
+                </svg>
+              </span>
+            </button>
+          );
+          if (tab.id === 'me') return (
+            <button
+              key="me"
+              onPointerDown={meStart}
+              onPointerMove={meMove}
+              onPointerUp={meEnd}
+              onPointerCancel={meCancel}
+              onPointerLeave={() => { /* keep menu open if dragging out, hover handled by elementFromPoint */ }}
+              onContextMenu={e => e.preventDefault()}
+              style={{ flex: 1, padding: '10px 4px 8px', border: 0, cursor: 'pointer', borderRadius: 22, background: active ? p.navActive : 'transparent', color: active ? p.fg : p.muted, fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.12, textTransform: 'uppercase', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' } as CSSProperties}
+              title="Tap = Me · Tieni premuto per scegliere sezione"
+            >
+              <NavIcon kind="me" color={active ? p.fg : p.muted} />
+              {tab.label}
+            </button>
           );
           return (
             <button key={tab.id} onClick={() => setScreen(tab.id as Screen)} style={{ flex: 1, padding: '10px 4px 8px', border: 0, cursor: 'pointer', borderRadius: 22, background: active ? p.navActive : 'transparent', color: active ? p.fg : p.muted, fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.12, textTransform: 'uppercase', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
