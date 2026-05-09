@@ -270,7 +270,10 @@ export function BottomNav({ screen, setScreen }: { screen: Screen; setScreen: (s
   const holdTimer = useRef<number | null>(null);
   const isHoldRef = useRef(false);
 
-  const startHold = () => {
+  const startHold = (e: React.PointerEvent) => {
+    // Consume the native pointerdown so iOS doesn't fire its long-press
+    // selection/copy callout in parallel
+    e.preventDefault();
     isHoldRef.current = false;
     holdTimer.current = window.setTimeout(() => {
       isHoldRef.current = true;
@@ -303,7 +306,8 @@ export function BottomNav({ screen, setScreen }: { screen: Screen; setScreen: (s
   const meHoldTimer = useRef<number | null>(null);
   const meHoldFiredRef = useRef(false);
 
-  const meStart = () => {
+  const meStart = (e: React.PointerEvent) => {
+    e.preventDefault();
     meHoldFiredRef.current = false;
     setMeHover(null);
     meHoldTimer.current = window.setTimeout(() => {

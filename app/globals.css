@@ -8,40 +8,53 @@
   --f-mono: 'Geist Mono', 'Courier New', monospace;
 }
 
-html { background: #040404; height: 100%; }
+html, body { background: #040404; }
+html { height: 100%; }
 
+/* On iOS PWA standalone, position:fixed + inset:0 reliably fills the entire
+   viewport including safe-area zones — more robust than 100dvh which has bugs
+   on some iOS versions where the bottom safe-area is excluded. */
 body {
-  background: #040404;
-  /* dvh adapts to viewport (no Safari URL-bar gap) and on PWA standalone
-     it equals full screen including safe-area zones */
-  height: 100dvh;
-  min-height: 100dvh;
+  position: fixed;
+  inset: 0;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
 }
 
 body > div {
+  position: absolute;
+  inset: 0;
   width: 100%;
-  height: 100dvh;
-  min-height: 100dvh;
-  position: relative;
   overflow: hidden;
 }
 
 @media (min-width: 600px) {
   body {
+    position: static;
     display: flex;
     align-items: center;
     justify-content: center;
     height: 100vh;
+    inset: auto;
   }
   body > div {
+    position: relative;
+    inset: auto;
     width: 402px;
     height: 874px;
-    min-height: unset;
     border-radius: 48px;
     box-shadow: 0 40px 120px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.08);
   }
+}
+
+/* Disable iOS native callout/select/drag globally on interactive controls.
+   Inputs and textareas keep selection (they're selector-excluded). */
+button, [role="button"], a, svg, [data-no-callout] {
+  -webkit-touch-callout: none !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-user-drag: none !important;
+  -webkit-tap-highlight-color: transparent;
 }
 
 ::-webkit-scrollbar { display: none; }
