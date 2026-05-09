@@ -8,7 +8,7 @@ import { MarkerTarget, MarkerDiamond, MarkerStar4, MarkerTriangle, MarkerHex } f
 import { useAuth } from '@/lib/auth-context';
 import { useDayStore, MoodId, useMonthData } from '@/lib/day-store';
 import { getMealTotals } from '@/lib/meals';
-import { useXP, useCountdowns, useWeeklyChallenge, daysUntil } from '@/lib/user-store';
+import { useXP, useCountdowns, useWeeklyChallenge, daysUntil, useUserSettings } from '@/lib/user-store';
 import { useToast } from '@/lib/toast';
 import { CountdownEditor } from '@/components/countdown-editor';
 
@@ -16,36 +16,32 @@ import { CountdownEditor } from '@/components/countdown-editor';
 
 const BUILD_SHA = process.env.NEXT_PUBLIC_BUILD_SHA ?? 'dev';
 
-function RefreshButton() {
+function TopRightButtons({ onSettings }: { onSettings: () => void }) {
   const [spin, setSpin] = useState(false);
-  const onClick = () => {
+  const onRefresh = () => {
     setSpin(true);
     setTimeout(() => window.location.reload(), 120);
   };
+  const baseStyle: CSSProperties = {
+    width: 32, height: 32, borderRadius: '50%',
+    border: '1px solid rgba(255,255,255,0.25)',
+    background: 'rgba(255,255,255,0.08)',
+    backdropFilter: 'blur(8px)',
+    WebkitBackdropFilter: 'blur(8px)',
+    color: '#fff',
+    fontFamily: p.monoFont, fontSize: 16, fontWeight: 500,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    cursor: 'pointer', padding: 0,
+  };
   return (
     <>
-      <button
-        onClick={onClick}
-        aria-label="Aggiorna"
-        style={{
-          position: 'fixed',
-          top: 'calc(env(safe-area-inset-top, 0px) + 12px)',
-          right: 14,
-          zIndex: 100,
-          width: 32, height: 32, borderRadius: '50%',
-          border: '1px solid rgba(255,255,255,0.25)',
-          background: 'rgba(255,255,255,0.08)',
-          backdropFilter: 'blur(8px)',
-          WebkitBackdropFilter: 'blur(8px)',
-          color: '#fff',
-          fontFamily: p.monoFont, fontSize: 16, fontWeight: 500,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          cursor: 'pointer', padding: 0,
-        }}
-      >
-        <span style={{ display: 'inline-block', animation: spin ? 'rfSpin 0.6s linear infinite' : 'none' }}>↻</span>
-        <style>{`@keyframes rfSpin { to { transform: rotate(360deg); } }`}</style>
-      </button>
+      <div style={{ position:'fixed', top:'calc(env(safe-area-inset-top, 0px) + 12px)', right:14, zIndex:100, display:'flex', gap:6 }}>
+        <button onClick={onSettings} aria-label="Settings" style={baseStyle}>⚙</button>
+        <button onClick={onRefresh} aria-label="Aggiorna" style={baseStyle}>
+          <span style={{ display:'inline-block', animation: spin ? 'rfSpin 0.6s linear infinite' : 'none' }}>↻</span>
+        </button>
+      </div>
+      <style>{`@keyframes rfSpin { to { transform: rotate(360deg); } }`}</style>
     </>
   );
 }
@@ -110,8 +106,15 @@ function WeatherCard() {
   }
   if (!w) {
     return (
-      <NeonGlass style={{ marginTop: 12 }} radius={18} tint="rgba(255,255,255,0.03)">
-        <div style={{ padding:'12px 16px', fontFamily:p.monoFont, fontSize:10, color:p.dim }}>Carico meteo Bolzano…</div>
+      <NeonGlass style={{ marginTop: 12 }} radius={20} tint="rgba(255,255,255,0.03)">
+        <div style={{ padding:'14px 16px', display:'flex', alignItems:'center', gap:14 }}>
+          <div className="skel" style={{ width:46, height:46, borderRadius:'50%', flexShrink:0 }}/>
+          <div style={{ flex:1 }}>
+            <div className="skel" style={{ width:80, height:9, marginBottom:6 }}/>
+            <div className="skel" style={{ width:120, height:30, marginBottom:6 }}/>
+            <div className="skel" style={{ width:160, height:8 }}/>
+          </div>
+        </div>
       </NeonGlass>
     );
   }
@@ -197,9 +200,20 @@ function NewsFeed() {
   }
   if (!items) {
     return (
-      <NeonGlass style={{ marginTop: 8 }} radius={18} tint="rgba(255,255,255,0.03)">
-        <div style={{ padding:'12px 16px', fontFamily:p.monoFont, fontSize:10, color:p.dim }}>Carico news…</div>
-      </NeonGlass>
+      <div style={{ marginTop: 8, display:'flex', flexDirection:'column', gap:5 }}>
+        {Array.from({length:3}).map((_,i) => (
+          <NeonGlass key={i} tint="rgba(255,255,255,0.03)" radius={14}>
+            <div style={{ padding:'10px 12px', display:'flex', gap:10, alignItems:'flex-start' }}>
+              <div className="skel" style={{ width:3, alignSelf:'stretch', height:42, borderRadius:2, flexShrink:0 }}/>
+              <div style={{ flex:1 }}>
+                <div className="skel" style={{ width:60, height:8, marginBottom:6 }}/>
+                <div className="skel" style={{ width:'90%', height:12, marginBottom:4 }}/>
+                <div className="skel" style={{ width:'65%', height:12 }}/>
+              </div>
+            </div>
+          </NeonGlass>
+        ))}
+      </div>
     );
   }
 
@@ -292,13 +306,14 @@ function computeTodayXP(habits: boolean[], moodM: MoodId|null, moodE: MoodId|nul
 }
 
 type MeTabHint = 'cibo'|'fitness'|'mood'|'habits'|'suppl';
-export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brain'|'me'|'focus', opts?: { meTab?: MeTabHint }) => void }) {
+export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brain'|'me'|'focus'|'settings', opts?: { meTab?: MeTabHint }) => void }) {
   const { user } = useAuth();
   const toast = useToast();
   const { data, save } = useDayStore(user?.uid ?? null);
   const { totalXP, addXP, level, tier, progress, xpNext } = useXP(user?.uid ?? null);
   const { countdowns, saveCountdowns } = useCountdowns(user?.uid ?? null);
   const weekly = useWeeklyChallenge(user?.uid ?? null);
+  const { settings } = useUserSettings(user?.uid ?? null);
   const [showEditor, setShowEditor] = useState(false);
 
   // Real habit streaks (consecutive days backward) — pulls curr + prev month
@@ -313,10 +328,10 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
   const waterMl  = data.water;
   const habits   = data.habits;
 
-  const WATER_TARGET = data.workouts.length > 0 ? 4000 : 3000;
+  const WATER_TARGET = data.workouts.length > 0 ? settings.waterTargetTraining : settings.waterTargetRest;
 
   const { kcal: kcalEaten, pr: totalPr, c: totalC, g: totalG } = getMealTotals(data.mealSelected);
-  const KCAL_TARGET = 2050;
+  const KCAL_TARGET = settings.kcalTarget;
   const kcalLeft  = KCAL_TARGET - kcalEaten;
   const kcalPct   = Math.min(100, Math.round((kcalEaten / KCAL_TARGET) * 100));
   const waterPct  = Math.min(100, Math.round((waterMl / WATER_TARGET) * 100));
@@ -328,7 +343,7 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
     save({ habits: habits.map((v, ix) => ix === i ? !v : v) });
     if (!wasOn) {
       addXP(HABITS[i][1]);
-      toast.xp(HABITS[i][1], HABITS[i][0]);
+      if (settings.showXpToast) toast.xp(HABITS[i][1], HABITS[i][0]);
     }
   };
 
@@ -342,7 +357,7 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
     save(isMorning ? { moodMorning: m } : { moodEvening: m });
     if (!hadMood) {
       addXP(10);
-      toast.xp(10, isMorning ? 'mood mattina' : 'mood sera');
+      if (settings.showXpToast) toast.xp(10, isMorning ? 'mood mattina' : 'mood sera');
     }
   };
 
@@ -375,7 +390,7 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
     save({ todayDone: !wasDone });
     if (!wasDone && data.todayThing.trim()) {
       addXP(20);
-      toast.xp(20, 'cosa di oggi');
+      if (settings.showXpToast) toast.xp(20, 'cosa di oggi');
     }
   };
 
@@ -384,7 +399,7 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
   return (
     <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', overflowX: 'hidden', background: p.bg, color: p.fg, fontFamily: p.bodyFont }}>
 
-      <RefreshButton />
+      <TopRightButtons onSettings={() => onNavigate?.('settings')} />
 
       {ORBS.map((orb, i) => (
         <div key={i} style={{ position: 'absolute', top: 't' in orb ? orb.t : undefined, bottom: 'b' in orb ? orb.b : undefined, left: 'l' in orb ? orb.l : undefined, right: 'r' in orb ? orb.r : undefined, width: orb.w, height: orb.w, borderRadius: '50%', background: `radial-gradient(circle, ${orb.c} 0%, transparent 65%)`, filter: 'blur(65px)', opacity: orb.o, zIndex: 0, pointerEvents: 'none' } as CSSProperties} />
@@ -491,7 +506,7 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
                   weekly.incrementProgress();
                   if (wasOneFromComplete) {
                     addXP(weekly.challenge.xp);
-                    toast.xp(weekly.challenge.xp, 'sfida settimanale!');
+                    if (settings.showXpToast) toast.xp(weekly.challenge.xp, 'sfida settimanale!');
                   } else {
                     toast.show(`${weekly.progress + 1}/${weekly.target} · ${weekly.challenge.label}`, 'info');
                   }
@@ -499,7 +514,7 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
                 <span style={{ fontFamily:p.monoFont, fontSize:9, color:p.muted }}>{weekly.progress}/{weekly.target}</span>
               </div>
             ) : (
-              <button onClick={() => { weekly.markComplete(); addXP(weekly.challenge.xp); toast.xp(weekly.challenge.xp, 'sfida settimanale!'); }} style={{ border:`1px solid #ffd40066`, background:'rgba(255,212,0,0.15)', borderRadius:10, padding:'7px 12px', cursor:'pointer', fontFamily:p.monoFont, fontSize:9, color:'#ffd400', textTransform:'uppercase', fontWeight:700 }}>FATTA</button>
+              <button onClick={() => { weekly.markComplete(); addXP(weekly.challenge.xp); if (settings.showXpToast) toast.xp(weekly.challenge.xp, 'sfida settimanale!'); }} style={{ border:`1px solid #ffd40066`, background:'rgba(255,212,0,0.15)', borderRadius:10, padding:'7px 12px', cursor:'pointer', fontFamily:p.monoFont, fontSize:9, color:'#ffd400', textTransform:'uppercase', fontWeight:700 }}>FATTA</button>
             )}
           </div>
         </NeonGlass>

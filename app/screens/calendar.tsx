@@ -14,17 +14,91 @@ const M_NAMES = ['GEN','FEB','MAR','APR','MAG','GIU','LUG','AGO','SET','OTT','NO
 const D_NAMES = ['LU','MA','ME','GI','VE','SA','DO'];
 const MC: Record<string, string> = { awful:p.red, bad:p.orange, meh:'#ffd400', good:p.green, great:p.cyan };
 
+// ─── Italian holidays ────────────────────────────────────────────────────────
+
+function easterDate(year: number): Date {
+  // Gauss algorithm
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const L = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * L) / 451);
+  const month = Math.floor((h + L - 7 * m + 114) / 31);
+  const day = ((h + L - 7 * m + 114) % 31) + 1;
+  return new Date(year, month - 1, day);
+}
+
+function nthSundayOfMonth(year: number, month: number, n: number): Date {
+  const first = new Date(year, month, 1);
+  const offset = (7 - first.getDay()) % 7; // days until first Sunday
+  return new Date(year, month, 1 + offset + (n - 1) * 7);
+}
+
+function fmtKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+interface Holiday { label: string; emoji: string; type: 'fest'|'religious'|'celebr' }
+
+function italianHolidays(year: number): Map<string, Holiday> {
+  const easter = easterDate(year);
+  const easterMon = new Date(easter); easterMon.setDate(easter.getDate() + 1);
+  const mothersDay = nthSundayOfMonth(year, 4, 2); // 2nd Sunday of May
+  const map = new Map<string, Holiday>();
+  const add = (d: Date, h: Holiday) => map.set(fmtKey(d), h);
+  add(new Date(year, 0, 1),   { label: 'Capodanno',         emoji: '🎉', type:'fest' });
+  add(new Date(year, 0, 6),   { label: 'Epifania',           emoji: '🌟', type:'religious' });
+  add(new Date(year, 1, 14),  { label: 'San Valentino',      emoji: '💞', type:'celebr' });
+  add(new Date(year, 2, 19),  { label: 'Festa del Papà',     emoji: '👨', type:'celebr' });
+  add(easter,                  { label: 'Pasqua',             emoji: '🥚', type:'religious' });
+  add(easterMon,               { label: 'Pasquetta',          emoji: '🍃', type:'religious' });
+  add(new Date(year, 3, 25),  { label: 'Liberazione',        emoji: '🇮🇹', type:'fest' });
+  add(new Date(year, 4, 1),   { label: 'Festa del Lavoro',   emoji: '🛠', type:'fest' });
+  add(mothersDay,              { label: 'Festa della Mamma', emoji: '👩', type:'celebr' });
+  add(new Date(year, 5, 2),   { label: 'Festa Repubblica',   emoji: '🇮🇹', type:'fest' });
+  add(new Date(year, 7, 15),  { label: 'Ferragosto',         emoji: '☀', type:'fest' });
+  add(new Date(year, 9, 31),  { label: 'Halloween',          emoji: '🎃', type:'celebr' });
+  add(new Date(year, 10, 1),  { label: 'Ognissanti',         emoji: '🕯', type:'religious' });
+  add(new Date(year, 11, 8),  { label: 'Immacolata',         emoji: '✨', type:'religious' });
+  add(new Date(year, 11, 25), { label: 'Natale',             emoji: '🎄', type:'religious' });
+  add(new Date(year, 11, 26), { label: 'Santo Stefano',      emoji: '🎁', type:'religious' });
+  add(new Date(year, 11, 31), { label: 'San Silvestro',      emoji: '🥂', type:'celebr' });
+  return map;
+}
+
+const HOLIDAY_COLOR: Record<Holiday['type'], string> = {
+  fest:      '#ff14b8',
+  religious: '#a78bfa',
+  celebr:    '#ffd400',
+};
+
 export function CalendarScreen() {
   const today = new Date();
   const [selDay, setSelDay] = useState(today.getDate());
   const [vm, setVm] = useState(today.getMonth());
   const [vy, setVy] = useState(today.getFullYear());
+  const [view, setView] = useState<'month'|'week'>('month');
 
   const { user } = useAuth();
   const monthData = useMonthData(user?.uid ?? null, vy, vm);
   const { countdowns, saveCountdowns } = useCountdowns(user?.uid ?? null);
   const gcal = useGoogleCalendar(vy, vm);
   const [showCdEditor, setShowCdEditor] = useState(false);
+
+  // Holidays for current and adjacent years (week view may span across boundary)
+  const holidays = useMemo(() => {
+    const m = italianHolidays(vy);
+    if (vm === 0) italianHolidays(vy - 1).forEach((v, k) => m.set(k, v));
+    if (vm === 11) italianHolidays(vy + 1).forEach((v, k) => m.set(k, v));
+    return m;
+  }, [vy, vm]);
 
   const dim    = new Date(vy, vm + 1, 0).getDate();
   const fd     = new Date(vy, vm, 1).getDay();
@@ -121,39 +195,111 @@ export function CalendarScreen() {
           </NeonGlass>
         )}
 
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:3, marginTop:16 }}>
-          {D_NAMES.map(d => <div key={d} style={{ textAlign:'center', fontFamily:p.monoFont, fontSize:9, color:p.dim, padding:'4px 0' }}>{d}</div>)}
-        </div>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:3, marginTop:2 }}>
-          {Array.from({length:offset}).map((_,i) => <div key={`e${i}`}/>)}
-          {Array.from({length:dim}).map((_,i) => {
-            const day = i + 1;
-            const k = dayKey(day);
-            const isToday = day === today.getDate() && vm === today.getMonth() && vy === today.getFullYear();
-            const isSel   = day === selDay;
-            const hasFit  = (monthData[k]?.workouts?.length ?? 0) > 0;
-            const mood    = (monthData[k]?.mood ?? null) as MoodId | null;
-            const hasEvent = (eventsByDay[day]?.length ?? 0) > 0;
-            return (
-              <button key={day} onClick={() => setSelDay(day)} style={{
-                border:`1px solid ${isToday ? 'rgba(166,255,0,0.6)' : isSel ? 'rgba(255,106,0,0.6)' : 'transparent'}`,
-                cursor:'pointer', borderRadius:12, padding:'8px 2px',
-                background:isSel ? 'rgba(255,106,0,0.22)' : isToday ? 'rgba(166,255,0,0.12)' : 'transparent',
-                display:'flex', flexDirection:'column', alignItems:'center', gap:3,
-              }}>
-                <span style={{ fontFamily:p.monoFont, fontSize:12, fontWeight:isToday||isSel?700:400, color:isToday?p.green:isSel?p.orange:p.fg }}>{day}</span>
-                <div style={{ display:'flex', gap:2 }}>
-                  {hasFit   && <div style={{ width:4,height:4,borderRadius:'50%',background:p.orange }}/>}
-                  {mood     && <div style={{ width:4,height:4,borderRadius:'50%',background:MC[mood] }}/>}
-                  {hasEvent && <div style={{ width:4,height:4,borderRadius:'50%',background:p.cyan }}/>}
-                </div>
-              </button>
-            );
-          })}
+        {/* View toggle: month / week */}
+        <div style={{ display:'flex', gap:6, marginTop:12 }}>
+          {(['month','week'] as const).map(v => (
+            <button key={v} onClick={() => setView(v)} style={{ flex:1, padding:'7px 4px', borderRadius:11, border:`1px solid ${view===v?p.orange:'rgba(255,255,255,0.1)'}`, background:view===v?'rgba(255,106,0,0.15)':'transparent', color:view===v?p.orange:p.muted, fontFamily:p.monoFont, fontSize:9.5, letterSpacing:0.12, textTransform:'uppercase', cursor:'pointer' }}>
+              {v === 'month' ? '◫ MESE' : '☷ SETTIMANA'}
+            </button>
+          ))}
         </div>
 
+        {view === 'month' && (
+          <>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:3, marginTop:14 }}>
+              {D_NAMES.map(d => <div key={d} style={{ textAlign:'center', fontFamily:p.monoFont, fontSize:9, color:p.dim, padding:'4px 0' }}>{d}</div>)}
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:3, marginTop:2 }}>
+              {Array.from({length:offset}).map((_,i) => <div key={`e${i}`}/>)}
+              {Array.from({length:dim}).map((_,i) => {
+                const day = i + 1;
+                const k = dayKey(day);
+                const isToday = day === today.getDate() && vm === today.getMonth() && vy === today.getFullYear();
+                const isSel   = day === selDay;
+                const hasFit  = (monthData[k]?.workouts?.length ?? 0) > 0;
+                const mood    = (monthData[k]?.mood ?? null) as MoodId | null;
+                const hasEvent = (eventsByDay[day]?.length ?? 0) > 0;
+                const holiday = holidays.get(k);
+                return (
+                  <button key={day} onClick={() => setSelDay(day)} style={{
+                    border:`1px solid ${isToday ? 'rgba(166,255,0,0.6)' : isSel ? 'rgba(255,106,0,0.6)' : holiday ? `${HOLIDAY_COLOR[holiday.type]}55` : 'transparent'}`,
+                    cursor:'pointer', borderRadius:12, padding:'8px 2px',
+                    background:isSel ? 'rgba(255,106,0,0.22)' : isToday ? 'rgba(166,255,0,0.12)' : holiday ? `${HOLIDAY_COLOR[holiday.type]}10` : 'transparent',
+                    display:'flex', flexDirection:'column', alignItems:'center', gap:3, position:'relative',
+                  }}>
+                    <span style={{ fontFamily:p.monoFont, fontSize:12, fontWeight:isToday||isSel||holiday?700:400, color:isToday?p.green:isSel?p.orange:holiday?HOLIDAY_COLOR[holiday.type]:p.fg }}>{day}</span>
+                    <div style={{ display:'flex', gap:2, minHeight:4 }}>
+                      {hasFit   && <div style={{ width:4,height:4,borderRadius:'50%',background:p.orange }}/>}
+                      {mood     && <div style={{ width:4,height:4,borderRadius:'50%',background:MC[mood] }}/>}
+                      {hasEvent && <div style={{ width:4,height:4,borderRadius:'50%',background:p.cyan }}/>}
+                      {holiday  && <div style={{ width:4,height:4,borderRadius:'50%',background:HOLIDAY_COLOR[holiday.type] }}/>}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {view === 'week' && (() => {
+          // Find the Monday of the week containing selDay
+          const sel = new Date(vy, vm, selDay);
+          const dayOfWeek = sel.getDay() === 0 ? 7 : sel.getDay(); // 1=Mon..7=Sun
+          const weekStart = new Date(sel); weekStart.setDate(sel.getDate() - (dayOfWeek - 1));
+          const weekDays: Date[] = Array.from({length:7}, (_,i) => {
+            const d = new Date(weekStart); d.setDate(weekStart.getDate() + i); return d;
+          });
+          return (
+            <>
+              <div style={{ display:'flex', justifyContent:'space-between', marginTop:14, marginBottom:6 }}>
+                <button onClick={() => { const s = new Date(weekStart); s.setDate(s.getDate() - 7); setSelDay(s.getDate()); setVm(s.getMonth()); setVy(s.getFullYear()); }} style={{ background:'transparent',border:'none',color:p.muted,cursor:'pointer',fontFamily:p.monoFont,fontSize:11 }}>‹ sett.</button>
+                <span style={{ fontFamily:p.monoFont, fontSize:10, color:p.dim }}>SETTIMANA · {weekDays[0].getDate()} {M_NAMES[weekDays[0].getMonth()]} → {weekDays[6].getDate()} {M_NAMES[weekDays[6].getMonth()]}</span>
+                <button onClick={() => { const s = new Date(weekStart); s.setDate(s.getDate() + 7); setSelDay(s.getDate()); setVm(s.getMonth()); setVy(s.getFullYear()); }} style={{ background:'transparent',border:'none',color:p.muted,cursor:'pointer',fontFamily:p.monoFont,fontSize:11 }}>sett. ›</button>
+              </div>
+              <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+                {weekDays.map((d, i) => {
+                  const k = fmtKey(d);
+                  const isToday = d.toDateString() === today.toDateString();
+                  const isSel   = d.getDate() === selDay && d.getMonth() === vm && d.getFullYear() === vy;
+                  const dd = monthData[k];
+                  const hasFit  = (dd?.workouts?.length ?? 0) > 0;
+                  const mood    = (dd?.mood ?? dd?.moodEvening ?? null) as MoodId | null;
+                  const evts    = eventsByDay[d.getDate()] ?? (d.getMonth() === vm ? [] : []);
+                  const holiday = holidays.get(k);
+                  return (
+                    <button key={k} onClick={() => { setSelDay(d.getDate()); if (d.getMonth() !== vm || d.getFullYear() !== vy) { setVm(d.getMonth()); setVy(d.getFullYear()); } }} style={{
+                      display:'flex', alignItems:'center', gap:10, padding:'12px 14px', borderRadius:14,
+                      border:`1px solid ${isToday ? 'rgba(166,255,0,0.5)' : isSel ? 'rgba(255,106,0,0.5)' : holiday ? `${HOLIDAY_COLOR[holiday.type]}44` : p.border}`,
+                      background:isSel ? 'rgba(255,106,0,0.18)' : isToday ? 'rgba(166,255,0,0.10)' : holiday ? `${HOLIDAY_COLOR[holiday.type]}0d` : 'rgba(255,255,255,0.03)',
+                      cursor:'pointer', textAlign:'left',
+                    }}>
+                      <div style={{ width:36, textAlign:'center' }}>
+                        <div style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim, textTransform:'uppercase' }}>{D_NAMES[i]}</div>
+                        <div style={{ fontFamily:p.displayFont, fontWeight:800, fontSize:24, color:isToday?p.green:isSel?p.orange:holiday?HOLIDAY_COLOR[holiday.type]:p.fg, lineHeight:1 }}>{d.getDate()}</div>
+                      </div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        {holiday && (
+                          <div style={{ fontFamily:p.monoFont, fontSize:10, color:HOLIDAY_COLOR[holiday.type], textTransform:'uppercase', letterSpacing:0.15, marginBottom:2 }}>
+                            {holiday.emoji} {holiday.label}
+                          </div>
+                        )}
+                        <div style={{ display:'flex', gap:8, flexWrap:'wrap', fontFamily:p.monoFont, fontSize:10, color:p.muted }}>
+                          {hasFit  && <span style={{ color:p.orange }}>⚡ {(dd?.workouts ?? []).join('+')}</span>}
+                          {mood    && <span style={{ color:MC[mood] }}>● {mood.toUpperCase()}</span>}
+                          {evts.length > 0 && <span style={{ color:p.cyan }}>📅 {evts.length} ev.</span>}
+                          {!hasFit && !mood && !evts.length && !holiday && <span style={{ color:p.dim }}>—</span>}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          );
+        })()}
+
         <div style={{ display:'flex', gap:12, marginTop:12, flexWrap:'wrap' }}>
-          {([['Allenamento',p.orange],['Mood',p.green],['Eventi GCal',p.cyan]] as [string,string][]).map(([l,c]) => (
+          {([['Allenamento',p.orange],['Mood',p.green],['Eventi',p.cyan],['Festa',HOLIDAY_COLOR.fest]] as [string,string][]).map(([l,c]) => (
             <div key={l} style={{ display:'flex', alignItems:'center', gap:5 }}>
               <div style={{ width:6,height:6,borderRadius:'50%',background:c }}/>
               <span style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim }}>{l}</span>
@@ -171,10 +317,16 @@ export function CalendarScreen() {
             const d = new Date(iso);
             return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
           };
+          const holiday = holidays.get(k);
           return (
-            <NeonGlass style={{ marginTop:14 }} tint="rgba(255,255,255,0.04)" radius={20}>
+            <NeonGlass style={{ marginTop:14 }} tint={holiday ? `${HOLIDAY_COLOR[holiday.type]}11` : 'rgba(255,255,255,0.04)'} edge={holiday ? `${HOLIDAY_COLOR[holiday.type]}55` : undefined} radius={20}>
               <div style={{ padding:'14px 16px' }}>
                 <div style={{ fontFamily:p.monoFont, fontSize:10, color:p.orange, textTransform:'uppercase' }}>{selDay} {M_NAMES[vm]}</div>
+                {holiday && (
+                  <div style={{ marginTop:4, fontFamily:p.monoFont, fontSize:11, color:HOLIDAY_COLOR[holiday.type], textTransform:'uppercase', letterSpacing:0.15 }}>
+                    {holiday.emoji} {holiday.label}
+                  </div>
+                )}
                 <div style={{ marginTop:6, fontFamily:p.bodyFont, fontSize:14, color:dayWorkouts.length > 0 ? p.orange : p.muted }}>
                   {dayWorkouts.length > 0 ? `⚡ ${dayWorkouts.join(' + ')}` : 'Nessun allenamento'}
                 </div>

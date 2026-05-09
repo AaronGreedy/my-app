@@ -9,10 +9,12 @@ import { CalendarScreen } from '@/screens/calendar';
 import { BrainScreen } from '@/screens/brain';
 import { MeScreen, MeTab } from '@/screens/me';
 import { FocusScreen } from '@/screens/focus';
+import { SettingsScreen } from '@/screens/settings';
 import { BottomNav } from './bottom-nav';
 import { MarkerDiamond } from './markers';
+import { LevelUpCelebration } from './level-up-celebration';
 
-type Screen = 'home' | 'cal' | 'brain' | 'me' | 'focus';
+type Screen = 'home' | 'cal' | 'brain' | 'me' | 'focus' | 'settings';
 type NavScreen = 'home' | 'cal' | 'brain' | 'me';
 
 function LoadingScreen() {
@@ -38,22 +40,24 @@ export function AppShell() {
   };
 
   const content: Record<Screen, ReactNode> = {
-    home:  <HomeScreen onNavigate={navigate} />,
-    cal:   <CalendarScreen />,
-    brain: <BrainScreen />,
-    me:    <MeScreen initialTab={meTab} />,
-    focus: <FocusScreen onBack={() => setScreen('home')} />,
+    home:     <HomeScreen onNavigate={navigate} />,
+    cal:      <CalendarScreen />,
+    brain:    <BrainScreen />,
+    me:       <MeScreen initialTab={meTab} />,
+    focus:    <FocusScreen onBack={() => setScreen('home')} />,
+    settings: <SettingsScreen onBack={() => setScreen('home')} />,
   };
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: p.bg }}>
       {content[screen]}
-      {screen !== 'focus' && (
+      {screen !== 'focus' && screen !== 'settings' && (
         <BottomNav
           screen={screen as NavScreen}
           setScreen={(s, opts) => navigate(s, opts)}
         />
       )}
+      <LevelUpCelebration/>
     </div>
   );
 }

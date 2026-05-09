@@ -24,6 +24,8 @@ export interface DayData {
   todayThing: string;         // "la cosa di oggi" task text
   todayDeadline: string;      // HH:MM (es. "18:00") — '' = nessuna
   todayDone: boolean;
+  sleepHours: number;         // ore di sonno scorsa notte (0 = non loggato)
+  sleepQuality: number;       // 1-5 (0 = non loggato)
 }
 
 const EMPTY_ME_HABITS = Array(10).fill(false) as boolean[];
@@ -48,6 +50,8 @@ const EMPTY: DayData = {
   todayThing: '',
   todayDeadline: '',
   todayDone: false,
+  sleepHours: 0,
+  sleepQuality: 0,
 };
 
 function padMeals(arr: (string|null)[], len: number): (string|null)[] {
@@ -92,6 +96,8 @@ export function useDayStore(uid: string | null) {
           todayThing:       typeof d.todayThing   === 'string' ? d.todayThing      : '',
           todayDeadline:    typeof d.todayDeadline === 'string'? d.todayDeadline   : '',
           todayDone:        typeof d.todayDone    === 'boolean'? d.todayDone       : false,
+          sleepHours:       typeof d.sleepHours   === 'number' ? d.sleepHours      : 0,
+          sleepQuality:     typeof d.sleepQuality === 'number' ? d.sleepQuality    : 0,
         });
       } else {
         setData(EMPTY);

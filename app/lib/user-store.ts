@@ -439,6 +439,57 @@ export function useWorkItems(uid: string | null) {
   return { items, add, update, touch, remove };
 }
 
+// ─── User Settings (preferenze) ────────────────────────────────────────────────
+
+export interface UserSettings {
+  kcalTarget: number;
+  proteinTarget: number;
+  carbsTarget: number;
+  fatTarget: number;
+  waterTargetTraining: number;  // ml
+  waterTargetRest: number;      // ml
+  caffeineLimit: number;         // mg
+  weightTargetMin: number;
+  weightTargetMax: number;
+  showXpToast: boolean;
+}
+
+export const DEFAULT_SETTINGS: UserSettings = {
+  kcalTarget: 2050,
+  proteinTarget: 180,
+  carbsTarget: 180,
+  fatTarget: 50,
+  waterTargetTraining: 4000,
+  waterTargetRest: 3000,
+  caffeineLimit: 400,
+  weightTargetMin: 79,
+  weightTargetMax: 82,
+  showXpToast: true,
+};
+
+export function useUserSettings(uid: string | null) {
+  const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
+
+  useEffect(() => {
+    if (!uid || !db) return;
+    const ref = doc(db, 'users', uid);
+    return onSnapshot(ref, snap => {
+      if (snap.exists() && snap.data().settings) {
+        setSettings({ ...DEFAULT_SETTINGS, ...snap.data().settings });
+      }
+    });
+  }, [uid]);
+
+  const saveSettings = (patch: Partial<UserSettings>) => {
+    const next = { ...settings, ...patch };
+    setSettings(next);
+    if (!uid || !db) return;
+    setDoc(doc(db, 'users', uid), { settings: next }, { merge: true }).catch(console.error);
+  };
+
+  return { settings, saveSettings };
+}
+
 // ─── Weight Log ───────────────────────────────────────────────────────────────
 
 export interface WeightEntry {

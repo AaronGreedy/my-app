@@ -7,7 +7,7 @@ import { MarkerDiamond, MarkerStar4 } from '@/components/markers';
 import { MoodFace } from '@/components/mood-face';
 import { useAuth } from '@/lib/auth-context';
 import { useDayStore, MoodId, DayData, useMonthData } from '@/lib/day-store';
-import { useUserProfile, useSupplements, useWeightLog, useNotes, useXP, DEFAULT_PRS } from '@/lib/user-store';
+import { useUserProfile, useSupplements, useWeightLog, useNotes, useXP, DEFAULT_PRS, useUserSettings } from '@/lib/user-store';
 import { useNotifications } from '@/lib/notifications';
 import { MEALS, getMealTotals } from '@/lib/meals';
 
@@ -215,13 +215,15 @@ function localDateKey(d: Date): string {
 
 // ─── Cibo ──────────────────────────────────────────────────────────────────────
 
-function CiboTab({ data, save }: { data: DayData; save: (p: Partial<DayData>) => void }) {
+function CiboTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayData>) => void; uid: string | null }) {
   const mode         = data.dietMode;
   const caffeine     = data.caffeine;
   const mealSelected = data.mealSelected;
+  const { settings } = useUserSettings(uid);
 
   const { kcal: kcalEaten, pr: totalPr, c: totalC, g: totalG } = getMealTotals(mealSelected);
-  const KCAL_TARGET = 2050;
+  const KCAL_TARGET = settings.kcalTarget;
+  const CAFF_LIMIT  = settings.caffeineLimit;
   const kcalLeft    = KCAL_TARGET - kcalEaten;
   const pct         = Math.min(100, Math.round((kcalEaten / KCAL_TARGET) * 100));
 
@@ -240,7 +242,7 @@ function CiboTab({ data, save }: { data: DayData; save: (p: Partial<DayData>) =>
         ))}
       </div>
 
-      <SectionLabel num="02" title="KCAL" hint={`target ${KCAL_TARGET}`}/>
+      <SectionLabel num="02" title="KCAL" hint={`target ${KCAL_TARGET} · P${settings.proteinTarget} · C${settings.carbsTarget} · G${settings.fatTarget}`}/>
       <NeonGlass style={{ marginTop:8 }} tint="linear-gradient(135deg,rgba(255,106,0,0.28),rgba(255,212,0,0.1))" edge="rgba(255,106,0,0.5)" glow="#ff6a00" radius={22}>
         <div style={{ padding:'16px' }}>
           <div style={{ display:'flex', alignItems:'flex-end', gap:12 }}>
@@ -287,7 +289,7 @@ function CiboTab({ data, save }: { data: DayData; save: (p: Partial<DayData>) =>
         ))}
       </div>
 
-      <SectionLabel num="04" title="CAFFEINA" hint="max 400mg"/>
+      <SectionLabel num="04" title="CAFFEINA" hint={`max ${CAFF_LIMIT}mg`}/>
       <NeonGlass style={{ marginTop:8 }} tint="rgba(255,255,255,0.04)" radius={18}>
         <div style={{ padding:'12px 16px', display:'flex', gap:6, alignItems:'center' }}>
           {([
@@ -295,15 +297,15 @@ function CiboTab({ data, save }: { data: DayData; save: (p: Partial<DayData>) =>
             { label:'🍵 Tè',     mg:40 },
             { label:'⚡ Monster', mg:160 },
           ]).map(b => (
-            <button key={b.label} onClick={() => save({ caffeine: caffeine + b.mg })} style={{ flex:1,padding:'10px 4px',borderRadius:14,border:`1px solid ${caffeine>=400?'rgba(255,0,64,0.4)':'rgba(255,212,0,0.3)'}`,background:caffeine>=400?'rgba(255,0,64,0.1)':'rgba(255,212,0,0.08)',color:p.fg,cursor:'pointer',fontFamily:p.monoFont,fontSize:9,textTransform:'uppercase',display:'flex',flexDirection:'column',gap:2,alignItems:'center' }}>
+            <button key={b.label} onClick={() => save({ caffeine: caffeine + b.mg })} style={{ flex:1,padding:'10px 4px',borderRadius:14,border:`1px solid ${caffeine>=CAFF_LIMIT?'rgba(255,0,64,0.4)':'rgba(255,212,0,0.3)'}`,background:caffeine>=CAFF_LIMIT?'rgba(255,0,64,0.1)':'rgba(255,212,0,0.08)',color:p.fg,cursor:'pointer',fontFamily:p.monoFont,fontSize:9,textTransform:'uppercase',display:'flex',flexDirection:'column',gap:2,alignItems:'center' }}>
               <span>{b.label}</span>
               <span style={{ fontSize:8, color:p.dim }}>+{b.mg}mg</span>
             </button>
           ))}
           <button onClick={() => save({ caffeine: 0 })} title="Reset" style={{ padding:'10px 10px',borderRadius:14,border:`1px solid ${p.border}`,background:'transparent',color:p.muted,cursor:'pointer',fontFamily:p.monoFont,fontSize:11 }}>↺</button>
-          <div style={{ fontFamily:p.displayFont,fontSize:22,fontWeight:800,color:caffeine>=400?p.red:p.fg,minWidth:54,textAlign:'right',lineHeight:1 }}>{caffeine}<span style={{ fontFamily:p.monoFont,fontSize:9,color:p.muted,marginLeft:2 }}>mg</span></div>
+          <div style={{ fontFamily:p.displayFont,fontSize:22,fontWeight:800,color:caffeine>=CAFF_LIMIT?p.red:p.fg,minWidth:54,textAlign:'right',lineHeight:1 }}>{caffeine}<span style={{ fontFamily:p.monoFont,fontSize:9,color:p.muted,marginLeft:2 }}>mg</span></div>
         </div>
-        {caffeine >= 400 && <div style={{ padding:'0 16px 10px',fontFamily:p.monoFont,fontSize:9,color:p.red,textTransform:'uppercase' }}>⚠ OLTRE LIMITE RACCOMANDATO (400mg)</div>}
+        {caffeine >= CAFF_LIMIT && <div style={{ padding:'0 16px 10px',fontFamily:p.monoFont,fontSize:9,color:p.red,textTransform:'uppercase' }}>⚠ OLTRE LIMITE ({CAFF_LIMIT}mg)</div>}
       </NeonGlass>
     </div>
   );
@@ -673,9 +675,42 @@ function MoodTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayData
     </div>
   );
 
+  const sleepH = data.sleepHours;
+  const sleepQ = data.sleepQuality;
+
   return (
     <div>
-      <SectionLabel num="01" title="LOG OGGI" hint=""/>
+      <SectionLabel num="01" title="SONNO" hint="ultima notte"/>
+      <NeonGlass style={{ marginTop:8 }} tint="linear-gradient(135deg,rgba(107,0,255,0.16),rgba(0,240,255,0.08))" edge="rgba(107,0,255,0.35)" radius={20}>
+        <div style={{ padding:'14px 16px' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:14 }}>
+            <div style={{ flex:1 }}>
+              <div style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim, textTransform:'uppercase', letterSpacing:0.15, marginBottom:6 }}>ORE</div>
+              <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
+                {[5,6,7,8,9].map(h => (
+                  <button key={h} onClick={() => save({ sleepHours: sleepH === h ? 0 : h })} style={{ flex:'1 1 42px', padding:'8px 4px', borderRadius:10, border:`1px solid ${sleepH===h?'#a78bfa':'rgba(255,255,255,0.1)'}`, background:sleepH===h?'rgba(167,139,250,0.18)':'transparent', color:sleepH===h?'#a78bfa':p.muted, cursor:'pointer', fontFamily:p.monoFont, fontSize:11, fontWeight:700 }}>{h}h</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim, textTransform:'uppercase', letterSpacing:0.15, marginBottom:6 }}>QUALITÀ</div>
+              <div style={{ display:'flex', gap:3 }}>
+                {[1,2,3,4,5].map(q => (
+                  <button key={q} onClick={() => save({ sleepQuality: sleepQ === q ? 0 : q })} style={{ background:'transparent', border:'none', cursor:'pointer', padding:0, fontSize:18, color: q <= sleepQ ? '#ffd400' : 'rgba(255,255,255,0.15)' }}>★</button>
+                ))}
+              </div>
+            </div>
+          </div>
+          {sleepH > 0 && (
+            <div style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim, marginTop:10, textTransform:'uppercase' }}>
+              {sleepH < 6 ? '⚠ poche ore' : sleepH > 9 ? 'oltre la media' : '✓ ottimo'}
+              {sleepQ > 0 && ` · qualità ${sleepQ}/5`}
+            </div>
+          )}
+        </div>
+      </NeonGlass>
+
+      <SectionLabel num="02" title="LOG OGGI" hint=""/>
       <NeonGlass style={{ marginTop:8 }} tint="rgba(255,255,255,0.04)" radius={22}>
         <div style={{ padding:'16px' }}>
           <MoodPicker value={morning} onChange={v => save({ moodMorning: v })} label="☀ MATTINA"/>
@@ -692,7 +727,7 @@ function MoodTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayData
         </div>
       </NeonGlass>
 
-      <SectionLabel num="02" title="HEATMAP" hint="4 settimane"/>
+      <SectionLabel num="03" title="HEATMAP" hint="4 settimane"/>
       <NeonGlass style={{ marginTop:8 }} tint="rgba(255,255,255,0.04)" radius={22}>
         <div style={{ padding:'14px 16px' }}>
           <div style={{ display:'flex', gap:3, marginBottom:6 }}>
@@ -716,7 +751,7 @@ function MoodTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayData
         </div>
       </NeonGlass>
 
-      <SectionLabel num="03" title="AI · PATTERN" hint="ultimi 30 giorni"/>
+      <SectionLabel num="04" title="AI · PATTERN" hint="ultimi 30 giorni"/>
       <NeonGlass style={{ marginTop:8 }} tint="linear-gradient(135deg,rgba(0,240,255,0.16),rgba(107,0,255,0.12))" edge="rgba(0,240,255,0.4)" radius={22}>
         <div style={{ padding:'14px 16px' }}>
           <div style={{ fontFamily:p.bodyFont, fontSize:12, color:p.muted, lineHeight:1.4, marginBottom:10 }}>
@@ -1059,7 +1094,7 @@ export function MeScreen({ initialTab }: { initialTab?: MeTab } = {}) {
             <button key={t.id} onClick={() => setTab(t.id)} style={{ flex:1,padding:'8px 2px',borderRadius:13,border:`1px solid ${tab===t.id?p.magenta:'rgba(255,255,255,0.1)'}`,background:tab===t.id?'rgba(255,20,184,0.18)':'transparent',color:tab===t.id?p.fg:p.muted,cursor:'pointer',fontFamily:p.monoFont,fontSize:8.5,letterSpacing:0.06,textTransform:'uppercase' }}>{t.l}</button>
           ))}
         </div>
-        {tab==='cibo'    && <CiboTab    data={data} save={save}/>}
+        {tab==='cibo'    && <CiboTab    data={data} save={save} uid={user?.uid ?? null}/>}
         {tab==='fitness' && <FitnessTab data={data} save={save} prs={prs} savePr={savePr} uid={user?.uid ?? null}/>}
         {tab==='mood'    && <MoodTab    data={data} save={save} uid={user?.uid ?? null}/>}
         {tab==='habits'  && <HabitsTab  data={data} save={save} uid={user?.uid ?? null}/>}

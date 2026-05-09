@@ -57,6 +57,23 @@ button, [role="button"], a, svg, [data-no-callout] {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Skeleton shimmer for loading placeholders */
+.skel {
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0.04) 0%,
+    rgba(255,255,255,0.10) 50%,
+    rgba(255,255,255,0.04) 100%
+  );
+  background-size: 200% 100%;
+  animation: skelShimmer 1.4s ease-in-out infinite;
+  border-radius: 8px;
+}
+@keyframes skelShimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 ::-webkit-scrollbar { display: none; }
 * { scrollbar-width: none; }
 
