@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server';
 
-export const runtime = 'edge';
+// Node.js runtime (not Edge): Vercel "Sensitive" env vars are
+// only exposed to Node, so CEREBRAS_API_KEY is unavailable on Edge.
+export const runtime = 'nodejs';
 
 type Msg = { role: 'system' | 'user' | 'assistant'; content: string };
 
