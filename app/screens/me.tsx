@@ -560,6 +560,8 @@ function MoodTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayData
   const [aiLoading, setAiLoading] = useState(false);
   const [aiResponse, setAiResponse] = useState('');
   const [aiError, setAiError] = useState('');
+  const [aiDebug, setAiDebug] = useState('');
+  const [showAiDebug, setShowAiDebug] = useState(false);
   const [savingNote, setSavingNote] = useState<'M'|'E'|null>(null);
   const [savedFlash, setSavedFlash] = useState<'M'|'E'|null>(null);
 
@@ -583,7 +585,7 @@ function MoodTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayData
 
   const analyzePattern = async () => {
     if (aiLoading) return;
-    setAiLoading(true); setAiError(''); setAiResponse('');
+    setAiLoading(true); setAiError(''); setAiResponse(''); setAiDebug(''); setShowAiDebug(false);
     try {
       const today = new Date(); today.setHours(0,0,0,0);
       const lines: string[] = [];
@@ -608,6 +610,7 @@ function MoodTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayData
         setAiLoading(false);
         return;
       }
+      setAiDebug(lines.join('\n'));
       const system = `Sei un coach di Aaron, analizzi il suo log mood + journal + allenamenti.\n\nREGOLE FERREE:\n1. Usa SOLO i dati nel blocco DATI sotto. NON inventare workout, date, note, citazioni o eventi non letteralmente presenti. Se citi una data o una frase, deve apparire identica nei DATI.\n2. Se hai meno di 5 entry per categoria (mood, workout, journal), DILLO e spiega che il dataset è troppo piccolo per pattern affidabili — non estrapolare comunque.\n3. Se non vedi correlazioni reali, scrivi "non emergono pattern significativi con questi dati" invece di inventare.\n4. Italiano, max 6 bullet, asciutto, senza preamboli tipo "Ciao Aaron". Vai dritto.\n5. Niente banalità tipo "fai più sport", "dormi di più". Solo pattern osservati.\n\nDATI (ordine cronologico, ultimi 30gg loggati):\n${lines.join('\n')}`;
       const res = await fetch('/api/ai', {
         method: 'POST',
@@ -778,7 +781,15 @@ function MoodTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayData
           {aiResponse && (
             <div style={{ marginTop:12, padding:'12px 14px', borderRadius:14, background:'rgba(255,255,255,0.04)', border:`1px solid ${p.border}` }}>
               <div style={{ fontFamily:p.bodyFont, fontSize:13, color:p.fg, lineHeight:1.5, whiteSpace:'pre-wrap' }}>{aiResponse}</div>
-              <button onClick={saveAiAsNote} style={{ marginTop:10,padding:'8px 14px',borderRadius:12,border:`1px solid rgba(0,240,255,0.3)`,background:'rgba(0,240,255,0.08)',color:p.cyan,fontFamily:p.monoFont,fontSize:9.5,textTransform:'uppercase',cursor:'pointer' }}>↵ Salva nel Brain</button>
+              <div style={{ display:'flex', gap:8, marginTop:10, flexWrap:'wrap' }}>
+                <button onClick={saveAiAsNote} style={{ padding:'8px 14px',borderRadius:12,border:`1px solid rgba(0,240,255,0.3)`,background:'rgba(0,240,255,0.08)',color:p.cyan,fontFamily:p.monoFont,fontSize:9.5,textTransform:'uppercase',cursor:'pointer' }}>↵ Salva nel Brain</button>
+                {aiDebug && (
+                  <button onClick={() => setShowAiDebug(s => !s)} style={{ padding:'8px 14px',borderRadius:12,border:`1px solid ${p.border}`,background:'transparent',color:p.muted,fontFamily:p.monoFont,fontSize:9.5,textTransform:'uppercase',cursor:'pointer' }}>{showAiDebug ? '× nascondi dati' : '⚙ dati grezzi'}</button>
+                )}
+              </div>
+              {showAiDebug && aiDebug && (
+                <pre style={{ marginTop:10, padding:'10px 12px', borderRadius:10, background:'rgba(0,0,0,0.4)', border:`1px solid ${p.border}`, fontFamily:p.monoFont, fontSize:10, color:p.muted, lineHeight:1.45, whiteSpace:'pre-wrap', wordBreak:'break-word', overflowX:'auto' }}>{aiDebug}</pre>
+              )}
             </div>
           )}
         </div>
