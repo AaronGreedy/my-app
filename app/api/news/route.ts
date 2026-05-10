@@ -102,7 +102,7 @@ async function translateTitlesIT(items: NewsItem[]): Promise<NewsItem[]> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
       body: JSON.stringify({
-        model: 'gpt-oss-120b',
+        model: 'qwen-3-235b-a22b-instruct-2507',
         messages: [
           { role: 'system', content: 'Translate the following English news headlines to natural Italian. Keep them tight and idiomatic. Output ONLY a JSON array of strings, same order, same length, nothing else. No code fences, no commentary.' },
           { role: 'user', content: list },

@@ -7,7 +7,7 @@ export const runtime = 'nodejs';
 type Msg = { role: 'system' | 'user' | 'assistant'; content: string };
 
 const CEREBRAS_URL = 'https://api.cerebras.ai/v1/chat/completions';
-const DEFAULT_MODEL = 'gpt-oss-120b';
+const DEFAULT_MODEL = 'qwen-3-235b-a22b-instruct-2507';
 
 export async function POST(req: NextRequest) {
   const key = process.env.CEREBRAS_API_KEY;
