@@ -398,7 +398,7 @@ export function BrainScreen() {
         return `· ${date}${tags} ${n.title}\n  ${n.body.slice(0, 240)}`;
       }).join('\n');
       const system = `Sei l'AI del Second Brain di Aaron. Rispondi in italiano, breve e diretto, senza fronzoli. Se ti chiede di riorganizzare/cercare/collegare/sintetizzare le note, usa SOLO il contesto qui sotto. Se non c'è abbastanza materiale, dillo chiaramente invece di inventare.${ctx ? `\n\nNOTE (più recenti, max 30):\n${ctx}` : '\n\n(Nessuna nota ancora.)'}`;
-      const res = await fetch('/api/groq', {
+      const res = await fetch('/api/cerebras', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ system, messages: [{ role: 'user', content: q }] }),
@@ -626,7 +626,7 @@ export function BrainScreen() {
               <div style={{ padding:'14px 18px', display:'flex', alignItems:'center', gap:12 }}>
                 <MarkerHex size={16} color={p.cyan}/>
                 <div style={{ flex:1 }}>
-                  <div style={{ fontFamily:p.monoFont, fontSize:10, color:p.cyan, letterSpacing:0.18, textTransform:'uppercase' }}>AI GROQ · ANALISI</div>
+                  <div style={{ fontFamily:p.monoFont, fontSize:10, color:p.cyan, letterSpacing:0.18, textTransform:'uppercase' }}>AI CEREBRAS · ANALISI</div>
                   <div style={{ fontFamily:p.bodyFont, fontSize:12, color:p.muted, marginTop:2 }}>Chiedi, riorganizza, trova pattern</div>
                 </div>
                 <span style={{ fontFamily:p.monoFont, fontSize:18, color:p.cyan }}>→</span>
@@ -701,7 +701,7 @@ export function BrainScreen() {
           <div onClick={e => e.stopPropagation()} style={{ width:'100%',maxHeight:'88%',overflowY:'auto',padding:'24px 20px 110px',background:'rgba(10,8,6,0.94)',borderTop:`1px solid ${p.border}`,borderTopLeftRadius:28,borderTopRightRadius:28 }}>
             <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:14 }}>
               <MarkerHex size={14} color={p.cyan}/>
-              <div style={{ fontFamily:p.monoFont, fontSize:10, color:p.cyan, letterSpacing:0.18, textTransform:'uppercase' }}>AI GROQ · {notes.length} note nel contesto</div>
+              <div style={{ fontFamily:p.monoFont, fontSize:10, color:p.cyan, letterSpacing:0.18, textTransform:'uppercase' }}>AI CEREBRAS · {notes.length} note nel contesto</div>
             </div>
             <textarea
               value={aiPrompt}
@@ -721,13 +721,13 @@ export function BrainScreen() {
 
             {aiError && (
               <div style={{ marginTop:14, padding:'12px 14px', borderRadius:12, border:`1px solid rgba(255,0,64,0.4)`, background:'rgba(255,0,64,0.08)', color:p.red, fontFamily:p.monoFont, fontSize:11 }}>
-                {aiError.toLowerCase().includes('groq_api_key') || aiError.toLowerCase().includes('non configurata') ? (
+                {aiError.toLowerCase().includes('cerebras_api_key') || aiError.toLowerCase().includes('non configurata') ? (
                   <>
-                    <div style={{ fontWeight:700, marginBottom:6 }}>⚠ Groq non configurata</div>
+                    <div style={{ fontWeight:700, marginBottom:6 }}>⚠ Cerebras non configurata</div>
                     <div style={{ color:p.fg, fontSize:10.5, lineHeight:1.5, fontFamily:p.bodyFont }}>
                       Per attivare l&apos;AI:<br/>
-                      1. crea una key gratuita su <span style={{ color:p.cyan }}>console.groq.com/keys</span><br/>
-                      2. Vercel → Settings → Environment Variables → aggiungi <code style={{ color:p.orange }}>GROQ_API_KEY</code><br/>
+                      1. crea una key gratuita su <span style={{ color:p.cyan }}>cloud.cerebras.ai</span><br/>
+                      2. Vercel → Environments → aggiungi <code style={{ color:p.orange }}>CEREBRAS_API_KEY</code><br/>
                       3. Redeploy
                     </div>
                   </>

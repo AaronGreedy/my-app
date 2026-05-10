@@ -94,15 +94,15 @@ async function fetchFeed(feed: Feed): Promise<NewsItem[]> {
 }
 
 async function translateTitlesIT(items: NewsItem[]): Promise<NewsItem[]> {
-  const key = process.env.GROQ_API_KEY;
+  const key = process.env.CEREBRAS_API_KEY;
   if (!key || items.length === 0) return items;
   try {
     const list = items.map((it, i) => `${i + 1}. ${it.title}`).join('\n');
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const res = await fetch('https://api.cerebras.ai/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: 'gpt-oss-120b',
         messages: [
           { role: 'system', content: 'Translate the following English news headlines to natural Italian. Keep them tight and idiomatic. Output ONLY a JSON array of strings, same order, same length, nothing else. No code fences, no commentary.' },
           { role: 'user', content: list },
