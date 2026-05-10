@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, CSSProperties } from 'react';
 import { p } from '@/lib/design';
 import { MarkerPlus } from './markers';
 import { useAuth } from '@/lib/auth-context';
-import { useNotes, useShoppingList } from '@/lib/user-store';
+import { useNotes, useShoppingList, useGifts } from '@/lib/user-store';
 import { useDayStore } from '@/lib/day-store';
 
 type Screen = 'home' | 'cal' | 'brain' | 'me';
@@ -74,6 +74,7 @@ function CaptureOverlay({ open, onClose, autoVoice }: { open: boolean; onClose: 
   const { addNote }    = useNotes(uid);
   const { addItem }    = useShoppingList(uid);
   const { data, save } = useDayStore(uid);
+  const { gifts, saveGifts } = useGifts(uid);
 
   const [text, setText]   = useState('');
   const [saving, setSaving] = useState(false);
@@ -166,7 +167,7 @@ function CaptureOverlay({ open, onClose, autoVoice }: { open: boolean; onClose: 
         case 'brain':    await addNote(display, ['idea']);                  break;
         case 'spesa':    addItem(display);                                  break;
         case 'problema': await addNote(display, ['lavoro']);                break;
-        case 'regalo':   await addNote(`REGALO · ${display}`, ['idea']);    break; // PIN-locked area, salva come nota promemoria
+        case 'regalo':   saveGifts([...gifts, { id: Date.now().toString(), label: display, note: '', done: false }]); break;
         case 'nota':     await addNote(display, []);                        break;
       }
       setDone(route.label);
@@ -194,6 +195,7 @@ function CaptureOverlay({ open, onClose, autoVoice }: { open: boolean; onClose: 
             { id:'todo' as Route,  label:'⏰ Ricorda', c: p.orange  },
             { id:'spesa' as Route, label:'🛒 Compra',  c: p.green   },
             { id:'brain' as Route, label:'🧠 Nota',    c: p.cyan    },
+            { id:'regalo' as Route,label:'🎁 Regalo',  c: p.magenta },
           ]).map(b => {
             const active = presetRoute === b.id;
             return (
@@ -214,9 +216,10 @@ function CaptureOverlay({ open, onClose, autoVoice }: { open: boolean; onClose: 
           rows={4}
           disabled={saving}
           placeholder={
-            presetRoute === 'todo'  ? 'cosa devi ricordarti?' :
-            presetRoute === 'spesa' ? 'banane, latte, cereali…' :
-            presetRoute === 'brain' ? 'idea o pensiero…' :
+            presetRoute === 'todo'   ? 'cosa devi ricordarti?' :
+            presetRoute === 'spesa'  ? 'banane, latte, cereali…' :
+            presetRoute === 'brain'  ? 'idea o pensiero…' :
+            presetRoute === 'regalo' ? 'idea regalo per lei…' :
             'parla, scrivi, dump…  →  ricordami / brain / compra / regalo'
           }
           style={{ width: '100%', resize: 'none', border: 0, outline: 0, background: 'transparent', color: p.fg, fontFamily: p.bodyFont, fontSize: 17, lineHeight: 1.35 }}
