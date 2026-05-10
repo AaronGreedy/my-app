@@ -4,13 +4,13 @@ export const runtime = 'edge';
 
 type Msg = { role: 'system' | 'user' | 'assistant'; content: string };
 
-const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const DEFAULT_MODEL = 'llama-3.3-70b-versatile';
+const CEREBRAS_URL = 'https://api.cerebras.ai/v1/chat/completions';
+const DEFAULT_MODEL = 'gpt-oss-120b';
 
 export async function POST(req: NextRequest) {
-  const key = process.env.GROQ_API_KEY;
+  const key = process.env.CEREBRAS_API_KEY;
   if (!key) {
-    return Response.json({ error: 'GROQ_API_KEY non configurata su Vercel' }, { status: 500 });
+    return Response.json({ error: 'CEREBRAS_API_KEY non configurata su Vercel' }, { status: 500 });
   }
 
   let body: { messages?: Msg[]; system?: string; model?: string };
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     ? [{ role: 'system', content: body.system }, ...messages]
     : messages;
 
-  const res = await fetch(GROQ_URL, {
+  const res = await fetch(CEREBRAS_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
   if (!res.ok) {
     const text = await res.text();
     return Response.json(
-      { error: `Groq ${res.status}: ${text.slice(0, 300)}` },
+      { error: `Cerebras ${res.status}: ${text.slice(0, 300)}` },
       { status: res.status },
     );
   }
