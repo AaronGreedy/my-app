@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, CSSProperties } from 'react';
+import { useEffect, useState, CSSProperties } from 'react';
 import { p } from '@/lib/design';
 import { useAuth } from '@/lib/auth-context';
 import { useXP } from '@/lib/user-store';
@@ -11,24 +11,26 @@ export function LevelUpCelebration() {
   const { user } = useAuth();
   const { level, tier, totalXP } = useXP(user?.uid ?? null);
   const [state, setState] = useState<CelebrationState>({ level: 0, tier: '', show: false });
-  const prevLevelRef = useRef<number | null>(null);
 
   useEffect(() => {
-    // First load: just record level, no celebration
-    if (prevLevelRef.current === null) {
-      prevLevelRef.current = level;
+    // Persist last-celebrated level per uid: re-mounts (PWA reopen) and the
+    // initial default→fetched level transition would otherwise re-trigger.
+    if (!user?.uid || totalXP === 0) return;
+    const key = `celebratedLevel:${user.uid}`;
+    const raw = localStorage.getItem(key);
+    if (raw === null) {
+      localStorage.setItem(key, String(level));
       return;
     }
-    // Level went up: celebrate
-    if (level > prevLevelRef.current && totalXP > 0) {
+    const stored = Number(raw);
+    if (level > stored) {
       setState({ level, tier, show: true });
       if ('vibrate' in navigator) navigator.vibrate([20, 60, 40, 80, 60, 100]);
+      localStorage.setItem(key, String(level));
       const timer = setTimeout(() => setState(s => ({ ...s, show: false })), 3500);
-      prevLevelRef.current = level;
       return () => clearTimeout(timer);
     }
-    prevLevelRef.current = level;
-  }, [level, tier, totalXP]);
+  }, [level, tier, totalXP, user?.uid]);
 
   if (!state.show) return null;
 
