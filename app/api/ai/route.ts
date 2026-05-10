@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     body: JSON.stringify({
       model: body.model ?? DEFAULT_MODEL,
       messages: finalMessages,
-      temperature: 0.7,
+      temperature: 0.3,
       max_tokens: 4096,
     }),
   });
