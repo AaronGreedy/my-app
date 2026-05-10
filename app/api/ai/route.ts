@@ -1,18 +1,16 @@
 import { NextRequest } from 'next/server';
 
-// Node.js runtime (not Edge): Vercel "Sensitive" env vars are
-// only exposed to Node, so CEREBRAS_API_KEY is unavailable on Edge.
 export const runtime = 'nodejs';
 
 type Msg = { role: 'system' | 'user' | 'assistant'; content: string };
 
-const CEREBRAS_URL = 'https://api.cerebras.ai/v1/chat/completions';
-const DEFAULT_MODEL = 'qwen-3-235b-a22b-instruct-2507';
+const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
+const DEFAULT_MODEL = 'gemini-2.5-flash';
 
 export async function POST(req: NextRequest) {
-  const key = process.env.CEREBRAS_API_KEY;
+  const key = process.env.GEMINI_API_KEY;
   if (!key) {
-    return Response.json({ error: 'CEREBRAS_API_KEY non configurata su Vercel' }, { status: 500 });
+    return Response.json({ error: 'GEMINI_API_KEY non configurata su Vercel' }, { status: 500 });
   }
 
   let body: { messages?: Msg[]; system?: string; model?: string };
@@ -31,7 +29,7 @@ export async function POST(req: NextRequest) {
     ? [{ role: 'system', content: body.system }, ...messages]
     : messages;
 
-  const res = await fetch(CEREBRAS_URL, {
+  const res = await fetch(GEMINI_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -48,7 +46,7 @@ export async function POST(req: NextRequest) {
   if (!res.ok) {
     const text = await res.text();
     return Response.json(
-      { error: `Cerebras ${res.status}: ${text.slice(0, 300)}` },
+      { error: `Gemini ${res.status}: ${text.slice(0, 300)}` },
       { status: res.status },
     );
   }

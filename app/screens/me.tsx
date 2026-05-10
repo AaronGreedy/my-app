@@ -609,7 +609,7 @@ function MoodTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayData
         return;
       }
       const system = `Sei uno psicologo e coach di Aaron. Analizza il suo log mood + journal + allenamenti degli ultimi 30 giorni. Identifica pattern concreti (es. "i giorni di Pull stai meglio la sera", "dopo 2 giorni senza workout l'umore mattina cala", "tema ricorrente nelle note: …"). Rispondi in italiano, conciso (5-8 punti bullet), evita banalità tipo "fai più sport". Sii specifico citando date/correlazioni reali.\n\nDATI (ordine cronologico, ultimi 30gg loggati):\n${lines.join('\n')}`;
-      const res = await fetch('/api/cerebras', {
+      const res = await fetch('/api/ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ system, messages: [{ role: 'user', content: 'Analizza i pattern di umore, allenamento e pensieri.' }] }),
@@ -755,7 +755,7 @@ function MoodTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayData
       <NeonGlass style={{ marginTop:8 }} tint="linear-gradient(135deg,rgba(0,240,255,0.16),rgba(107,0,255,0.12))" edge="rgba(0,240,255,0.4)" radius={22}>
         <div style={{ padding:'14px 16px' }}>
           <div style={{ fontFamily:p.bodyFont, fontSize:12, color:p.muted, lineHeight:1.4, marginBottom:10 }}>
-            Cerebras analizza umore, allenamenti e journal — trova correlazioni reali, non frasi fatte.
+            L&apos;AI analizza umore, allenamenti e journal — trova correlazioni reali, non frasi fatte.
           </div>
           <button onClick={analyzePattern} disabled={aiLoading} style={{ width:'100%',padding:'12px',borderRadius:14,border:'none',background:aiLoading?'rgba(0,240,255,0.2)':p.cyan,color:'#0a0a0a',fontFamily:p.monoFont,fontSize:11,textTransform:'uppercase',cursor:aiLoading?'not-allowed':'pointer',fontWeight:800,letterSpacing:0.15 }}>
             {aiLoading ? '· · · ANALIZZO ·  · ·' : '↵ Analizza pattern'}
@@ -763,12 +763,12 @@ function MoodTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayData
 
           {aiError && (
             <div style={{ marginTop:12, padding:'12px 14px', borderRadius:12, border:`1px solid rgba(255,0,64,0.4)`, background:'rgba(255,0,64,0.08)', color:p.red, fontFamily:p.monoFont, fontSize:10 }}>
-              {aiError.toLowerCase().includes('cerebras_api_key') || aiError.toLowerCase().includes('non configurata') ? (
+              {aiError.toLowerCase().includes('gemini_api_key') || aiError.toLowerCase().includes('non configurata') ? (
                 <>
-                  <div style={{ fontWeight:700, marginBottom:5 }}>⚠ Cerebras non configurata</div>
+                  <div style={{ fontWeight:700, marginBottom:5 }}>⚠ AI non configurata</div>
                   <div style={{ color:p.fg, fontSize:10.5, lineHeight:1.5, fontFamily:p.bodyFont }}>
-                    Crea una key su <span style={{ color:p.cyan }}>cloud.cerebras.ai</span> →
-                    Vercel · Environments · <code style={{ color:p.orange }}>CEREBRAS_API_KEY</code> → Redeploy
+                    Crea una key su <span style={{ color:p.cyan }}>aistudio.google.com/apikey</span> →
+                    Vercel · Environments · <code style={{ color:p.orange }}>GEMINI_API_KEY</code> → Redeploy
                   </div>
                 </>
               ) : aiError}

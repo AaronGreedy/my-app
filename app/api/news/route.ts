@@ -94,15 +94,15 @@ async function fetchFeed(feed: Feed): Promise<NewsItem[]> {
 }
 
 async function translateTitlesIT(items: NewsItem[]): Promise<NewsItem[]> {
-  const key = process.env.CEREBRAS_API_KEY;
+  const key = process.env.GEMINI_API_KEY;
   if (!key || items.length === 0) return items;
   try {
     const list = items.map((it, i) => `${i + 1}. ${it.title}`).join('\n');
-    const res = await fetch('https://api.cerebras.ai/v1/chat/completions', {
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
       body: JSON.stringify({
-        model: 'qwen-3-235b-a22b-instruct-2507',
+        model: 'gemini-2.5-flash',
         messages: [
           { role: 'system', content: 'Translate the following English news headlines to natural Italian. Keep them tight and idiomatic. Output ONLY a JSON array of strings, same order, same length, nothing else. No code fences, no commentary.' },
           { role: 'user', content: list },
