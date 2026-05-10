@@ -267,6 +267,92 @@ function PinPad({ title, onSubmit, onCancel, confirmMode }: {
   );
 }
 
+// ─── News Section ──────────────────────────────────────────────────────────────
+
+interface NewsItem {
+  title: string;
+  link: string;
+  source: string;
+  pubDate: number;
+  description: string;
+}
+
+function relTime(ms: number): string {
+  const diff = Date.now() - ms;
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return 'ora';
+  if (min < 60) return `${min}min fa`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h}h fa`;
+  const d = Math.floor(h / 24);
+  return `${d}g fa`;
+}
+
+function NewsSection() {
+  const [items, setItems] = useState<NewsItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [lastFetch, setLastFetch] = useState<number>(0);
+
+  const load = async () => {
+    setLoading(true); setError('');
+    try {
+      const res = await fetch('/api/news', { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setItems((data.items ?? []) as NewsItem[]);
+      setLastFetch(Date.now());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Errore caricamento');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  return (
+    <div>
+      <SectionLabel num="01" title="NEWS FEED" hint={`${items.length} · AI · Design`}/>
+      <div style={{ display:'flex', gap:8, marginTop:8, alignItems:'center' }}>
+        <button onClick={load} disabled={loading} style={{ padding:'10px 14px', borderRadius:14, border:`1px solid ${p.border}`, background:'rgba(255,255,255,0.04)', color:p.muted, fontFamily:p.monoFont, fontSize:10, letterSpacing:0.12, textTransform:'uppercase', cursor:loading?'wait':'pointer' }}>
+          {loading ? '· · · CARICO ·  · ·' : '↻ Aggiorna'}
+        </button>
+        {lastFetch > 0 && !loading && (
+          <span style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim }}>aggiornato {relTime(lastFetch)}</span>
+        )}
+      </div>
+
+      {error && (
+        <div style={{ marginTop:12, padding:'12px 14px', borderRadius:12, border:`1px solid rgba(255,0,64,0.4)`, background:'rgba(255,0,64,0.08)', color:p.red, fontFamily:p.monoFont, fontSize:10 }}>{error}</div>
+      )}
+
+      <div style={{ display:'flex', flexDirection:'column', gap:8, marginTop:12 }}>
+        {items.map(it => (
+          <a key={it.link} href={it.link} target="_blank" rel="noopener noreferrer" style={{ textDecoration:'none' }}>
+            <NeonGlass tint="rgba(255,255,255,0.03)" radius={16}>
+              <div style={{ padding:'12px 14px' }}>
+                <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:5 }}>
+                  <span style={{ fontFamily:p.monoFont, fontSize:9, color:p.cyan, letterSpacing:0.15, textTransform:'uppercase' }}>{it.source}</span>
+                  <span style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim }}>· {relTime(it.pubDate)}</span>
+                </div>
+                <div style={{ fontFamily:p.bodyFont, fontSize:14, color:p.fg, lineHeight:1.35, fontWeight:600 }}>{it.title}</div>
+                {it.description && (
+                  <div style={{ fontFamily:p.bodyFont, fontSize:12, color:p.muted, lineHeight:1.4, marginTop:4 }}>{it.description}</div>
+                )}
+              </div>
+            </NeonGlass>
+          </a>
+        ))}
+      </div>
+
+      {!loading && !error && items.length === 0 && (
+        <div style={{ textAlign:'center', padding:'40px 0', fontFamily:p.monoFont, fontSize:11, color:p.dim }}>nessuna news disponibile</div>
+      )}
+    </div>
+  );
+}
+
 // ─── Gifts Section ─────────────────────────────────────────────────────────────
 
 function GiftsSection({ uid }: { uid: string | null }) {
@@ -354,7 +440,7 @@ export function BrainScreen() {
   const { notes, addNote, deleteNote } = useNotes(user?.uid ?? null);
   const { items, addItem, toggleItem, removeItem, moveItem, clearAll } = useShoppingList(user?.uid ?? null);
 
-  const [section, setSection] = useState<'brain'|'spesa'|'regali'>('brain');
+  const [section, setSection] = useState<'brain'|'spesa'|'regali'|'news'>('brain');
   const [view, setView]     = useState<'list'|'graph'>('list');
   const [search, setSearch] = useState('');
   const [activeTag, setActiveTag] = useState<Tag | null>(null);
@@ -478,7 +564,7 @@ export function BrainScreen() {
 
         {/* Section tabs */}
         <div style={{ display:'flex', gap:5, marginTop:18 }}>
-          {([['brain','🧠 BRAIN'],['spesa','🛒 SPESA'],['regali','🎁 REGALI']] as [typeof section, string][]).map(([s, lbl]) => (
+          {([['brain','🧠 BRAIN'],['spesa','🛒 SPESA'],['regali','🎁 REGALI'],['news','📰 NEWS']] as [typeof section, string][]).map(([s, lbl]) => (
             <button key={s} onClick={() => setSection(s)} style={{ flex:1, padding:'10px 4px', borderRadius:14, border:`1px solid ${section===s?(s==='regali'?p.magenta:p.cyan):'rgba(255,255,255,0.1)'}`, background:section===s?(s==='regali'?'rgba(255,20,184,0.12)':'rgba(0,240,255,0.12)'):'transparent', color:section===s?p.fg:p.muted, cursor:'pointer', fontFamily:p.monoFont, fontSize:9, letterSpacing:0.12, textTransform:'uppercase' }}>
               {lbl}
             </button>
@@ -692,6 +778,9 @@ export function BrainScreen() {
 
         {/* ── REGALI TAB ── */}
         {section === 'regali' && <GiftsSection uid={user?.uid ?? null} />}
+
+        {/* ── NEWS TAB ── */}
+        {section === 'news' && <NewsSection/>}
 
       </div>
 
