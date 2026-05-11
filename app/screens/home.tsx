@@ -487,10 +487,10 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
               <span style={{ background: 'linear-gradient(120deg, #ffd400 0%, #ff6a00 35%, #ff0040 70%, #ff14b8 100%)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>AARON.</span>
             </div>
           </div>
-          <div style={{ fontFamily: p.monoFont, fontSize: 11, letterSpacing: 0.22, color: p.dim, textAlign: 'right', lineHeight: 1.5, marginLeft: 18, flexShrink: 0 }}>
+          <div style={{ fontFamily: p.monoFont, fontSize: 11, letterSpacing: 0.22, color: p.dim, textAlign: 'right', lineHeight: 1.5, marginLeft: 18, marginRight: 3, flexShrink: 0 }}>
             {now.toLocaleDateString('it-IT',{weekday:'short'}).toUpperCase()}<br/>
             {fmtItDateFromDate(now)}
-            <div style={{ fontSize: 8, opacity: 0.55, marginTop: 4, letterSpacing: 0.25 }}>build·{BUILD_SHA}</div>
+            <div style={{ fontSize: 10, color: p.fg, fontWeight: 700, marginTop: 4, letterSpacing: 0.25 }}>build·{BUILD_SHA}</div>
           </div>
         </div>
 
