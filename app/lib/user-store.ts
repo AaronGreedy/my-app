@@ -523,6 +523,7 @@ export interface UserSettings {
   novaTtsAuto: boolean;          // NOVA legge a voce di default
   novaBriefingOnOpen: boolean;   // mostra prompt di briefing NOVA all'apertura app
   novaVoicePremium: boolean;     // usa OpenAI TTS (voce naturale) se configurata
+  novaVoiceId: string;           // ElevenLabs voice_id custom ('' = usa default lato server)
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -542,6 +543,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   novaTtsAuto: true,
   novaBriefingOnOpen: false,
   novaVoicePremium: true,
+  novaVoiceId: '',
 };
 
 export function useUserSettings(uid: string | null) {
