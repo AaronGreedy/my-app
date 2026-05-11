@@ -85,9 +85,11 @@ function padHabits(arr: boolean[], len: number): boolean[] {
 
 export function useDayStore(uid: string | null) {
   const [data, setData] = useState<DayData>(EMPTY);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    if (!uid || !db) return;
+    if (!uid || !db) { setLoaded(true); return; }
+    setLoaded(false);
     const ref = doc(db, 'users', uid, 'days', todayKey());
     return onSnapshot(ref, snap => {
       if (snap.exists()) {
@@ -120,6 +122,7 @@ export function useDayStore(uid: string | null) {
       } else {
         setData(EMPTY);
       }
+      setLoaded(true);
     });
   }, [uid]);
 
@@ -129,7 +132,7 @@ export function useDayStore(uid: string | null) {
     setDoc(doc(db, 'users', uid, 'days', todayKey()), patch, { merge: true }).catch(console.error);
   };
 
-  return { data, save };
+  return { data, save, loaded };
 }
 
 export function useMonthData(uid: string | null, year: number, month: number) {

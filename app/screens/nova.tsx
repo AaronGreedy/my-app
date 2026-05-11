@@ -109,7 +109,7 @@ export function NovaScreen({ onBack, initialBriefing = false }: { onBack: () => 
   const toast = useToast();
 
   // Hooks dati — entrano nel contesto passato a Gemini
-  const { data: today } = useDayStore(uid);
+  const { data: today, loaded: todayLoaded } = useDayStore(uid);
   const { todos, addTodo } = useTodos(uid);
   const { notes, addNote } = useNotes(uid);
   const { countdowns, saveCountdowns } = useCountdowns(uid);
@@ -140,17 +140,19 @@ export function NovaScreen({ onBack, initialBriefing = false }: { onBack: () => 
     if (recRef.current) { try { recRef.current.stop(); } catch {} recRef.current = null; }
   }, []);
 
-  // Auto-briefing all'apertura se la pillola "Briefing" è il punto di ingresso
+  // Auto-briefing all'apertura — aspetta che il primo snapshot Firestore sia
+  // arrivato (todayLoaded), altrimenti si parte coi dati EMPTY e il briefing
+  // dice "0% FIT, 0L acqua, 0 Kcal" anche se hai loggato tutto.
   const briefingFiredRef = useRef(false);
   useEffect(() => {
-    if (initialBriefing && !briefingFiredRef.current) {
-      briefingFiredRef.current = true;
-      // ritardo minimo per assicurarsi che i dati Firestore siano arrivati
-      const t = setTimeout(() => send('Fammi il briefing della giornata.', 'briefing'), 350);
-      return () => clearTimeout(t);
-    }
+    if (!initialBriefing || briefingFiredRef.current) return;
+    if (!todayLoaded) return;
+    briefingFiredRef.current = true;
+    // micro-delay per dare tempo agli altri hook (todos/countdowns/notes) di sincronizzarsi
+    const t = setTimeout(() => send('Fammi il briefing della giornata.', 'briefing'), 250);
+    return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialBriefing]);
+  }, [initialBriefing, todayLoaded]);
 
   // ─── Costruzione contesto da passare a /api/ai/nova ──────────────────────
   const buildContext = useCallback(() => {
@@ -341,12 +343,20 @@ export function NovaScreen({ onBack, initialBriefing = false }: { onBack: () => 
           </button>
         </div>
 
-        {/* Quick chips */}
-        <div style={{ display:'flex', gap:6, marginBottom:10, flexWrap:'wrap' }}>
-          <button onClick={briefing} disabled={loading} style={{ padding:'7px 12px', borderRadius:99, border:`1px solid #a78bfa55`, background:'rgba(167,139,250,0.12)', color:'#a78bfa', fontFamily:p.monoFont, fontSize:10, letterSpacing:0.1, textTransform:'uppercase', cursor: loading ? 'not-allowed' : 'pointer', fontWeight:700 }}>✦ Briefing</button>
-          <button onClick={askObbligatoria} disabled={loading} style={{ padding:'7px 12px', borderRadius:99, border:`1px solid ${p.red}55`, background:'rgba(255,0,64,0.10)', color:p.red, fontFamily:p.monoFont, fontSize:10, letterSpacing:0.1, textTransform:'uppercase', cursor: loading ? 'not-allowed' : 'pointer' }}>!!! Obbligatoria</button>
-          <button onClick={askEasy} disabled={loading} style={{ padding:'7px 12px', borderRadius:99, border:`1px solid #ffd40055`, background:'rgba(255,212,0,0.08)', color:'#ffd400', fontFamily:p.monoFont, fontSize:10, letterSpacing:0.1, textTransform:'uppercase', cursor: loading ? 'not-allowed' : 'pointer' }}>! Easy</button>
-          <button onClick={analyze} disabled={loading} style={{ padding:'7px 12px', borderRadius:99, border:`1px solid ${p.cyan}55`, background:'rgba(0,240,255,0.10)', color:p.cyan, fontFamily:p.monoFont, fontSize:10, letterSpacing:0.1, textTransform:'uppercase', cursor: loading ? 'not-allowed' : 'pointer' }}>◇ Analizza</button>
+        {/* Quick chips — disabilitati finché i dati di oggi non sono arrivati */}
+        <div style={{ display:'flex', gap:6, marginBottom:10, flexWrap:'wrap', alignItems:'center' }}>
+          {(() => {
+            const dis = loading || !todayLoaded;
+            return (
+              <>
+                <button onClick={briefing} disabled={dis} style={{ padding:'7px 12px', borderRadius:99, border:`1px solid #a78bfa55`, background:'rgba(167,139,250,0.12)', color:'#a78bfa', fontFamily:p.monoFont, fontSize:10, letterSpacing:0.1, textTransform:'uppercase', cursor: dis ? 'not-allowed' : 'pointer', fontWeight:700, opacity: dis ? 0.5 : 1 }}>✦ Briefing</button>
+                <button onClick={askObbligatoria} disabled={dis} style={{ padding:'7px 12px', borderRadius:99, border:`1px solid ${p.red}55`, background:'rgba(255,0,64,0.10)', color:p.red, fontFamily:p.monoFont, fontSize:10, letterSpacing:0.1, textTransform:'uppercase', cursor: dis ? 'not-allowed' : 'pointer', opacity: dis ? 0.5 : 1 }}>!!! Obbligatoria</button>
+                <button onClick={askEasy} disabled={dis} style={{ padding:'7px 12px', borderRadius:99, border:`1px solid #ffd40055`, background:'rgba(255,212,0,0.08)', color:'#ffd400', fontFamily:p.monoFont, fontSize:10, letterSpacing:0.1, textTransform:'uppercase', cursor: dis ? 'not-allowed' : 'pointer', opacity: dis ? 0.5 : 1 }}>! Easy</button>
+                <button onClick={analyze} disabled={dis} style={{ padding:'7px 12px', borderRadius:99, border:`1px solid ${p.cyan}55`, background:'rgba(0,240,255,0.10)', color:p.cyan, fontFamily:p.monoFont, fontSize:10, letterSpacing:0.1, textTransform:'uppercase', cursor: dis ? 'not-allowed' : 'pointer', opacity: dis ? 0.5 : 1 }}>◇ Analizza</button>
+                {!todayLoaded && <span style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim, letterSpacing:0.15 }}>sincronizzo dati…</span>}
+              </>
+            );
+          })()}
         </div>
 
         {/* Conversation */}
