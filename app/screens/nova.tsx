@@ -170,23 +170,6 @@ async function speakPremium(text: string, voiceId?: string): Promise<PremiumResu
   }
 }
 
-// ─── Voice presets ───────────────────────────────────────────────────────────
-
-interface VoicePreset { id: string; name: string; desc: string; gender: 'F' | 'M' }
-const VOICE_PRESETS: VoicePreset[] = [
-  { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Sarah',     desc: 'giovane, brillante, naturale', gender: 'F' },
-  { id: 'XB0fDUnXU5powFXDhCwa', name: 'Charlotte', desc: 'intima, soft, british',        gender: 'F' },
-  { id: 'pFZP5JQG7iQjIQuC4Bku', name: 'Lily',      desc: 'calma, soothing',              gender: 'F' },
-  { id: 'XrExE9yKIg1WjnnlVkGX', name: 'Matilda',   desc: 'calda, conversazionale',       gender: 'F' },
-  { id: 'Xb7hH8MSUJpSbSDYk0k2', name: 'Alice',     desc: 'sicura, british',              gender: 'F' },
-  { id: 'cgSgspJ2msm6clMCkdW9', name: 'Jessica',   desc: 'espressiva, popular',          gender: 'F' },
-  { id: '9BWtsMINqrJLrRacOk9x', name: 'Aria',      desc: 'matura, scura, elegante',      gender: 'F' },
-  { id: 'JBFqnCBsd6RMkjVDRZzb', name: 'George',    desc: 'caldo, british',               gender: 'M' },
-  { id: 'onwK4e9ZLuTAKqWW03F9', name: 'Daniel',    desc: 'sicuro, british',              gender: 'M' },
-  { id: 'pNInz6obpgDQGcFmaJgB', name: 'Adam',      desc: 'maturo, profondo',             gender: 'M' },
-];
-
-const SAMPLE_PHRASE = 'Ciao Aaron, sono NOVA. Hai due cose aperte oggi, la più urgente è la rate macchina. Vediamo se chiudiamo qualcosa.';
 
 function stopSpeaking() {
   if (typeof window === 'undefined') return;
@@ -220,48 +203,22 @@ export function NovaScreen({ onBack, initialBriefing = false }: { onBack: () => 
   const [ttsOn, setTtsOn] = useState<boolean>(settings.novaTtsAuto ?? true);
   // Stato voce premium: true = ElevenLabs, false = browser. Sticky alla settings.
   const [premiumOn, setPremiumOn] = useState<boolean>(settings.novaVoicePremium ?? true);
-  const [voicePickerOpen, setVoicePickerOpen] = useState(false);
-  const [voiceSampling, setVoiceSampling] = useState<string | null>(null);
-  const [customVoiceId, setCustomVoiceId] = useState('');
-  // Voce attualmente impostata (custom + preset)
-  const currentVoiceId = settings.novaVoiceId || '';
-  const currentVoiceLabel = (() => {
-    const preset = VOICE_PRESETS.find(v => v.id === currentVoiceId);
-    if (preset) return preset.name;
-    if (currentVoiceId) return `custom · ${currentVoiceId.slice(0,8)}…`;
-    return 'default';
-  })();
 
   // Speak unificato: prova premium se attivo, fallback al browser TTS.
+  // Errore premium loggato come toast con status+msg per debug rapido.
   const speak = useCallback(async (text: string) => {
     if (!text.trim()) return;
     if (premiumOn) {
-      const r = await speakPremium(text, currentVoiceId || undefined);
+      const r = await speakPremium(text);
       if (r.ok) return;
-      // Se la premium fallisce (env mancante o errore), uso browser
+      // Mostro l'errore reale almeno una volta, poi cado in browser TTS
+      if (r.status || r.error) {
+        toast.err(`TTS ${r.status ?? '—'}: ${(r.error ?? 'fallita').slice(0, 120)}`);
+      }
     }
     speakBrowser(text);
-  }, [premiumOn, currentVoiceId]);
-
-  // Sample di una voce specifica (per voice picker)
-  const sampleVoice = async (voiceId: string) => {
-    if (voiceSampling) return;
-    setVoiceSampling(voiceId);
-    try {
-      const r = await speakPremium(SAMPLE_PHRASE, voiceId);
-      if (!r.ok) {
-        const code = r.status ?? '—';
-        toast.err(`TTS ${code}: ${(r.error ?? 'fallita').slice(0, 120)}`);
-      }
-    } finally {
-      // Lascia il loading per la durata stimata della frase, poi spegne
-      setTimeout(() => setVoiceSampling(null), 4500);
-    }
-  };
-  const setVoice = (voiceId: string) => {
-    saveSettings({ novaVoiceId: voiceId });
-    toast.ok(voiceId ? `Voce impostata: ${VOICE_PRESETS.find(v => v.id === voiceId)?.name ?? voiceId.slice(0,8)}` : 'Voce: default server');
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [premiumOn]);
   const recRef = useRef<SRInstance | null>(null);
   const baseTextRef = useRef('');
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -482,10 +439,6 @@ export function NovaScreen({ onBack, initialBriefing = false }: { onBack: () => 
             <span style={{ fontFamily:p.monoFont, fontSize:11, color:'#a78bfa', textTransform:'uppercase', letterSpacing:0.25, fontWeight:800 }}>NOVA</span>
             <span style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim }}>· il tuo super-AI</span>
           </div>
-          {/* Voice picker */}
-          <button onClick={() => setVoicePickerOpen(true)} title="Cambia voce" style={{ height:34, padding:'0 10px', borderRadius:11, border:`1px solid ${p.border}`, background:'transparent', color:p.muted, cursor:'pointer', fontFamily:p.monoFont, fontSize:9.5, letterSpacing:0.1, textTransform:'uppercase', display:'flex', alignItems:'center', gap:6 }}>
-            ✦ {currentVoiceLabel}
-          </button>
           {/* Toggle TTS */}
           <button onClick={() => { const next = !ttsOn; setTtsOn(next); saveSettings({ novaTtsAuto: next }); if (!next) stopSpeaking(); }} title={ttsOn ? 'Spegni voce' : 'Accendi voce'}
             style={{ width:34, height:34, borderRadius:11, border:`1px solid ${ttsOn ? '#a78bfa' : p.border}`, background: ttsOn ? 'rgba(167,139,250,0.15)' : 'transparent', color: ttsOn ? '#a78bfa' : p.muted, cursor:'pointer', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center' }}>
@@ -569,83 +522,6 @@ export function NovaScreen({ onBack, initialBriefing = false }: { onBack: () => 
         </div>
       </div>
 
-      {/* Voice picker bottom sheet */}
-      {voicePickerOpen && (
-        <div onClick={() => setVoicePickerOpen(false)} style={{ position:'absolute', inset:0, zIndex:120, background:'rgba(0,0,0,0.7)', backdropFilter:'blur(22px)', WebkitBackdropFilter:'blur(22px)', display:'flex', alignItems:'flex-end' }}>
-          <div onClick={e => e.stopPropagation()} style={{ width:'100%', maxHeight:'85%', overflowY:'auto', padding:'22px 18px calc(env(safe-area-inset-bottom, 0px) + 24px)', background:'rgba(10,8,6,0.96)', borderTop:`1px solid ${p.border}`, borderTopLeftRadius:28, borderTopRightRadius:28 }}>
-            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:14 }}>
-              <span style={{ fontFamily:p.monoFont, fontSize:10, color:'#a78bfa', textTransform:'uppercase', letterSpacing:0.2, fontWeight:800 }}>✦ VOCE NOVA</span>
-              <span style={{ flex:1 }}/>
-              <button onClick={() => setVoicePickerOpen(false)} style={{ background:'transparent', border:0, color:p.muted, fontFamily:p.monoFont, fontSize:11, cursor:'pointer' }}>chiudi ×</button>
-            </div>
-            <div style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim, marginBottom:14, lineHeight:1.5 }}>
-              tap ♪ per ascoltare il sample · tap nome per usarla. Costo per sample: ~150 char dal tuo cap mensile ElevenLabs.
-            </div>
-
-            {/* Default server (nessuna voce custom) */}
-            <button onClick={() => setVoice('')} style={{ width:'100%', textAlign:'left', padding:'10px 12px', borderRadius:12, border:`1px solid ${!currentVoiceId ? '#a78bfa' : p.border}`, background: !currentVoiceId ? 'rgba(167,139,250,0.15)' : 'transparent', color: !currentVoiceId ? p.fg : p.muted, fontFamily:p.bodyFont, fontSize:13, cursor:'pointer', marginBottom:6, display:'flex', alignItems:'center', gap:10 }}>
-              <span style={{ flex:1 }}>
-                <div style={{ fontWeight:700 }}>Default server</div>
-                <div style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim, marginTop:2 }}>quello che è settato lato server (ora: Sarah)</div>
-              </span>
-              {!currentVoiceId && <span style={{ fontFamily:p.monoFont, fontSize:9, color:'#a78bfa', textTransform:'uppercase' }}>✓ attiva</span>}
-            </button>
-
-            {/* Presets femminili */}
-            <div style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim, marginTop:14, marginBottom:6, textTransform:'uppercase', letterSpacing:0.18 }}>Femminili</div>
-            {VOICE_PRESETS.filter(v => v.gender === 'F').map(v => {
-              const isSel = currentVoiceId === v.id;
-              const isSampling = voiceSampling === v.id;
-              return (
-                <div key={v.id} style={{ display:'flex', gap:6, marginBottom:6 }}>
-                  <button onClick={() => sampleVoice(v.id)} disabled={!!voiceSampling} title="Ascolta sample" style={{ width:42, flexShrink:0, borderRadius:12, border:`1px solid ${isSampling ? '#a78bfa' : p.border}`, background: isSampling ? 'rgba(167,139,250,0.2)' : 'rgba(255,255,255,0.04)', color: isSampling ? '#a78bfa' : p.fg, cursor: voiceSampling ? 'not-allowed' : 'pointer', fontSize:16, opacity: voiceSampling && !isSampling ? 0.4 : 1 }}>
-                    {isSampling ? '●' : '♪'}
-                  </button>
-                  <button onClick={() => setVoice(v.id)} style={{ flex:1, textAlign:'left', padding:'10px 12px', borderRadius:12, border:`1px solid ${isSel ? '#a78bfa' : p.border}`, background: isSel ? 'rgba(167,139,250,0.15)' : 'transparent', color: isSel ? p.fg : p.muted, fontFamily:p.bodyFont, fontSize:13, cursor:'pointer', display:'flex', alignItems:'center', gap:10 }}>
-                    <span style={{ flex:1 }}>
-                      <div style={{ fontWeight:700 }}>{v.name}</div>
-                      <div style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim, marginTop:2 }}>{v.desc}</div>
-                    </span>
-                    {isSel && <span style={{ fontFamily:p.monoFont, fontSize:9, color:'#a78bfa', textTransform:'uppercase' }}>✓ attiva</span>}
-                  </button>
-                </div>
-              );
-            })}
-
-            {/* Presets maschili */}
-            <div style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim, marginTop:14, marginBottom:6, textTransform:'uppercase', letterSpacing:0.18 }}>Maschili</div>
-            {VOICE_PRESETS.filter(v => v.gender === 'M').map(v => {
-              const isSel = currentVoiceId === v.id;
-              const isSampling = voiceSampling === v.id;
-              return (
-                <div key={v.id} style={{ display:'flex', gap:6, marginBottom:6 }}>
-                  <button onClick={() => sampleVoice(v.id)} disabled={!!voiceSampling} title="Ascolta sample" style={{ width:42, flexShrink:0, borderRadius:12, border:`1px solid ${isSampling ? '#a78bfa' : p.border}`, background: isSampling ? 'rgba(167,139,250,0.2)' : 'rgba(255,255,255,0.04)', color: isSampling ? '#a78bfa' : p.fg, cursor: voiceSampling ? 'not-allowed' : 'pointer', fontSize:16, opacity: voiceSampling && !isSampling ? 0.4 : 1 }}>
-                    {isSampling ? '●' : '♪'}
-                  </button>
-                  <button onClick={() => setVoice(v.id)} style={{ flex:1, textAlign:'left', padding:'10px 12px', borderRadius:12, border:`1px solid ${isSel ? '#a78bfa' : p.border}`, background: isSel ? 'rgba(167,139,250,0.15)' : 'transparent', color: isSel ? p.fg : p.muted, fontFamily:p.bodyFont, fontSize:13, cursor:'pointer', display:'flex', alignItems:'center', gap:10 }}>
-                    <span style={{ flex:1 }}>
-                      <div style={{ fontWeight:700 }}>{v.name}</div>
-                      <div style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim, marginTop:2 }}>{v.desc}</div>
-                    </span>
-                    {isSel && <span style={{ fontFamily:p.monoFont, fontSize:9, color:'#a78bfa', textTransform:'uppercase' }}>✓ attiva</span>}
-                  </button>
-                </div>
-              );
-            })}
-
-            {/* Custom voice_id (italiane native dalla libreria) */}
-            <div style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim, marginTop:14, marginBottom:6, textTransform:'uppercase', letterSpacing:0.18 }}>Voice ID custom</div>
-            <div style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim, marginBottom:8, lineHeight:1.5 }}>
-              su <span style={{ color:p.cyan }}>elevenlabs.io/app/voice-library</span> filtra per lingua italiano, copia il voice_id e incollalo qui sotto
-            </div>
-            <div style={{ display:'flex', gap:6, marginBottom:6 }}>
-              <input value={customVoiceId} onChange={e => setCustomVoiceId(e.target.value.trim())} placeholder="voice_id da libreria" style={{ flex:1, padding:'10px 12px', borderRadius:12, border:`1px solid ${p.border}`, background:'rgba(255,255,255,0.05)', color:p.fg, fontFamily:p.monoFont, fontSize:12, outline:'none' }}/>
-              <button onClick={() => customVoiceId && sampleVoice(customVoiceId)} disabled={!customVoiceId || !!voiceSampling} style={{ padding:'10px 14px', borderRadius:12, border:`1px solid ${p.border}`, background:'rgba(255,255,255,0.04)', color: customVoiceId && !voiceSampling ? p.fg : p.dim, fontFamily:p.monoFont, fontSize:10, textTransform:'uppercase', cursor: customVoiceId && !voiceSampling ? 'pointer' : 'not-allowed' }}>♪</button>
-              <button onClick={() => customVoiceId && setVoice(customVoiceId)} disabled={!customVoiceId} style={{ padding:'10px 14px', borderRadius:12, border:0, background: customVoiceId ? '#a78bfa' : 'rgba(167,139,250,0.2)', color:'#0a0a0a', fontFamily:p.monoFont, fontSize:10, fontWeight:800, textTransform:'uppercase', cursor: customVoiceId ? 'pointer' : 'not-allowed' }}>usa</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

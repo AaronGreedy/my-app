@@ -565,20 +565,49 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
               <span style={{ fontFamily:p.monoFont, fontSize:9, color:p.green, textTransform:'uppercase' }}>+{weekly.challenge.xp} XP</span>
             ) : weekly.target > 1 ? (
               <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, flexShrink:0 }}>
-                <button onClick={() => {
-                  const wasOneFromComplete = weekly.progress + 1 >= weekly.target;
-                  weekly.incrementProgress();
-                  if (wasOneFromComplete) {
-                    addXP(weekly.challenge.xp);
-                    if (settings.showXpToast) toast.xp(weekly.challenge.xp, 'sfida settimanale!');
-                  } else {
-                    toast.show(`${weekly.progress + 1}/${weekly.target} · ${weekly.challenge.label}`, 'info');
-                  }
-                }} style={{ border:`1px solid #ffd40066`, background:'rgba(255,212,0,0.15)', borderRadius:10, padding:'5px 10px', cursor:'pointer', fontFamily:p.monoFont, fontSize:9, color:'#ffd400', textTransform:'uppercase', fontWeight:700, minWidth:54 }}>+1</button>
+                <button
+                  onClick={() => {
+                    if (weekly.lockedToday) {
+                      toast.show('Già contato oggi · si sblocca domani', 'info');
+                      return;
+                    }
+                    const wasOneFromComplete = weekly.progress + 1 >= weekly.target;
+                    weekly.incrementProgress();
+                    if (wasOneFromComplete) {
+                      addXP(weekly.challenge.xp);
+                      if (settings.showXpToast) toast.xp(weekly.challenge.xp, 'sfida settimanale!');
+                    } else {
+                      toast.show(`${weekly.progress + 1}/${weekly.target} · ${weekly.challenge.label}`, 'info');
+                    }
+                  }}
+                  disabled={weekly.lockedToday}
+                  title={weekly.lockedToday ? 'Già contato oggi · domani si sblocca' : 'Conta +1 per oggi'}
+                  style={{
+                    border: `1px solid ${weekly.lockedToday ? p.border : '#ffd40066'}`,
+                    background: weekly.lockedToday ? 'rgba(255,255,255,0.04)' : 'rgba(255,212,0,0.15)',
+                    borderRadius: 10, padding: '5px 10px',
+                    cursor: weekly.lockedToday ? 'not-allowed' : 'pointer',
+                    fontFamily: p.monoFont, fontSize: 9,
+                    color: weekly.lockedToday ? p.dim : '#ffd400',
+                    textTransform: 'uppercase', fontWeight: 700,
+                    minWidth: 54,
+                    opacity: weekly.lockedToday ? 0.55 : 1,
+                  }}>
+                  {weekly.lockedToday ? '🔒 oggi' : '+1'}
+                </button>
                 <span style={{ fontFamily:p.monoFont, fontSize:9, color:p.muted }}>{weekly.progress}/{weekly.target}</span>
               </div>
             ) : (
-              <button onClick={() => { weekly.markComplete(); addXP(weekly.challenge.xp); if (settings.showXpToast) toast.xp(weekly.challenge.xp, 'sfida settimanale!'); }} style={{ border:`1px solid #ffd40066`, background:'rgba(255,212,0,0.15)', borderRadius:10, padding:'7px 12px', cursor:'pointer', fontFamily:p.monoFont, fontSize:9, color:'#ffd400', textTransform:'uppercase', fontWeight:700 }}>FATTA</button>
+              <button
+                onClick={() => {
+                  if (weekly.lockedToday) { toast.show('Già contato oggi · si sblocca domani', 'info'); return; }
+                  weekly.markComplete(); addXP(weekly.challenge.xp);
+                  if (settings.showXpToast) toast.xp(weekly.challenge.xp, 'sfida settimanale!');
+                }}
+                disabled={weekly.lockedToday}
+                style={{ border:`1px solid ${weekly.lockedToday ? p.border : '#ffd40066'}`, background: weekly.lockedToday ? 'rgba(255,255,255,0.04)' : 'rgba(255,212,0,0.15)', borderRadius:10, padding:'7px 12px', cursor: weekly.lockedToday ? 'not-allowed' : 'pointer', fontFamily:p.monoFont, fontSize:9, color: weekly.lockedToday ? p.dim : '#ffd400', textTransform:'uppercase', fontWeight:700, opacity: weekly.lockedToday ? 0.55 : 1 }}>
+                {weekly.lockedToday ? '🔒 oggi' : 'FATTA'}
+              </button>
             )}
           </div>
         </NeonGlass>

@@ -7,6 +7,10 @@ type Msg = { role: 'system' | 'user' | 'assistant'; content: string };
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
 const DEFAULT_MODEL = 'gemini-2.5-flash';
 
+// Limiti per evitare abuso (anche da utenti autenticati)
+const MAX_MESSAGES = 60;
+const MAX_TOTAL_CHARS = 60_000;
+
 export async function POST(req: NextRequest) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) {
@@ -23,6 +27,13 @@ export async function POST(req: NextRequest) {
   const messages = body.messages ?? [];
   if (!Array.isArray(messages) || messages.length === 0) {
     return Response.json({ error: 'messages mancante' }, { status: 400 });
+  }
+  if (messages.length > MAX_MESSAGES) {
+    return Response.json({ error: `troppi messaggi (max ${MAX_MESSAGES})` }, { status: 413 });
+  }
+  const totalChars = messages.reduce((s, m) => s + (typeof m.content === 'string' ? m.content.length : 0), 0);
+  if (totalChars > MAX_TOTAL_CHARS) {
+    return Response.json({ error: `payload troppo grande (max ${MAX_TOTAL_CHARS} char)` }, { status: 413 });
   }
 
   const finalMessages: Msg[] = body.system

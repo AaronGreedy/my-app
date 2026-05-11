@@ -7,6 +7,9 @@ import { NextRequest } from 'next/server';
 
 export const runtime = 'nodejs';
 
+const MAX_MESSAGES = 80;
+const MAX_TOTAL_CHARS = 80_000;
+
 interface NovaContext {
   now?: string;          // ISO timestamp client-side
   slot?: string;         // 'morning' | 'afternoon' | 'evening'
@@ -213,6 +216,13 @@ export async function POST(req: NextRequest) {
   const messages = body.messages ?? [];
   if (!Array.isArray(messages) || messages.length === 0) {
     return Response.json({ error: 'messages mancante' }, { status: 400 });
+  }
+  if (messages.length > MAX_MESSAGES) {
+    return Response.json({ error: `troppi messaggi (max ${MAX_MESSAGES})` }, { status: 413 });
+  }
+  const totalChars = messages.reduce((s, m) => s + (typeof m.content === 'string' ? m.content.length : 0), 0);
+  if (totalChars > MAX_TOTAL_CHARS) {
+    return Response.json({ error: `payload troppo grande (max ${MAX_TOTAL_CHARS} char)` }, { status: 413 });
   }
 
   const system = buildSystemPrompt(body.context ?? {}, body.mode ?? 'chat');

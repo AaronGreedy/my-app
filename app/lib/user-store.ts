@@ -395,30 +395,41 @@ function pickChallenge(weekKey: string): WeeklyChallenge {
 }
 
 export function useWeeklyChallenge(uid: string | null) {
-  // Stored as Record<key, boolean | number>: legacy true = completed, number = current progress count
-  const [progressMap, setProgressMap] = useState<Record<string, boolean | number>>({});
+  // Storage: Record<key, boolean | number | string>:
+  //  - <weekKey>_<challId>     → number (progress count) o boolean (legacy)
+  //  - <weekKey>_<challId>_d   → string YYYY-MM-DD (data ultimo +1; serve a
+  //                              lockare il bottone per oggi, resetta domani)
+  const [progressMap, setProgressMap] = useState<Record<string, boolean | number | string>>({});
 
   useEffect(() => {
     if (!uid || !db) return;
     const ref = doc(db, 'users', uid);
     return onSnapshot(ref, snap => {
       if (snap.exists() && snap.data().weeklyChallenges) {
-        setProgressMap(snap.data().weeklyChallenges as Record<string, boolean | number>);
+        setProgressMap(snap.data().weeklyChallenges as Record<string, boolean | number | string>);
       }
     });
   }, [uid]);
 
+  const today = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  })();
   const weekKey = isoWeekKey(new Date());
   const challenge = pickChallenge(weekKey);
   const compositeKey = `${weekKey}_${challenge.id}`;
+  const dateKey = `${compositeKey}_d`;
   const target = challenge.target ?? 1;
   const stored = progressMap[compositeKey];
   const progress = typeof stored === 'number' ? stored : (stored === true ? target : 0);
   const completed = progress >= target;
+  const lastIncDate = typeof progressMap[dateKey] === 'string' ? (progressMap[dateKey] as string) : '';
+  // True se ho già fatto +1 oggi → bottone lockato fino a domani.
+  const lockedToday = lastIncDate === today;
 
   const incrementProgress = () => {
-    if (completed) return;
-    const next = { ...progressMap, [compositeKey]: progress + 1 };
+    if (completed || lockedToday) return;
+    const next = { ...progressMap, [compositeKey]: progress + 1, [dateKey]: today };
     setProgressMap(next);
     if (!uid || !db) return;
     setDoc(doc(db, 'users', uid), { weeklyChallenges: next }, { merge: true }).catch(console.error);
@@ -426,7 +437,9 @@ export function useWeeklyChallenge(uid: string | null) {
 
   const decrementProgress = () => {
     if (progress <= 0) return;
-    const next = { ...progressMap, [compositeKey]: progress - 1 };
+    // Decrement libera anche il lock di oggi (così se ho premuto per errore posso correggere).
+    const next: Record<string, boolean | number | string> = { ...progressMap, [compositeKey]: progress - 1 };
+    if (lockedToday) delete next[dateKey];
     setProgressMap(next);
     if (!uid || !db) return;
     setDoc(doc(db, 'users', uid), { weeklyChallenges: next }, { merge: true }).catch(console.error);
@@ -435,13 +448,13 @@ export function useWeeklyChallenge(uid: string | null) {
   // Backwards-compat alias
   const markComplete = () => {
     if (completed) return;
-    const next = { ...progressMap, [compositeKey]: target };
+    const next = { ...progressMap, [compositeKey]: target, [dateKey]: today };
     setProgressMap(next);
     if (!uid || !db) return;
     setDoc(doc(db, 'users', uid), { weeklyChallenges: next }, { merge: true }).catch(console.error);
   };
 
-  return { weekKey, challenge, completed, progress, target, incrementProgress, decrementProgress, markComplete };
+  return { weekKey, challenge, completed, progress, target, lockedToday, incrementProgress, decrementProgress, markComplete };
 }
 
 // ─── Work Tracker ─────────────────────────────────────────────────────────────
@@ -522,8 +535,7 @@ export interface UserSettings {
   pomodoroLongBreakMin: number;  // pausa lunga ogni 4
   novaTtsAuto: boolean;          // NOVA legge a voce di default
   novaBriefingOnOpen: boolean;   // mostra prompt di briefing NOVA all'apertura app
-  novaVoicePremium: boolean;     // usa OpenAI TTS (voce naturale) se configurata
-  novaVoiceId: string;           // ElevenLabs voice_id custom ('' = usa default lato server)
+  novaVoicePremium: boolean;     // usa ElevenLabs (voce naturale) se configurata
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -543,7 +555,6 @@ export const DEFAULT_SETTINGS: UserSettings = {
   novaTtsAuto: true,
   novaBriefingOnOpen: false,
   novaVoicePremium: true,
-  novaVoiceId: '',
 };
 
 export function useUserSettings(uid: string | null) {

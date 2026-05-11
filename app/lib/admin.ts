@@ -4,6 +4,7 @@
 
 import { cert, getApps, initializeApp, App } from 'firebase-admin/app';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
+import { getAuth, Auth, DecodedIdToken } from 'firebase-admin/auth';
 
 let app: App | null = null;
 
@@ -26,4 +27,26 @@ export function getAdminApp(): App | null {
 export function getAdminDb(): Firestore | null {
   const a = getAdminApp();
   return a ? getFirestore(a) : null;
+}
+
+export function getAdminAuth(): Auth | null {
+  const a = getAdminApp();
+  return a ? getAuth(a) : null;
+}
+
+// Verifica un Firebase ID token preso dall'header Authorization (Bearer <token>).
+// Ritorna il payload decoded se valido, null altrimenti.
+// Caller: gli endpoint AI/TTS che devono essere accessibili solo all'utente
+// autenticato. Senza Firebase Admin configurato → null (fail-closed).
+export async function verifyAuthHeader(authHeader: string | null): Promise<DecodedIdToken | null> {
+  if (!authHeader) return null;
+  const m = /^Bearer\s+(.+)$/i.exec(authHeader);
+  if (!m) return null;
+  const auth = getAdminAuth();
+  if (!auth) return null;
+  try {
+    return await auth.verifyIdToken(m[1]);
+  } catch {
+    return null;
+  }
 }

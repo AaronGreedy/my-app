@@ -45,7 +45,7 @@ function fmtKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
-interface Holiday { label: string; emoji: string; type: 'fest'|'religious'|'celebr' }
+interface Holiday { label: string; emoji: string; type: 'fest'|'religious'|'celebr'|'sunday' }
 
 function italianHolidays(year: number): Map<string, Holiday> {
   const easter = easterDate(year);
@@ -73,15 +73,18 @@ function italianHolidays(year: number): Map<string, Holiday> {
   return map;
 }
 
-// Festività tutte con lo stesso colore (magenta). Domeniche trattate come festa.
-const HOLIDAY_HEX = '#ff14b8';
+// Feste vere = giallo. Domeniche = magenta. Quando una festa cade di domenica,
+// la festa vince (giallo) perché dayHoliday() controlla prima la festa esplicita.
+const HOLIDAY_FEST_HEX   = '#ffd400'; // tutte le festività reali (fest/religious/celebr)
+const HOLIDAY_SUNDAY_HEX = '#ff14b8'; // domeniche "normali" senza festa
 const HOLIDAY_COLOR: Record<Holiday['type'], string> = {
-  fest:      HOLIDAY_HEX,
-  religious: HOLIDAY_HEX,
-  celebr:    HOLIDAY_HEX,
+  fest:      HOLIDAY_FEST_HEX,
+  religious: HOLIDAY_FEST_HEX,
+  celebr:    HOLIDAY_FEST_HEX,
+  sunday:    HOLIDAY_SUNDAY_HEX,
 };
-const SUNDAY_HOLIDAY: Holiday = { label: 'Domenica', emoji: '🛐', type: 'fest' };
-// Restituisce festività esplicita o, se domenica, il marker domenicale.
+const SUNDAY_HOLIDAY: Holiday = { label: 'Domenica', emoji: '🛐', type: 'sunday' };
+// Restituisce festività esplicita (giallo) o, se domenica senza festa, marker domenica (magenta).
 function dayHoliday(date: Date, holidays: Map<string, Holiday>): Holiday | undefined {
   const explicit = holidays.get(fmtKey(date));
   if (explicit) return explicit;
@@ -309,7 +312,7 @@ export function CalendarScreen() {
         })()}
 
         <div style={{ display:'flex', gap:12, marginTop:12, flexWrap:'wrap' }}>
-          {([['Allenamento',p.orange],['Mood',p.green],['Eventi',p.cyan],['Festa',HOLIDAY_COLOR.fest]] as [string,string][]).map(([l,c]) => (
+          {([['Allenamento',p.orange],['Mood',p.green],['Eventi',p.cyan],['Festa',HOLIDAY_FEST_HEX],['Domenica',HOLIDAY_SUNDAY_HEX]] as [string,string][]).map(([l,c]) => (
             <div key={l} style={{ display:'flex', alignItems:'center', gap:5 }}>
               <div style={{ width:6,height:6,borderRadius:'50%',background:c }}/>
               <span style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim }}>{l}</span>

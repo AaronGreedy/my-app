@@ -91,20 +91,20 @@ function buildLinkGraph(notes: BrainNote[]) {
 
 interface GraphNode { id: string; title: string; x: number; y: number; vx: number; vy: number; deg: number }
 
-function forceLayout(notes: BrainNote[], edges: [string, string, ...unknown[]][], W: number, H: number, iters = 180): GraphNode[] {
+function forceLayout(notes: BrainNote[], edges: [string, string, ...unknown[]][], W: number, H: number, iters = 260): GraphNode[] {
   if (notes.length === 0) return [];
   const cx = W / 2, cy = H / 2;
   // Inizializzo i nodi su una spirale (più centrale di un cerchio) per evitare
   // che la sola repulsione li scaraventi sui bordi prima del primo step.
-  const R = Math.min(W, H) * 0.18;
+  const R = Math.min(W, H) * 0.22;
   const nodes: GraphNode[] = notes.map((n, i) => {
     const t = i / Math.max(1, notes.length - 1);
     const ang = t * Math.PI * 4;
     return {
       id: n.id,
       title: n.title,
-      x: cx + Math.cos(ang) * R * (0.4 + t * 0.8),
-      y: cy + Math.sin(ang) * R * (0.4 + t * 0.8),
+      x: cx + Math.cos(ang) * R * (0.5 + t * 0.9),
+      y: cy + Math.sin(ang) * R * (0.5 + t * 0.9),
       vx: 0, vy: 0,
       deg: 0,
     };
@@ -116,14 +116,13 @@ function forceLayout(notes: BrainNote[], edges: [string, string, ...unknown[]][]
     if (bi !== undefined) nodes[bi].deg++;
   }
 
-  // Parametri ricalibrati: repulsione meno aggressiva a distanze grandi
-  // (lineare anziché quadratica), molla più morbida, gravità verso il centro
-  // 4× più forte. I nodi senza collegamenti restano comunque vicini al centro.
-  const REPEL = 1800;
-  const SPRING = 0.04;
-  const SPRING_LEN = 70;
-  const DAMP = 0.78;
-  const CENTER = 0.022;
+  // Repulsione 2× più forte per dare spazio alle etichette; gravità centrale
+  // più debole per non collassare tutto al centro; molla più lunga.
+  const REPEL = 3600;
+  const SPRING = 0.035;
+  const SPRING_LEN = 95;
+  const DAMP = 0.80;
+  const CENTER = 0.012;
   const MAX_V = 8;
 
   for (let it = 0; it < iters; it++) {
@@ -508,6 +507,8 @@ export function BrainScreen() {
   const [newTags, setNewTags] = useState<Tag[]>([]);
   const [newHeader, setNewHeader] = useState<string>('');
   const [newItem, setNewItem] = useState('');
+  const [showPrompts, setShowPrompts] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
 
   // Modal di modifica/full-text di una nota esistente
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -665,46 +666,55 @@ export function BrainScreen() {
         {/* ── BRAIN TAB ── */}
         {section === 'brain' && (
           <>
-            <div style={{ marginTop:16, display:'flex', flexDirection:'column', gap:8 }}>
-              {getDailyPrompts().map((prompt, i) => {
-                const c = CAT_COLORS[prompt.cat];
-                return (
-                  <NeonGlass key={i} tint={`linear-gradient(135deg,${c}33,${c}14)`} edge={`${c}66`} glow={c} radius={20}>
-                    <div style={{ padding:'12px 14px' }}>
-                      <div style={{ fontFamily:p.monoFont, fontSize:9, color:c, letterSpacing:0.2, textTransform:'uppercase', marginBottom:6, display:'flex', alignItems:'center', gap:6 }}>
-                        <MarkerStar4 size={9} color={c}/> {prompt.cat.toUpperCase()} · {i+1}/3
-                      </div>
-                      <div style={{ fontFamily:p.bodyFont, fontSize:13.5, color:p.fg, lineHeight:1.35, fontStyle:'italic' }}>
-                        &ldquo;{prompt.q}&rdquo;
-                      </div>
-                      <NeonGlass style={{ marginTop:10 }} radius={11} tint={`${c}26`} edge={`${c}55`} onClick={() => { setNewHeader(prompt.q); setNewBody(''); setNewTags(['mindfulness']); setShowNew(true); }}>
-                        <div style={{ padding:'7px 12px', fontFamily:p.monoFont, fontSize:9.5, color:c, textAlign:'center', textTransform:'uppercase' }}>↵ Rispondi nel brain</div>
-                      </NeonGlass>
-                    </div>
-                  </NeonGlass>
-                );
-              })}
-            </div>
-
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cerca nel brain…"
-              style={{ width:'100%', padding:'12px 16px', borderRadius:16, border:`1px solid ${p.border}`, background:'rgba(255,255,255,0.05)', color:p.fg, fontFamily:p.bodyFont, fontSize:15, outline:'none', marginTop:16 }} />
-
-            <div style={{ display:'flex', gap:6, marginTop:10, flexWrap:'wrap' }}>
-              {TAGS.map(t => (
-                <button key={t} onClick={() => setActiveTag(activeTag === t ? null : t)} style={{ padding:'5px 12px', borderRadius:99, border:`1px solid ${activeTag === t ? TC[t] : 'rgba(255,255,255,0.12)'}`, background:activeTag === t ? `${TC[t]}22` : 'transparent', color:activeTag === t ? TC[t] : p.muted, fontFamily:p.monoFont, fontSize:9.5, letterSpacing:0.12, textTransform:'uppercase', cursor:'pointer' }}>{t}</button>
-              ))}
-            </div>
-
-            <SectionLabel num="01" title="VIEW" hint={view === 'todo' ? `${todos.filter(t=>!t.done).length} todo · ${todos.filter(t=>t.done).length} fatti` : `${filtered.length} nota${filtered.length!==1?'e':''} · ${graphEdges.length} link`}/>
-
-            {/* Todo/Graph/List view toggle */}
-            <div style={{ display:'flex', gap:5, marginTop:8 }}>
+            {/* View toggle (subito visibile, è il primo gesto) */}
+            <div style={{ display:'flex', gap:5, marginTop:16 }}>
               {([['todo','✓ TODO'],['graph','◇ GRAPH'],['list','☰ LISTA']] as [typeof view, string][]).map(([v, lbl]) => (
-                <button key={v} onClick={() => setView(v)} style={{ flex:1, padding:'7px 4px', borderRadius:11, border:`1px solid ${view===v?p.cyan:'rgba(255,255,255,0.1)'}`, background:view===v?'rgba(0,240,255,0.12)':'transparent', color:view===v?p.cyan:p.muted, fontFamily:p.monoFont, fontSize:9, letterSpacing:0.12, textTransform:'uppercase', cursor:'pointer' }}>
+                <button key={v} onClick={() => setView(v)} style={{ flex:1, padding:'9px 4px', borderRadius:12, border:`1px solid ${view===v?p.cyan:'rgba(255,255,255,0.1)'}`, background:view===v?'rgba(0,240,255,0.12)':'transparent', color:view===v?p.cyan:p.muted, fontFamily:p.monoFont, fontSize:10, letterSpacing:0.12, textTransform:'uppercase', cursor:'pointer', fontWeight:700 }}>
                   {lbl}
                 </button>
               ))}
             </div>
+            <div style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim, marginTop:6, textAlign:'right' }}>
+              {view === 'todo' ? `${todos.filter(t=>!t.done).length} todo · ${todos.filter(t=>t.done).length} fatti` : `${filtered.length} nota${filtered.length!==1?'e':''} · ${graphEdges.length} link`}
+            </div>
+
+            {/* Riga compatta: ricerca + filtri + prompts. Tutto collassabile. */}
+            <div style={{ display:'flex', gap:6, marginTop:10, alignItems:'center' }}>
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cerca…"
+                style={{ flex:1, padding:'10px 12px', borderRadius:12, border:`1px solid ${p.border}`, background:'rgba(255,255,255,0.05)', color:p.fg, fontFamily:p.bodyFont, fontSize:14, outline:'none' }} />
+              <button onClick={() => setShowFilters(s => !s)} style={{ padding:'10px 12px', borderRadius:12, border:`1px solid ${(showFilters||activeTag) ? p.cyan : p.border}`, background: (showFilters||activeTag) ? 'rgba(0,240,255,0.10)' : 'rgba(255,255,255,0.03)', color: (showFilters||activeTag) ? p.cyan : p.muted, fontFamily:p.monoFont, fontSize:9.5, textTransform:'uppercase', cursor:'pointer' }}>
+                🏷 {activeTag ?? 'tag'}
+              </button>
+              <button onClick={() => setShowPrompts(s => !s)} style={{ padding:'10px 12px', borderRadius:12, border:`1px solid ${showPrompts ? '#ffd400' : p.border}`, background: showPrompts ? 'rgba(255,212,0,0.10)' : 'rgba(255,255,255,0.03)', color: showPrompts ? '#ffd400' : p.muted, fontFamily:p.monoFont, fontSize:9.5, textTransform:'uppercase', cursor:'pointer' }}>
+                ✦ prompts
+              </button>
+            </div>
+
+            {/* Filtri tag (collassabile) */}
+            {showFilters && (
+              <div style={{ display:'flex', gap:5, marginTop:8, flexWrap:'wrap' }}>
+                {TAGS.map(t => (
+                  <button key={t} onClick={() => setActiveTag(activeTag === t ? null : t)} style={{ padding:'5px 11px', borderRadius:99, border:`1px solid ${activeTag === t ? TC[t] : 'rgba(255,255,255,0.12)'}`, background:activeTag === t ? `${TC[t]}22` : 'transparent', color:activeTag === t ? TC[t] : p.muted, fontFamily:p.monoFont, fontSize:9, letterSpacing:0.12, textTransform:'uppercase', cursor:'pointer' }}>{t}</button>
+                ))}
+              </div>
+            )}
+
+            {/* Prompts di oggi (collassabile, non più sempre in faccia) */}
+            {showPrompts && (
+              <div style={{ marginTop:10, display:'flex', flexDirection:'column', gap:6 }}>
+                {getDailyPrompts().map((prompt, i) => {
+                  const c = CAT_COLORS[prompt.cat];
+                  return (
+                    <NeonGlass key={i} tint={`linear-gradient(135deg,${c}22,${c}0a)`} edge={`${c}44`} radius={14} onClick={() => { setNewHeader(prompt.q); setNewBody(''); setNewTags(['mindfulness']); setShowNew(true); }}>
+                      <div style={{ padding:'10px 12px' }}>
+                        <div style={{ fontFamily:p.monoFont, fontSize:8.5, color:c, letterSpacing:0.18, textTransform:'uppercase', marginBottom:3 }}>{prompt.cat}</div>
+                        <div style={{ fontFamily:p.bodyFont, fontSize:13, color:p.fg, lineHeight:1.3, fontStyle:'italic' }}>&ldquo;{prompt.q}&rdquo;</div>
+                      </div>
+                    </NeonGlass>
+                  );
+                })}
+              </div>
+            )}
 
             {/* TODO view */}
             {view === 'todo' && (
