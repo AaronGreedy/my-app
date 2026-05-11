@@ -65,17 +65,19 @@ async function unsubscribeServerPush(): Promise<void> {
 }
 
 export interface NotifPrefs {
-  enabled: boolean;
-  morning: string; // HH:MM
-  evening: string;
-  task:    string;
+  enabled:   boolean;
+  morning:   string; // HH:MM
+  afternoon: string;
+  evening:   string;
+  task:      string;
 }
 
 export const DEFAULT_NOTIF_PREFS: NotifPrefs = {
-  enabled: false,
-  morning: '08:30',
-  evening: '20:00',
-  task:    '18:00',
+  enabled:   false,
+  morning:   '08:30',
+  afternoon: '14:00',
+  evening:   '20:00',
+  task:      '18:00',
 };
 
 const FIRED_KEY = 'notif_fired_v1';
@@ -188,9 +190,10 @@ export function useNotifications(uid: string | null) {
         writeFired(fired);
       };
 
-      trySlot('morning', prefs.morning, 'Mood mattina ☀',  'Come ti senti stamattina?');
-      trySlot('evening', prefs.evening, 'Mood sera 🌙',      'Rifletti sulla giornata');
-      trySlot('task',    prefs.task,    'Cosa di oggi 🎯',   'Hai completato il task del giorno?');
+      trySlot('morning',   prefs.morning,   'Mood mattina ☀',     'Come ti senti stamattina?');
+      trySlot('afternoon', prefs.afternoon, 'Mood pomeriggio 🌤', 'Pausa: come va l’energia?');
+      trySlot('evening',   prefs.evening,   'Mood sera 🌙',        'Rifletti sulla giornata');
+      trySlot('task',      prefs.task,      'Cosa di oggi 🎯',     'Hai completato il task del giorno?');
     };
 
     tick();

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { p } from '@/lib/design';
+import { p, fmtItDate } from '@/lib/design';
 import { AARON_COUNTDOWN_PRESETS, Countdown, daysUntil } from '@/lib/user-store';
 
 export function CountdownEditor({ countdowns, saveCountdowns, onClose }: {
@@ -52,6 +52,7 @@ export function CountdownEditor({ countdowns, saveCountdowns, onClose }: {
             onChange={e => setList(prev => prev.map(x => x.id === c.id ? { ...x, date: e.target.value } : x))}
             style={{ background:'transparent',border:'none',outline:'none',color:p.muted,fontFamily:p.monoFont,fontSize:10,padding:0,colorScheme:'dark' }}
           />
+          {c.date && <span style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim,whiteSpace:'nowrap' }}>{fmtItDate(c.date)}</span>}
           <input
             value={c.note}
             onChange={e => setList(prev => prev.map(x => x.id === c.id ? { ...x, note: e.target.value } : x))}
@@ -89,7 +90,10 @@ export function CountdownEditor({ countdowns, saveCountdowns, onClose }: {
         <div style={{ marginTop:14,padding:'14px 16px',borderRadius:16,background:'rgba(255,106,0,0.08)',border:`1px solid rgba(255,106,0,0.3)` }}>
           <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim,textTransform:'uppercase',marginBottom:10 }}>+ NUOVO</div>
           <input value={label} onChange={e=>setLabel(e.target.value)} placeholder="Nome evento" style={{ width:'100%',background:'transparent',border:'none',borderBottom:`1px solid ${p.border}`,outline:'none',color:p.fg,fontFamily:p.bodyFont,fontSize:15,padding:'5px 0',marginBottom:10 }}/>
-          <input type="date" value={date} onChange={e=>setDate(e.target.value)} style={{ width:'100%',background:'transparent',border:'none',borderBottom:`1px solid ${p.border}`,outline:'none',color:p.fg,fontFamily:p.monoFont,fontSize:13,padding:'5px 0',marginBottom:10,colorScheme:'dark' }}/>
+          <div style={{ display:'flex', alignItems:'baseline', gap:8, marginBottom:10 }}>
+            <input type="date" value={date} onChange={e=>setDate(e.target.value)} style={{ flex:1,background:'transparent',border:'none',borderBottom:`1px solid ${p.border}`,outline:'none',color:p.fg,fontFamily:p.monoFont,fontSize:13,padding:'5px 0',colorScheme:'dark' }}/>
+            {date && <span style={{ fontFamily:p.monoFont,fontSize:11,color:p.orange,letterSpacing:0.1 }}>{fmtItDate(date)}</span>}
+          </div>
           <input value={note} onChange={e=>setNote(e.target.value)} placeholder="Note (opzionale)" style={{ width:'100%',background:'transparent',border:'none',borderBottom:`1px solid ${p.border}`,outline:'none',color:p.fg,fontFamily:p.bodyFont,fontSize:13,padding:'5px 0' }}/>
           <button onClick={add} style={{ marginTop:12,padding:'9px 20px',borderRadius:12,border:'none',background:p.orange,color:'#0a0a0a',fontFamily:p.monoFont,fontSize:10,textTransform:'uppercase',cursor:'pointer',fontWeight:800 }}>+ Aggiungi</button>
         </div>

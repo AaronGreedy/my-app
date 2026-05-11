@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { p } from '@/lib/design';
+import { p, fmtItDate, fmtItDateFromDate } from '@/lib/design';
 import { NeonGlass, SectionLabel } from '@/components/neon-glass';
 import { MarkerDiamond, MarkerStar4 } from '@/components/markers';
 import { useAuth } from '@/lib/auth-context';
@@ -73,11 +73,21 @@ function italianHolidays(year: number): Map<string, Holiday> {
   return map;
 }
 
+// Festività tutte con lo stesso colore (magenta). Domeniche trattate come festa.
+const HOLIDAY_HEX = '#ff14b8';
 const HOLIDAY_COLOR: Record<Holiday['type'], string> = {
-  fest:      '#ff14b8',
-  religious: '#a78bfa',
-  celebr:    '#ffd400',
+  fest:      HOLIDAY_HEX,
+  religious: HOLIDAY_HEX,
+  celebr:    HOLIDAY_HEX,
 };
+const SUNDAY_HOLIDAY: Holiday = { label: 'Domenica', emoji: '🛐', type: 'fest' };
+// Restituisce festività esplicita o, se domenica, il marker domenicale.
+function dayHoliday(date: Date, holidays: Map<string, Holiday>): Holiday | undefined {
+  const explicit = holidays.get(fmtKey(date));
+  if (explicit) return explicit;
+  if (date.getDay() === 0) return SUNDAY_HOLIDAY;
+  return undefined;
+}
 
 export function CalendarScreen() {
   const today = new Date();
@@ -219,7 +229,7 @@ export function CalendarScreen() {
                 const hasFit  = (monthData[k]?.workouts?.length ?? 0) > 0;
                 const mood    = (monthData[k]?.mood ?? null) as MoodId | null;
                 const hasEvent = (eventsByDay[day]?.length ?? 0) > 0;
-                const holiday = holidays.get(k);
+                const holiday = dayHoliday(new Date(vy, vm, day), holidays);
                 return (
                   <button key={day} onClick={() => setSelDay(day)} style={{
                     border:`1px solid ${isToday ? 'rgba(166,255,0,0.6)' : isSel ? 'rgba(255,106,0,0.6)' : holiday ? `${HOLIDAY_COLOR[holiday.type]}55` : 'transparent'}`,
@@ -265,7 +275,7 @@ export function CalendarScreen() {
                   const hasFit  = (dd?.workouts?.length ?? 0) > 0;
                   const mood    = (dd?.mood ?? dd?.moodEvening ?? null) as MoodId | null;
                   const evts    = eventsByDay[d.getDate()] ?? (d.getMonth() === vm ? [] : []);
-                  const holiday = holidays.get(k);
+                  const holiday = dayHoliday(d, holidays);
                   return (
                     <button key={k} onClick={() => { setSelDay(d.getDate()); if (d.getMonth() !== vm || d.getFullYear() !== vy) { setVm(d.getMonth()); setVy(d.getFullYear()); } }} style={{
                       display:'flex', alignItems:'center', gap:10, padding:'12px 14px', borderRadius:14,
@@ -317,11 +327,11 @@ export function CalendarScreen() {
             const d = new Date(iso);
             return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
           };
-          const holiday = holidays.get(k);
+          const holiday = dayHoliday(new Date(vy, vm, selDay), holidays);
           return (
             <NeonGlass style={{ marginTop:14 }} tint={holiday ? `${HOLIDAY_COLOR[holiday.type]}11` : 'rgba(255,255,255,0.04)'} edge={holiday ? `${HOLIDAY_COLOR[holiday.type]}55` : undefined} radius={20}>
               <div style={{ padding:'14px 16px' }}>
-                <div style={{ fontFamily:p.monoFont, fontSize:10, color:p.orange, textTransform:'uppercase' }}>{selDay} {M_NAMES[vm]}</div>
+                <div style={{ fontFamily:p.monoFont, fontSize:10, color:p.orange, textTransform:'uppercase' }}>{fmtItDateFromDate(new Date(vy, vm, selDay))}</div>
                 {holiday && (
                   <div style={{ marginTop:4, fontFamily:p.monoFont, fontSize:11, color:HOLIDAY_COLOR[holiday.type], textTransform:'uppercase', letterSpacing:0.15 }}>
                     {holiday.emoji} {holiday.label}
@@ -378,7 +388,7 @@ export function CalendarScreen() {
                 <div style={{ fontFamily:p.displayFont, fontSize:36, fontWeight:800, color:p.orange, lineHeight:1, minWidth:52 }}>{c.days}<span style={{ fontSize:11,color:p.muted,fontFamily:p.monoFont }}>g</span></div>
                 <div style={{ flex:1 }}>
                   <div style={{ fontFamily:p.displayFont, fontWeight:700, fontSize:15, textTransform:'uppercase' }}>{c.label}</div>
-                  {c.note && <div style={{ fontFamily:p.monoFont, fontSize:9.5, color:p.muted, marginTop:2 }}>{c.note}</div>}
+                  <div style={{ fontFamily:p.monoFont, fontSize:9.5, color:p.muted, marginTop:2 }}>{fmtItDate(c.date)}{c.note ? ` · ${c.note}` : ''}</div>
                 </div>
                 <span style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim, textTransform:'uppercase' }}>EDIT</span>
               </div>

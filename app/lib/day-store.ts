@@ -11,9 +11,11 @@ export interface DayData {
   mood: MoodId | null;
   habits: boolean[];          // 4 home habits
   moodMorning: MoodId | null;
+  moodAfternoon: MoodId | null;   // mood pomeridiano (14:00)
   moodEvening: MoodId | null;
   moodNote: string;
   moodNoteM: string;          // morning journal note
+  moodNoteA: string;          // afternoon journal note
   moodNoteE: string;          // evening journal note
   meHabits: boolean[];        // 10 me-habits (8 good + 2 bad)
   mealSelected: (string|null)[];
@@ -26,6 +28,16 @@ export interface DayData {
   todayDone: boolean;
   sleepHours: number;         // ore di sonno scorsa notte (0 = non loggato)
   sleepQuality: number;       // 1-5 (0 = non loggato)
+  // Snapshot meteo del giorno (catturato al primo mood loggato)
+  weatherSnap?: {
+    tempC: number;
+    code: number;
+    label: string;
+    rainPct: number;
+    capturedAt: number;
+  };
+  // Fase lunare del giorno (one of: new, waxing-crescent, first-quarter, waxing-gibbous, full, waning-gibbous, last-quarter, waning-crescent)
+  moonPhase?: string;
 }
 
 const EMPTY_ME_HABITS = Array(10).fill(false) as boolean[];
@@ -37,9 +49,11 @@ const EMPTY: DayData = {
   mood: null,
   habits: [false, false, false, false],
   moodMorning: null,
+  moodAfternoon: null,
   moodEvening: null,
   moodNote: '',
   moodNoteM: '',
+  moodNoteA: '',
   moodNoteE: '',
   meHabits: EMPTY_ME_HABITS,
   mealSelected: EMPTY_MEALS,
@@ -82,10 +96,12 @@ export function useDayStore(uid: string | null) {
           water:            typeof d.water === 'number'      ? d.water            : 0,
           mood:             (d.mood        ?? null)           as MoodId | null,
           habits:           Array.isArray(d.habits)           ? d.habits           : [false,false,false,false],
-          moodMorning:      (d.moodMorning ?? null)           as MoodId | null,
-          moodEvening:      (d.moodEvening ?? null)           as MoodId | null,
+          moodMorning:      (d.moodMorning   ?? null)         as MoodId | null,
+          moodAfternoon:    (d.moodAfternoon ?? null)         as MoodId | null,
+          moodEvening:      (d.moodEvening   ?? null)         as MoodId | null,
           moodNote:         typeof d.moodNote  === 'string'   ? d.moodNote         : '',
           moodNoteM:        typeof d.moodNoteM === 'string'   ? d.moodNoteM        : '',
+          moodNoteA:        typeof d.moodNoteA === 'string'   ? d.moodNoteA        : '',
           moodNoteE:        typeof d.moodNoteE === 'string'   ? d.moodNoteE        : '',
           meHabits:         Array.isArray(d.meHabits)         ? padHabits(d.meHabits, 10) : EMPTY_ME_HABITS,
           mealSelected:     Array.isArray(d.mealSelected)     ? padMeals(d.mealSelected, 5) : EMPTY_MEALS,
@@ -98,6 +114,8 @@ export function useDayStore(uid: string | null) {
           todayDone:        typeof d.todayDone    === 'boolean'? d.todayDone       : false,
           sleepHours:       typeof d.sleepHours   === 'number' ? d.sleepHours      : 0,
           sleepQuality:     typeof d.sleepQuality === 'number' ? d.sleepQuality    : 0,
+          weatherSnap:      d.weatherSnap && typeof d.weatherSnap === 'object' ? d.weatherSnap : undefined,
+          moonPhase:        typeof d.moonPhase    === 'string' ? d.moonPhase       : undefined,
         });
       } else {
         setData(EMPTY);

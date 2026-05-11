@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { p } from '@/lib/design';
+import { p, fmtItDate, fmtItDateFromDate } from '@/lib/design';
 import { NeonGlass, SectionLabel } from '@/components/neon-glass';
 import { MarkerDiamond, MarkerStar4 } from '@/components/markers';
 import { MoodFace } from '@/components/mood-face';
@@ -10,6 +10,7 @@ import { useDayStore, MoodId, DayData, useMonthData } from '@/lib/day-store';
 import { useUserProfile, useSupplements, useWeightLog, useNotes, useXP, DEFAULT_PRS, useUserSettings } from '@/lib/user-store';
 import { useNotifications } from '@/lib/notifications';
 import { MEALS, getMealTotals } from '@/lib/meals';
+import { moonPhase, MOON_EMOJI, MOON_LABEL_IT } from '@/lib/sky';
 
 // ─── Achievements ─────────────────────────────────────────────────────────────
 
@@ -85,9 +86,10 @@ function NotificationsSection({ uid }: { uid: string | null }) {
         {permission === 'granted' && prefs.enabled && (
           <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
             {([
-              { key:'morning', icon:'☀',  label:'Mood mattina'   },
-              { key:'task',    icon:'🎯', label:'Cosa di oggi'    },
-              { key:'evening', icon:'🌙', label:'Mood sera'       },
+              { key:'morning',   icon:'☀',  label:'Mood mattina'    },
+              { key:'afternoon', icon:'🌤', label:'Mood pomeriggio' },
+              { key:'task',      icon:'🎯', label:'Cosa di oggi'    },
+              { key:'evening',   icon:'🌙', label:'Mood sera'       },
             ] as const).map(row => (
               <div key={row.key} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 10px', borderRadius:12, background:'rgba(255,255,255,0.04)' }}>
                 <span style={{ fontSize:14 }}>{row.icon}</span>
@@ -451,8 +453,10 @@ function FitnessTab({
   const workouts = data.workouts;
   const [cardioSlope, setCardioSlope] = useState('3');
   const [cardioSpeed, setCardioSpeed] = useState('6.5');
+  const [cardioMin,   setCardioMin]   = useState('30');
   const [editingPR, setEditingPR] = useState<string|null>(null);
-  const [editVal, setEditVal] = useState('');
+  const [editKg,   setEditKg]   = useState('');
+  const [editReps, setEditReps] = useState('');
   const [weightInput, setWeightInput] = useState('');
   const { entries, logWeight } = useWeightLog(uid);
 
@@ -461,7 +465,28 @@ function FitnessTab({
     save({ workouts: next });
   };
 
-  const cardioKcal = Math.round(parseFloat(cardioSpeed||'0') * parseFloat(cardioSlope||'0') * 0.85 + parseFloat(cardioSpeed||'0') * 4.5);
+  // kcal/h ≈ velocità·pendenza·0.85 + velocità·4.5 — scalo poi sui minuti reali
+  const cardioKcalPerHour = parseFloat(cardioSpeed||'0') * parseFloat(cardioSlope||'0') * 0.85 + parseFloat(cardioSpeed||'0') * 4.5;
+  const cardioKcal = Math.round(cardioKcalPerHour * (parseFloat(cardioMin||'0') / 60));
+
+  // Parsing PR: accetta "95", "95x5", "95 x 5" — kg + reps.
+  const parsePR = (raw: string): { kg: string; reps: string } => {
+    if (!raw) return { kg: '', reps: '' };
+    const m = /^\s*(\d+(?:[.,]\d+)?)\s*[x×]\s*(\d+)\s*$/i.exec(raw);
+    if (m) return { kg: m[1].replace(',', '.'), reps: m[2] };
+    return { kg: raw.replace(',', '.'), reps: '' };
+  };
+  const formatPR = (raw: string): string => {
+    const { kg, reps } = parsePR(raw);
+    if (!kg) return '—';
+    return reps ? `${kg}×${reps}` : kg;
+  };
+  const serializePR = (kg: string, reps: string): string => {
+    const k = kg.trim();
+    const r = reps.trim();
+    if (!k) return '';
+    return r ? `${k}x${r}` : k;
+  };
   const prNames = Object.keys(DEFAULT_PRS);
   const latestWeight = entries.length > 0 ? entries[entries.length - 1].weight : null;
 
@@ -483,45 +508,73 @@ function FitnessTab({
 
       {workouts.includes('CARDIO') && (
         <>
-          <SectionLabel num="02" title="CARDIO" hint="pendenza · velocità · kcal"/>
+          <SectionLabel num="02" title="CARDIO" hint="pendenza · km/h · minuti · kcal"/>
           <NeonGlass style={{ marginTop:8 }} tint="rgba(255,255,255,0.04)" radius={18}>
             <div style={{ padding:'14px 16px' }}>
-              <div style={{ display:'flex', gap:10 }}>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim,textTransform:'uppercase',marginBottom:4 }}>PENDENZA %</div>
-                  <input type="number" value={cardioSlope} onChange={e=>setCardioSlope(e.target.value)} style={{ width:'100%',background:'rgba(255,255,255,0.06)',border:`1px solid ${p.border}`,borderRadius:10,padding:'8px 12px',color:p.fg,fontFamily:p.displayFont,fontSize:22,fontWeight:700,outline:'none' }}/>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:10 }}>
+                <div>
+                  <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim,textTransform:'uppercase',marginBottom:4 }}>PEND %</div>
+                  <input type="number" value={cardioSlope} onChange={e=>setCardioSlope(e.target.value)} style={{ width:'100%',background:'rgba(255,255,255,0.06)',border:`1px solid ${p.border}`,borderRadius:10,padding:'8px 10px',color:p.fg,fontFamily:p.displayFont,fontSize:20,fontWeight:700,outline:'none' }}/>
                 </div>
-                <div style={{ flex:1 }}>
+                <div>
                   <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim,textTransform:'uppercase',marginBottom:4 }}>KM/H</div>
-                  <input type="number" step="0.5" value={cardioSpeed} onChange={e=>setCardioSpeed(e.target.value)} style={{ width:'100%',background:'rgba(255,255,255,0.06)',border:`1px solid ${p.border}`,borderRadius:10,padding:'8px 12px',color:p.fg,fontFamily:p.displayFont,fontSize:22,fontWeight:700,outline:'none' }}/>
+                  <input type="number" step="0.5" value={cardioSpeed} onChange={e=>setCardioSpeed(e.target.value)} style={{ width:'100%',background:'rgba(255,255,255,0.06)',border:`1px solid ${p.border}`,borderRadius:10,padding:'8px 10px',color:p.fg,fontFamily:p.displayFont,fontSize:20,fontWeight:700,outline:'none' }}/>
                 </div>
-                <div style={{ flex:1 }}>
+                <div>
+                  <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim,textTransform:'uppercase',marginBottom:4 }}>MIN</div>
+                  <input type="number" value={cardioMin} onChange={e=>setCardioMin(e.target.value)} style={{ width:'100%',background:'rgba(255,255,255,0.06)',border:`1px solid ${p.border}`,borderRadius:10,padding:'8px 10px',color:p.fg,fontFamily:p.displayFont,fontSize:20,fontWeight:700,outline:'none' }}/>
+                </div>
+                <div>
                   <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim,textTransform:'uppercase',marginBottom:4 }}>KCAL</div>
-                  <div style={{ fontFamily:p.displayFont,fontSize:22,fontWeight:700,color:p.orange,paddingTop:8 }}>{cardioKcal}</div>
+                  <div style={{ fontFamily:p.displayFont,fontSize:20,fontWeight:700,color:p.orange,paddingTop:8 }}>{cardioKcal}</div>
                 </div>
               </div>
+              <div style={{ fontFamily:p.monoFont,fontSize:8.5,color:p.dim,marginTop:8 }}>~{Math.round(cardioKcalPerHour)} kcal/h · totale stimato sui minuti</div>
             </div>
           </NeonGlass>
         </>
       )}
 
-      <SectionLabel num={workouts.includes('CARDIO')?'03':'02'} title="PERSONAL RECORDS" hint="tap per modificare"/>
+      <SectionLabel num={workouts.includes('CARDIO')?'03':'02'} title="PERSONAL RECORDS" hint="tap · kg × reps"/>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginTop:8 }}>
-        {prNames.map(name => (
-          <NeonGlass key={name} tint="rgba(255,255,255,0.04)" radius={18} onClick={() => { setEditingPR(name); setEditVal(prs[name]??DEFAULT_PRS[name]); }}>
-            <div style={{ padding:'12px 14px' }}>
-              <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim,textTransform:'uppercase',letterSpacing:0.15 }}>{name}</div>
-              {editingPR === name ? (
-                <input autoFocus type="number" value={editVal} onChange={e=>setEditVal(e.target.value)}
-                  onBlur={() => { savePr(name, editVal); setEditingPR(null); }}
-                  onKeyDown={e => { if(e.key==='Enter'){ savePr(name, editVal); setEditingPR(null); } }}
-                  style={{ width:'100%',background:'transparent',border:'none',borderBottom:`1px solid ${p.orange}`,outline:'none',color:p.orange,fontFamily:p.displayFont,fontSize:28,fontWeight:800,padding:'4px 0' }}/>
-              ) : (
-                <div style={{ fontFamily:p.displayFont,fontSize:30,fontWeight:800,color:p.fg,marginTop:4 }}>{prs[name]??DEFAULT_PRS[name]}<span style={{ fontSize:12,color:p.muted }}>kg</span></div>
-              )}
-            </div>
-          </NeonGlass>
-        ))}
+        {prNames.map(name => {
+          const cur = parsePR(prs[name] ?? DEFAULT_PRS[name]);
+          const isEditing = editingPR === name;
+          const commit = () => { savePr(name, serializePR(editKg, editReps)); setEditingPR(null); };
+          return (
+            <NeonGlass key={name} tint="rgba(255,255,255,0.04)" radius={18} onClick={() => { if (!isEditing) { setEditingPR(name); setEditKg(cur.kg); setEditReps(cur.reps); } }}>
+              <div style={{ padding:'12px 14px' }}>
+                <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim,textTransform:'uppercase',letterSpacing:0.15 }}>{name}</div>
+                {isEditing ? (
+                  <div style={{ display:'flex',alignItems:'baseline',gap:6,marginTop:4 }}>
+                    <input autoFocus type="number" value={editKg} onChange={e=>setEditKg(e.target.value)}
+                      onKeyDown={e => { if(e.key==='Enter') commit(); }}
+                      placeholder="kg"
+                      style={{ width:'48%',background:'transparent',border:'none',borderBottom:`1px solid ${p.orange}`,outline:'none',color:p.orange,fontFamily:p.displayFont,fontSize:22,fontWeight:800,padding:'4px 0' }}/>
+                    <span style={{ color:p.dim,fontFamily:p.monoFont,fontSize:13 }}>×</span>
+                    <input type="number" value={editReps} onChange={e=>setEditReps(e.target.value)}
+                      onBlur={commit}
+                      onKeyDown={e => { if(e.key==='Enter') commit(); }}
+                      placeholder="rep"
+                      style={{ flex:1,background:'transparent',border:'none',borderBottom:`1px solid ${p.orange}`,outline:'none',color:p.orange,fontFamily:p.displayFont,fontSize:22,fontWeight:800,padding:'4px 0' }}/>
+                  </div>
+                ) : (
+                  <div style={{ marginTop:4 }}>
+                    <span style={{ fontFamily:p.displayFont,fontSize:28,fontWeight:800,color:p.fg }}>{cur.kg || '—'}</span>
+                    <span style={{ fontSize:11,color:p.muted,marginLeft:2 }}>kg</span>
+                    {cur.reps && (
+                      <>
+                        <span style={{ fontFamily:p.displayFont,fontSize:18,fontWeight:700,color:p.muted,margin:'0 6px' }}>×</span>
+                        <span style={{ fontFamily:p.displayFont,fontSize:22,fontWeight:800,color:p.green }}>{cur.reps}</span>
+                        <span style={{ fontSize:11,color:p.muted,marginLeft:2 }}>rep</span>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            </NeonGlass>
+          );
+        })}
       </div>
 
       <SectionLabel num={workouts.includes('CARDIO')?'04':'03'} title="PESO" hint={latestWeight ? `${latestWeight} kg` : 'nessun log'}/>
@@ -551,10 +604,12 @@ function FitnessTab({
 // ─── Mood + Journal ────────────────────────────────────────────────────────────
 
 function MoodTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayData>) => void; uid: string | null }) {
-  const morning  = data.moodMorning;
-  const evening  = data.moodEvening;
-  const noteM    = data.moodNoteM;
-  const noteE    = data.moodNoteE;
+  const morning   = data.moodMorning;
+  const afternoon = data.moodAfternoon;
+  const evening   = data.moodEvening;
+  const noteM     = data.moodNoteM;
+  const noteA     = data.moodNoteA;
+  const noteE     = data.moodNoteE;
   const { addNote } = useNotes(uid);
 
   const [aiLoading, setAiLoading] = useState(false);
@@ -562,8 +617,32 @@ function MoodTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayData
   const [aiError, setAiError] = useState('');
   const [aiDebug, setAiDebug] = useState('');
   const [showAiDebug, setShowAiDebug] = useState(false);
-  const [savingNote, setSavingNote] = useState<'M'|'E'|null>(null);
-  const [savedFlash, setSavedFlash] = useState<'M'|'E'|null>(null);
+  const [savingNote, setSavingNote] = useState<'M'|'A'|'E'|null>(null);
+  const [savedFlash, setSavedFlash] = useState<'M'|'A'|'E'|null>(null);
+
+  // Cattura snapshot meteo + fase lunare al primo mood loggato del giorno.
+  // Fire-and-forget: se la rete fallisce ignoro, il mood viene comunque salvato.
+  const captureEnvIfNeeded = async () => {
+    if (data.weatherSnap) return;
+    try {
+      const res = await fetch('/api/weather');
+      if (!res.ok) return;
+      const w = await res.json();
+      const cur = w?.current;
+      const daily = w?.daily;
+      if (!cur || !daily) return;
+      save({
+        weatherSnap: {
+          tempC:   Math.round(cur.temperature_2m),
+          code:    cur.weather_code,
+          label:   '', // verrà ricostruito al render via wmoLabel; non lo passo ora per non duplicare
+          rainPct: daily.precipitation_probability_max?.[0] ?? 0,
+          capturedAt: Date.now(),
+        },
+        moonPhase: moonPhase(new Date()),
+      });
+    } catch { /* silenzioso — non bloccante */ }
+  };
 
   const now = new Date();
   const currMonthData = useMonthData(uid, now.getFullYear(), now.getMonth());
@@ -595,13 +674,19 @@ function MoodTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayData
         const key = localDateKey(d);
         const dd = allDays[key];
         if (!dd) continue;
-        const m = dd.moodMorning ?? '—';
-        const e = dd.moodEvening ?? '—';
+        const m = dd.moodMorning   ?? '—';
+        const a = dd.moodAfternoon ?? '—';
+        const e = dd.moodEvening   ?? '—';
         const w = (dd.workouts ?? []).join('+') || '—';
         const noteM = (dd.moodNoteM ?? '').trim().slice(0, 200);
+        const noteA = (dd.moodNoteA ?? '').trim().slice(0, 200);
         const noteE = (dd.moodNoteE ?? '').trim().slice(0, 200);
-        let line = `${key} · M:${m} S:${e} · workout:${w}`;
+        const env: string[] = [];
+        if (dd.weatherSnap) env.push(`meteo:${dd.weatherSnap.tempC}°/${dd.weatherSnap.rainPct}%pioggia`);
+        if (dd.moonPhase)   env.push(`luna:${dd.moonPhase}`);
+        let line = `${key} · M:${m} P:${a} S:${e} · workout:${w}${env.length?` · ${env.join(' · ')}`:''}`;
         if (noteM) line += `\n  ☀ ${noteM}`;
+        if (noteA) line += `\n  🌤 ${noteA}`;
         if (noteE) line += `\n  🌙 ${noteE}`;
         lines.push(line);
       }
@@ -629,14 +714,14 @@ function MoodTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayData
 
   const saveAiAsNote = async () => {
     if (!aiResponse.trim()) return;
-    const dateStr = localDateKey(new Date());
+    const dateStr = fmtItDateFromDate(new Date());
     await addNote(`AI Mood Pattern · ${dateStr}\n\n${aiResponse}`, ['personale']);
   };
 
   const saveMorningNote = async () => {
     if (!noteM.trim() || savingNote === 'M') return;
     setSavingNote('M');
-    const dateStr = localDateKey(new Date());
+    const dateStr = fmtItDateFromDate(new Date());
     try {
       await addNote(`☀ ${dateStr} · ${noteM.trim().slice(0,50)}\n\n${noteM.trim()}`, ['mood']);
       save({ moodNoteM: '' });
@@ -647,10 +732,24 @@ function MoodTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayData
     }
   };
 
+  const saveAfternoonNote = async () => {
+    if (!noteA.trim() || savingNote === 'A') return;
+    setSavingNote('A');
+    const dateStr = fmtItDateFromDate(new Date());
+    try {
+      await addNote(`🌤 ${dateStr} · ${noteA.trim().slice(0,50)}\n\n${noteA.trim()}`, ['mood']);
+      save({ moodNoteA: '' });
+      setSavedFlash('A');
+      setTimeout(() => setSavedFlash(null), 1400);
+    } finally {
+      setSavingNote(null);
+    }
+  };
+
   const saveEveningNote = async () => {
     if (!noteE.trim() || savingNote === 'E') return;
     setSavingNote('E');
-    const dateStr = localDateKey(new Date());
+    const dateStr = fmtItDateFromDate(new Date());
     try {
       await addNote(`🌙 ${dateStr} · ${noteE.trim().slice(0,50)}\n\n${noteE.trim()}`, ['mood']);
       save({ moodNoteE: '' });
@@ -716,17 +815,37 @@ function MoodTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayData
       <SectionLabel num="02" title="LOG OGGI" hint=""/>
       <NeonGlass style={{ marginTop:8 }} tint="rgba(255,255,255,0.04)" radius={22}>
         <div style={{ padding:'16px' }}>
-          <MoodPicker value={morning} onChange={v => save({ moodMorning: v })} label="☀ MATTINA"/>
+          <MoodPicker value={morning} onChange={v => { save({ moodMorning: v }); captureEnvIfNeeded(); }} label="☀ MATTINA"/>
           <textarea value={noteM} onChange={e => save({ moodNoteM: e.target.value })} placeholder="Come stai stamattina? Cosa senti?" rows={3}
             style={{ width:'100%',resize:'none',border:`1px solid ${p.border}`,outline:'none',borderRadius:14,marginTop:10,padding:'10px 14px',background:'rgba(255,255,255,0.04)',color:p.fg,fontFamily:p.bodyFont,fontSize:14 }}/>
           <button onClick={saveMorningNote} disabled={!noteM.trim() || savingNote === 'M'} style={{ marginTop:8,padding:'8px 16px',borderRadius:12,border:`1px solid ${savedFlash==='M'?'rgba(166,255,0,0.5)':'rgba(0,240,255,0.3)'}`,background:savedFlash==='M'?'rgba(166,255,0,0.12)':'rgba(0,240,255,0.08)',color:savedFlash==='M'?p.green:p.cyan,fontFamily:p.monoFont,fontSize:9.5,textTransform:'uppercase',cursor:noteM.trim()&&savingNote!=='M'?'pointer':'not-allowed',opacity:noteM.trim()&&savingNote!=='M'?1:0.5 }}>{savedFlash==='M'?'✓ SALVATO':savingNote==='M'?'· · ·':'↵ Salva nel Brain'}</button>
 
           <div style={{ height:1,background:p.border,margin:'16px 0' }}/>
 
-          <MoodPicker value={evening} onChange={v => save({ moodEvening: v })} label="🌙 SERA"/>
+          <MoodPicker value={afternoon} onChange={v => { save({ moodAfternoon: v }); captureEnvIfNeeded(); }} label="🌤 POMERIGGIO · 14:00"/>
+          <textarea value={noteA} onChange={e => save({ moodNoteA: e.target.value })} placeholder="Pausa pomeriggio: come va l'energia?" rows={3}
+            style={{ width:'100%',resize:'none',border:`1px solid ${p.border}`,outline:'none',borderRadius:14,marginTop:10,padding:'10px 14px',background:'rgba(255,255,255,0.04)',color:p.fg,fontFamily:p.bodyFont,fontSize:14 }}/>
+          <button onClick={saveAfternoonNote} disabled={!noteA.trim() || savingNote === 'A'} style={{ marginTop:8,padding:'8px 16px',borderRadius:12,border:`1px solid ${savedFlash==='A'?'rgba(166,255,0,0.5)':'rgba(0,240,255,0.3)'}`,background:savedFlash==='A'?'rgba(166,255,0,0.12)':'rgba(0,240,255,0.08)',color:savedFlash==='A'?p.green:p.cyan,fontFamily:p.monoFont,fontSize:9.5,textTransform:'uppercase',cursor:noteA.trim()&&savingNote!=='A'?'pointer':'not-allowed',opacity:noteA.trim()&&savingNote!=='A'?1:0.5 }}>{savedFlash==='A'?'✓ SALVATO':savingNote==='A'?'· · ·':'↵ Salva nel Brain'}</button>
+
+          <div style={{ height:1,background:p.border,margin:'16px 0' }}/>
+
+          <MoodPicker value={evening} onChange={v => { save({ moodEvening: v }); captureEnvIfNeeded(); }} label="🌙 SERA"/>
           <textarea value={noteE} onChange={e => save({ moodNoteE: e.target.value })} placeholder="Com'è andata oggi? Rifletti sulla giornata." rows={3}
             style={{ width:'100%',resize:'none',border:`1px solid ${p.border}`,outline:'none',borderRadius:14,marginTop:10,padding:'10px 14px',background:'rgba(255,255,255,0.04)',color:p.fg,fontFamily:p.bodyFont,fontSize:14 }}/>
           <button onClick={saveEveningNote} disabled={!noteE.trim() || savingNote === 'E'} style={{ marginTop:8,padding:'8px 16px',borderRadius:12,border:`1px solid ${savedFlash==='E'?'rgba(166,255,0,0.5)':'rgba(0,240,255,0.3)'}`,background:savedFlash==='E'?'rgba(166,255,0,0.12)':'rgba(0,240,255,0.08)',color:savedFlash==='E'?p.green:p.cyan,fontFamily:p.monoFont,fontSize:9.5,textTransform:'uppercase',cursor:noteE.trim()&&savingNote!=='E'?'pointer':'not-allowed',opacity:noteE.trim()&&savingNote!=='E'?1:0.5 }}>{savedFlash==='E'?'✓ SALVATO':savingNote==='E'?'· · ·':'↵ Salva nel Brain'}</button>
+
+          {/* Snapshot ambiente del giorno — usato per pattern AI */}
+          {(data.weatherSnap || data.moonPhase) && (
+            <div style={{ marginTop:14, paddingTop:10, borderTop:`1px solid ${p.border}`, display:'flex', gap:14, alignItems:'center', flexWrap:'wrap', fontFamily:p.monoFont, fontSize:10, color:p.dim }}>
+              <span style={{ textTransform:'uppercase', letterSpacing:0.15 }}>ENV oggi</span>
+              {data.weatherSnap && (
+                <span>🌡 {data.weatherSnap.tempC}° · 💧 {data.weatherSnap.rainPct}%</span>
+              )}
+              {data.moonPhase && (
+                <span>{MOON_EMOJI[data.moonPhase as keyof typeof MOON_EMOJI] ?? '·'} {MOON_LABEL_IT[data.moonPhase as keyof typeof MOON_LABEL_IT] ?? data.moonPhase}</span>
+              )}
+            </div>
+          )}
         </div>
       </NeonGlass>
 
@@ -804,7 +923,7 @@ const GOOD_HABITS = [
   {n:'Stretching',          xp:15},
   {n:'No scroll a letto',   xp:20},
   {n:'Luci rosse sera',     xp:10},
-  {n:'Candle prima dormire',xp:10},
+  {n:'Candle',xp:10},
   {n:'Meditazione 5 min',   xp:15},
   {n:'Lettura 15 min',      xp:10},
   {n:'Doccia fredda',       xp:20},
@@ -863,7 +982,7 @@ function HabitsHeatmap({ allDays }: { allDays: Record<string, Partial<DayData>> 
               const future = cell.date > today;
               const isToday = cell.date.getTime() === today.getTime();
               return (
-                <div key={di} title={`${cell.key} · ${cell.count}/10 habits`} style={{ flex:1, height:22, borderRadius:5, background:colorFor(cell.count, future), border:isToday?`1px solid ${p.fg}`:'1px solid transparent', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:p.monoFont, fontSize:8, color: cell.count > 0 ? '#0a0a0a' : 'transparent', fontWeight: 700 }}>
+                <div key={di} title={`${fmtItDate(cell.key)} · ${cell.count}/10 habits`} style={{ flex:1, height:22, borderRadius:5, background:colorFor(cell.count, future), border:isToday?`1px solid ${p.fg}`:'1px solid transparent', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:p.monoFont, fontSize:8, color: cell.count > 0 ? '#0a0a0a' : 'transparent', fontWeight: 700 }}>
                   {cell.count > 0 && cell.count}
                 </div>
               );
@@ -957,7 +1076,7 @@ function HabitsTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayDa
 const BIOHACKING = [
   { icon: '🔴', title: 'Luce Rossa',    desc: '10 min mattina · cortisolo e mitocondri', habit: 'Luci rosse sera' },
   { icon: '❄️', title: 'Cold Exposure', desc: '30s acqua fredda · norepinefrina +300%',  habit: 'Doccia fredda' },
-  { icon: '💤', title: 'Sonno',          desc: 'Magnesio + melatonina + buio totale',     habit: 'Candle prima dormire' },
+  { icon: '💤', title: 'Sonno',          desc: 'Magnesio + melatonina + buio totale',     habit: 'Candle' },
   { icon: '📵', title: 'No Blue Light', desc: 'Stop scroll 1h prima del sonno',           habit: 'No scroll a letto' },
 ];
 

@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState, CSSProperties } from 'react';
-import { p, NOISE_SVG } from '@/lib/design';
+import { useEffect, useRef, useState, CSSProperties } from 'react';
+import { p, NOISE_SVG, fmtItDate, fmtItDateFromDate } from '@/lib/design';
 import { NeonGlass, SectionLabel, MetricHead } from '@/components/neon-glass';
 import { MoodFace } from '@/components/mood-face';
 import { MarkerTarget, MarkerDiamond, MarkerStar4, MarkerTriangle, MarkerHex } from '@/components/markers';
@@ -16,7 +16,7 @@ import { CountdownEditor } from '@/components/countdown-editor';
 
 const BUILD_SHA = process.env.NEXT_PUBLIC_BUILD_SHA ?? 'dev';
 
-function TopRightButtons({ onSettings }: { onSettings: () => void }) {
+function TopRightButtons({ onSettings, onNova }: { onSettings: () => void; onNova: () => void }) {
   const [spin, setSpin] = useState(false);
   const onRefresh = () => {
     setSpin(true);
@@ -33,9 +33,18 @@ function TopRightButtons({ onSettings }: { onSettings: () => void }) {
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     cursor: 'pointer', padding: 0,
   };
+  const novaStyle: CSSProperties = {
+    ...baseStyle,
+    border: '1px solid rgba(167,139,250,0.55)',
+    background: 'linear-gradient(135deg, rgba(167,139,250,0.35), rgba(0,240,255,0.20))',
+    boxShadow: '0 0 14px rgba(167,139,250,0.55), inset 0 0 8px rgba(255,255,255,0.15)',
+    color: '#fff',
+    fontSize: 14, fontWeight: 800, letterSpacing: 0.2,
+  };
   return (
     <>
       <div style={{ position:'fixed', top:'calc(env(safe-area-inset-top, 0px) + 12px)', right:14, zIndex:100, display:'flex', gap:6 }}>
+        <button onClick={onNova} aria-label="NOVA" title="Apri NOVA" style={novaStyle}>✦</button>
         <button onClick={onSettings} aria-label="Settings" style={baseStyle}>⚙</button>
         <button onClick={onRefresh} aria-label="Aggiorna" style={baseStyle}>
           <span style={{ display:'inline-block', animation: spin ? 'rfSpin 0.6s linear infinite' : 'none' }}>↻</span>
@@ -126,12 +135,21 @@ function WeatherCard() {
   const emoji = wmoEmoji(cur.weather_code, cur.is_day);
   const label = wmoLabel(cur.weather_code);
 
+  // Apre 3bmeteo Bolzano in nuova tab — 3bmeteo non espone API pubblica gratuita,
+  // quindi i dati restano da Open-Meteo (affidabile, free) e il widget linka alla
+  // pagina ufficiale per confronto visivo / forecast esteso.
+  const OPEN_3BMETEO = () => window.open('https://www.3bmeteo.com/meteo/bolzano', '_blank', 'noopener,noreferrer');
+
   return (
-    <NeonGlass style={{ marginTop: 12 }} tint="linear-gradient(135deg, rgba(0,240,255,0.18), rgba(166,255,0,0.08))" edge="rgba(0,240,255,0.4)" radius={20}>
+    <NeonGlass style={{ marginTop: 12 }} tint="linear-gradient(135deg, rgba(0,240,255,0.18), rgba(166,255,0,0.08))" edge="rgba(0,240,255,0.4)" radius={20} onClick={OPEN_3BMETEO}>
       <div style={{ padding:'14px 16px', display:'flex', alignItems:'center', gap:14 }}>
         <div style={{ fontSize:46, lineHeight:1, flexShrink:0, filter:'drop-shadow(0 4px 12px rgba(0,240,255,0.4))' }}>{emoji}</div>
         <div style={{ flex:1, minWidth:0 }}>
-          <div style={{ fontFamily:p.monoFont, fontSize:9.5, color:p.cyan, textTransform:'uppercase', letterSpacing:0.18 }}>BOLZANO · METEO</div>
+          <div style={{ display:'flex', alignItems:'center', gap:8, fontFamily:p.monoFont, fontSize:9.5, color:p.cyan, textTransform:'uppercase', letterSpacing:0.18 }}>
+            <span>BOLZANO · METEO</span>
+            <span style={{ flex:1 }}/>
+            <span style={{ color:p.dim, fontSize:8.5 }}>tap → 3bmeteo ↗</span>
+          </div>
           <div style={{ display:'flex', alignItems:'baseline', gap:8, marginTop:3 }}>
             <div style={{ fontFamily:p.displayFont, fontWeight:800, fontSize:34, letterSpacing:-1.2, lineHeight:1 }}>{Math.round(cur.temperature_2m)}<span style={{ fontSize:16, color:p.muted }}>°</span></div>
             <div style={{ fontFamily:p.bodyFont, fontSize:13, color:p.muted }}>{label}</div>
@@ -167,7 +185,7 @@ function timeAgo(ts: number): string {
   if (h < 24) return `${h}h`;
   const d = Math.round(h / 24);
   if (d < 7)  return `${d}g`;
-  return new Date(ts).toLocaleDateString('it-IT', { day:'2-digit', month:'short' });
+  return fmtItDateFromDate(new Date(ts));
 }
 
 const SRC_COLOR: Record<string, string> = {
@@ -264,7 +282,7 @@ const HABITS: [string, number][] = [   // [label, xp]
   ['Stretching',          15],
   ['No scroll a letto',   20],
   ['Luci rosse',          10],
-  ['Candle prima dormire',10],
+  ['Candle',10],
 ];
 
 // Compute consecutive-day streak (backward from today) for each habit slot
@@ -293,11 +311,12 @@ const ORBS = [
 
 // ─── HomeScreen ───────────────────────────────────────────────────────────────
 
-function computeTodayXP(habits: boolean[], moodM: MoodId|null, moodE: MoodId|null, meals: (string|null)[], waterMl: number, workouts: string[]): number {
+function computeTodayXP(habits: boolean[], moodM: MoodId|null, moodA: MoodId|null, moodE: MoodId|null, meals: (string|null)[], waterMl: number, workouts: string[]): number {
   const habitXP = [15, 20, 10, 10];
   let xp = 0;
   habits.forEach((on, i) => { if (on) xp += habitXP[i] ?? 10; });
   if (moodM) xp += 10;
+  if (moodA) xp += 10;
   if (moodE) xp += 10;
   meals.forEach(m => { if (m !== null) xp += 5; });
   if (waterMl >= 3000) xp += 25;
@@ -306,7 +325,7 @@ function computeTodayXP(habits: boolean[], moodM: MoodId|null, moodE: MoodId|nul
 }
 
 type MeTabHint = 'cibo'|'fitness'|'mood'|'habits'|'suppl';
-export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brain'|'me'|'focus'|'settings', opts?: { meTab?: MeTabHint }) => void }) {
+export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brain'|'me'|'focus'|'nova'|'settings', opts?: { meTab?: MeTabHint; novaBriefing?: boolean }) => void }) {
   const { user } = useAuth();
   const toast = useToast();
   const { data, save } = useDayStore(user?.uid ?? null);
@@ -315,6 +334,21 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
   const weekly = useWeeklyChallenge(user?.uid ?? null);
   const { settings } = useUserSettings(user?.uid ?? null);
   const [showEditor, setShowEditor] = useState(false);
+
+  // Auto-briefing NOVA all'apertura app (1 volta per sessione, se attivo nei settings)
+  const novaAutoFiredRef = useRef(false);
+  useEffect(() => {
+    if (novaAutoFiredRef.current) return;
+    if (!settings.novaBriefingOnOpen) return;
+    if (typeof window === 'undefined') return;
+    const sessionKey = 'nova_briefing_fired_session';
+    if (sessionStorage.getItem(sessionKey)) return;
+    sessionStorage.setItem(sessionKey, '1');
+    novaAutoFiredRef.current = true;
+    // breve delay per lasciar caricare i dati Firestore
+    const t = setTimeout(() => onNavigate?.('nova', { novaBriefing: true }), 700);
+    return () => clearTimeout(t);
+  }, [settings.novaBriefingOnOpen, onNavigate]);
 
   // Real habit streaks (consecutive days backward) — pulls curr + prev month
   const nowD = new Date();
@@ -349,19 +383,23 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
 
   const now = new Date();
   const timeStr  = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-  const isMorning = now.getHours() < 14;
+  const hour = now.getHours();
+  // Slot mood corrente: mattina < 13, pomeriggio 13-18, sera ≥ 19
+  const moodSlot: 'morning'|'afternoon'|'evening' = hour < 13 ? 'morning' : hour < 19 ? 'afternoon' : 'evening';
+  const slotLabel = moodSlot === 'morning' ? 'MATTINA' : moodSlot === 'afternoon' ? 'POMERIGGIO' : 'SERA';
+  const slotEmoji = moodSlot === 'morning' ? '☀' : moodSlot === 'afternoon' ? '🌤' : '🌙';
 
-  const currentMood = isMorning ? data.moodMorning : data.moodEvening;
+  const currentMood = moodSlot === 'morning' ? data.moodMorning : moodSlot === 'afternoon' ? data.moodAfternoon : data.moodEvening;
   const chooseMood = (m: MoodId) => {
     const hadMood = !!currentMood;
-    save(isMorning ? { moodMorning: m } : { moodEvening: m });
+    save(moodSlot === 'morning' ? { moodMorning: m } : moodSlot === 'afternoon' ? { moodAfternoon: m } : { moodEvening: m });
     if (!hadMood) {
       addXP(10);
-      if (settings.showXpToast) toast.xp(10, isMorning ? 'mood mattina' : 'mood sera');
+      if (settings.showXpToast) toast.xp(10, `mood ${slotLabel.toLowerCase()}`);
     }
   };
 
-  const todayXP = computeTodayXP(habits, data.moodMorning, data.moodEvening, data.mealSelected, waterMl, data.workouts);
+  const todayXP = computeTodayXP(habits, data.moodMorning, data.moodAfternoon, data.moodEvening, data.mealSelected, waterMl, data.workouts);
 
   // Sort active countdowns by date ascending, pick upcoming ones
   const sorted = [...countdowns]
@@ -399,7 +437,7 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
   return (
     <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', overflowX: 'hidden', background: p.bg, color: p.fg, fontFamily: p.bodyFont }}>
 
-      <TopRightButtons onSettings={() => onNavigate?.('settings')} />
+      <TopRightButtons onSettings={() => onNavigate?.('settings')} onNova={() => onNavigate?.('nova')} />
 
       {ORBS.map((orb, i) => (
         <div key={i} style={{ position: 'absolute', top: 't' in orb ? orb.t : undefined, bottom: 'b' in orb ? orb.b : undefined, left: 'l' in orb ? orb.l : undefined, right: 'r' in orb ? orb.r : undefined, width: orb.w, height: orb.w, borderRadius: '50%', background: `radial-gradient(circle, ${orb.c} 0%, transparent 65%)`, filter: 'blur(65px)', opacity: orb.o, zIndex: 0, pointerEvents: 'none' } as CSSProperties} />
@@ -407,25 +445,51 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
       <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1, backgroundImage: `url("${NOISE_SVG}")`, opacity: 0.18, mixBlendMode: 'overlay' } as CSSProperties} />
       <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1, opacity: 0.35, backgroundImage: 'linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px)', backgroundSize: '100% 4px' }} />
 
-      <div style={{ position: 'absolute', left: 5, top: 110, zIndex: 5, pointerEvents: 'none', fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.32, color: p.dim, writingMode: 'vertical-rl', transform: 'rotate(180deg)' } as CSSProperties}>SYS::DAY / {isMorning ? 'OPS-MORNING' : 'OPS-EVENING'}</div>
+      <div style={{ position: 'absolute', left: 5, top: 110, zIndex: 5, pointerEvents: 'none', fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.32, color: p.dim, writingMode: 'vertical-rl', transform: 'rotate(180deg)' } as CSSProperties}>SYS::DAY / OPS-{moodSlot.toUpperCase()}</div>
       <div style={{ position: 'absolute', right: 5, top: 110, zIndex: 5, pointerEvents: 'none', fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.32, color: p.dim, writingMode: 'vertical-rl' } as CSSProperties}>LV·{level} {tier} / XP {totalXP}</div>
 
       <div style={{ position: 'relative', zIndex: 2, padding: 'calc(env(safe-area-inset-top, 0px) + 14px) 18px calc(env(safe-area-inset-bottom, 0px) + 130px)' }}>
 
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 8 }}>
+        {/* Banner FIT — kick visivo nei giorni di rest. Rosso a 0%, verde quando c'è un workout. */}
+        {(() => {
+          const noFit = data.workouts.length === 0;
+          const col = noFit ? p.red : p.green;
+          return (
+            <NeonGlass style={{ marginTop: 8 }} tint={noFit ? 'rgba(255,0,64,0.12)' : 'rgba(166,255,0,0.10)'} edge={`${col}66`} radius={12} onClick={() => onNavigate?.('me', { meTab: 'fitness' })}>
+              <div style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 10, fontFamily: p.monoFont, fontSize: 10, letterSpacing: 0.18, textTransform: 'uppercase' }}>
+                <span style={{ color: col, fontWeight: 900, fontSize: 13, letterSpacing: 0.2 }}>{noFit ? '0% FIT' : '100% FIT'}</span>
+                <span style={{ color: noFit ? p.muted : p.fg }}>{noFit ? 'oggi non ti sei mosso · tap per loggare' : data.workouts.join(' + ')}</span>
+                <span style={{ flex: 1 }} />
+                <span style={{ color: p.dim }}>→</span>
+              </div>
+            </NeonGlass>
+          );
+        })()}
+
+        {/* NOVA · Briefing del giorno — pill verso il super-AI */}
+        <NeonGlass style={{ marginTop: 6 }} tint="linear-gradient(135deg, rgba(167,139,250,0.22), rgba(0,240,255,0.10))" edge="rgba(167,139,250,0.45)" glow="#a78bfa" radius={12} onClick={() => onNavigate?.('nova', { novaBriefing: true })}>
+          <div style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 10, fontFamily: p.monoFont, fontSize: 10, letterSpacing: 0.18, textTransform: 'uppercase' }}>
+            <span style={{ color: '#a78bfa', fontWeight: 900, fontSize: 14, letterSpacing: 0.2 }}>✦ NOVA</span>
+            <span style={{ color: p.muted }}>briefing del giorno · parla / scrivi</span>
+            <span style={{ flex: 1 }} />
+            <span style={{ color: '#a78bfa' }}>→</span>
+          </div>
+        </NeonGlass>
+
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 14 }}>
           <div>
             <div style={{ fontFamily: p.monoFont, fontSize: 10, letterSpacing: 0.2, color: p.orange, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
               <MarkerDiamond size={8} color={p.orange} />
-              {isMorning ? 'MATTINA' : 'SERA'} · {timeStr}
+              {slotLabel} · {timeStr}
             </div>
             <div style={{ fontFamily: p.displayFont, fontWeight: 700, fontSize: 44, lineHeight: 0.92, letterSpacing: -1.2, marginTop: 6, textTransform: 'uppercase' }}>
-              {isMorning ? 'BUONGIORNO' : 'BUONASERA'}<br/>
+              {moodSlot === 'morning' ? 'BUONGIORNO' : moodSlot === 'afternoon' ? 'POMERIGGIO' : 'BUONASERA'}<br/>
               <span style={{ background: 'linear-gradient(120deg, #ffd400 0%, #ff6a00 35%, #ff0040 70%, #ff14b8 100%)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>AARON.</span>
             </div>
           </div>
           <div style={{ fontFamily: p.monoFont, fontSize: 11, letterSpacing: 0.22, color: p.dim, textAlign: 'right', lineHeight: 1.5, marginLeft: 18, flexShrink: 0 }}>
-            {now.toLocaleDateString('it-IT',{weekday:'short',day:'2-digit',month:'short'}).toUpperCase()}<br/>
-            {now.getFullYear()}
+            {now.toLocaleDateString('it-IT',{weekday:'short'}).toUpperCase()}<br/>
+            {fmtItDateFromDate(now)}
             <div style={{ fontSize: 8, opacity: 0.55, marginTop: 4, letterSpacing: 0.25 }}>build·{BUILD_SHA}</div>
           </div>
         </div>
@@ -527,8 +591,8 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
         <NewsFeed/>
 
         {/* Mood — time-based: solo mattina prima delle 14, solo sera dopo */}
-        <SectionLabel num="01" title="MOOD CHECK" hint={isMorning ? '☀ mattina' : '🌙 sera'} />
-        <NeonGlass style={{ marginTop: 8 }} tint={isMorning ? 'linear-gradient(135deg, rgba(255,212,0,0.18), rgba(255,106,0,0.12))' : 'linear-gradient(135deg, rgba(107,0,255,0.18), rgba(0,240,255,0.10))'} radius={24}>
+        <SectionLabel num="01" title="MOOD CHECK" hint={`${slotEmoji} ${slotLabel.toLowerCase()}`} />
+        <NeonGlass style={{ marginTop: 8 }} tint={moodSlot === 'morning' ? 'linear-gradient(135deg, rgba(255,212,0,0.18), rgba(255,106,0,0.12))' : moodSlot === 'afternoon' ? 'linear-gradient(135deg, rgba(255,106,0,0.18), rgba(255,20,184,0.10))' : 'linear-gradient(135deg, rgba(107,0,255,0.18), rgba(0,240,255,0.10))'} radius={24}>
           <div style={{ padding: '18px 14px 14px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
               {MOODS.map(m => {
@@ -574,7 +638,7 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
               <div style={{ fontFamily: p.displayFont, fontSize: 36, fontWeight: 800, letterSpacing: -1.2, lineHeight: 0.95, marginTop: 4 }}>
                 {(waterMl / 1000).toFixed(2)}<span style={{ fontSize: 14, color: p.muted }}>l</span>
               </div>
-              <div style={{ fontFamily: p.monoFont, fontSize: 8, color: p.dim, marginTop: 2 }}>target: {WATER_TARGET/1000}L {data.workouts.length > 0 ? '(allenamento)' : '(riposo)'}</div>
+              <div style={{ fontFamily: p.monoFont, fontSize: 8, color: p.dim, marginTop: 2 }}>target: {WATER_TARGET/1000}L · {data.workouts.length > 0 ? '100% FIT' : '0% FIT'}</div>
               <div style={{ height: 8, marginTop: 6, borderRadius: 99, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
                 <div style={{ height: '100%', width: `${waterPct}%`, borderRadius: 99, background: 'linear-gradient(90deg, #a6ff00, #00f0ff)', boxShadow: '0 0 10px rgba(166,255,0,0.7)' }} />
               </div>
@@ -622,7 +686,7 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
               <div style={{ flex: 1 }}>
                 <div style={{ fontFamily: p.monoFont, fontSize: 9.5, letterSpacing: 0.2, color: p.dim, textTransform: 'uppercase' }}>giorni a</div>
                 <div style={{ fontFamily: p.displayFont, fontWeight: 700, fontSize: 18, marginTop: 2, textTransform: 'uppercase' }}>{nearest.label}</div>
-                {nearest.note && <div style={{ fontFamily: p.monoFont, fontSize: 10, color: p.muted, marginTop: 2 }}>{nearest.date} · {nearest.note}</div>}
+                <div style={{ fontFamily: p.monoFont, fontSize: 10, color: p.muted, marginTop: 2 }}>{fmtItDate(nearest.date)}{nearest.note ? ` · ${nearest.note}` : ''}</div>
               </div>
               <span style={{ fontFamily:p.monoFont,fontSize:9,color:p.orange,textTransform:'uppercase' }}>EDIT</span>
             </div>

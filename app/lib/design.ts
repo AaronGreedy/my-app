@@ -21,6 +21,23 @@ export const p = {
   captureBg: 'rgba(10,8,6,0.92)',
 } as const;
 
+// Format helpers
+// ISO YYYY-MM-DD → gg-mm-aaaa (italian dash format).
+// Accepts also empty/invalid input → returns input as-is.
+export function fmtItDate(iso: string): string {
+  if (!iso) return iso;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return iso;
+  return `${m[3]}-${m[2]}-${m[1]}`;
+}
+// JS Date → gg-mm-aaaa
+export function fmtItDateFromDate(d: Date): string {
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yy = d.getFullYear();
+  return `${dd}-${mm}-${yy}`;
+}
+
 export const NOISE_SVG = `data:image/svg+xml;utf8,${encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200">
     <filter id="n">

@@ -39,7 +39,16 @@ export function useNotes(uid: string | null) {
     await deleteDoc(doc(db, 'users', uid, 'notes', id));
   };
 
-  return { notes, addNote, deleteNote };
+  // Update a full note (body+tags). Re-derives the title from the first line of body.
+  const updateNote = async (id: string, body: string, tags?: string[]) => {
+    if (!uid || !db) return;
+    const title = body.split('\n')[0].slice(0, 60) || 'Nota';
+    const patch: Partial<BrainNote> = { body, title };
+    if (tags) patch.tags = tags;
+    await updateDoc(doc(db, 'users', uid, 'notes', id), patch);
+  };
+
+  return { notes, addNote, deleteNote, updateNote };
 }
 
 // ─── Shopping List ─────────────────────────────────────────────────────────────
@@ -99,6 +108,62 @@ export function useShoppingList(uid: string | null) {
   const clearAll = () => save([]);
 
   return { items, addItem, toggleItem, removeItem, moveItem, clearAll };
+}
+
+// ─── TODO con priorità ────────────────────────────────────────────────────────
+
+export type TodoPriority = 1 | 2 | 3; // 1 = !, 2 = !!, 3 = !!!
+
+export interface Todo {
+  id: string;
+  text: string;
+  priority: TodoPriority;
+  done: boolean;
+  createdAt: number;
+  doneAt?: number;
+  dueDate?: string; // YYYY-MM-DD opzionale
+}
+
+export function useTodos(uid: string | null) {
+  const [todos, setTodos] = useState<Todo[]>([]);
+
+  useEffect(() => {
+    if (!uid || !db) return;
+    const ref = doc(db, 'users', uid, 'lists', 'todos');
+    return onSnapshot(ref, snap => {
+      if (snap.exists()) setTodos((snap.data().items ?? []) as Todo[]);
+      else setTodos([]);
+    });
+  }, [uid]);
+
+  const save = (next: Todo[]) => {
+    if (!uid || !db) return;
+    setTodos(next);
+    setDoc(doc(db, 'users', uid, 'lists', 'todos'), { items: next }, { merge: true }).catch(console.error);
+  };
+
+  const addTodo = (text: string, priority: TodoPriority = 2, dueDate?: string) => {
+    const t = text.trim();
+    if (!t) return;
+    save([
+      { id: `${Date.now()}_${Math.random().toString(36).slice(2,6)}`, text: t, priority, done: false, createdAt: Date.now(), dueDate },
+      ...todos,
+    ]);
+  };
+
+  const toggleTodo = (id: string) =>
+    save(todos.map(t => t.id === id ? { ...t, done: !t.done, doneAt: !t.done ? Date.now() : undefined } : t));
+
+  const updateTodo = (id: string, patch: Partial<Todo>) =>
+    save(todos.map(t => t.id === id ? { ...t, ...patch } : t));
+
+  const removeTodo = (id: string) =>
+    save(todos.filter(t => t.id !== id));
+
+  const clearDone = () =>
+    save(todos.filter(t => !t.done));
+
+  return { todos, addTodo, toggleTodo, updateTodo, removeTodo, clearDone };
 }
 
 // ─── User Profile (PRs) ────────────────────────────────────────────────────────
@@ -304,7 +369,7 @@ const CHALLENGES: WeeklyChallenge[] = [
   { id:'workout_4',     label:'4 Workout',          desc:'Allena 4 volte questa settimana',      xp:100, target:4 },
   { id:'brain_10',      label:'Brain dump',         desc:'Aggiungi 10 note al Brain',            xp:70,  target:10 },
   { id:'stretching_5',  label:'Mobilità',           desc:'5 sessioni stretching complete',       xp:60,  target:5 },
-  { id:'candle_7',      label:'Sonno sacro',        desc:'Candle prima di dormire 7 sere',       xp:70,  target:7 },
+  { id:'candle_7',      label:'Sonno sacro',        desc:'Candle 7 sere di fila',                xp:70,  target:7 },
   { id:'nofap_7',       label:'No Fap × 7',         desc:'7 giorni di astinenza',                xp:100, target:7 },
   { id:'nojunk_7',      label:'No Junk',            desc:'7 giorni senza junk food',             xp:80,  target:7 },
   { id:'reading_5',     label:'Lettore',            desc:'15 min lettura × 5 giorni',            xp:60,  target:5 },
@@ -452,6 +517,11 @@ export interface UserSettings {
   weightTargetMin: number;
   weightTargetMax: number;
   showXpToast: boolean;
+  pomodoroWorkMin: number;       // minuti sessione lavoro
+  pomodoroShortBreakMin: number; // pausa breve
+  pomodoroLongBreakMin: number;  // pausa lunga ogni 4
+  novaTtsAuto: boolean;          // NOVA legge a voce di default
+  novaBriefingOnOpen: boolean;   // mostra prompt di briefing NOVA all'apertura app
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -465,6 +535,11 @@ export const DEFAULT_SETTINGS: UserSettings = {
   weightTargetMin: 79,
   weightTargetMax: 82,
   showXpToast: true,
+  pomodoroWorkMin: 25,
+  pomodoroShortBreakMin: 5,
+  pomodoroLongBreakMin: 15,
+  novaTtsAuto: true,
+  novaBriefingOnOpen: false,
 };
 
 export function useUserSettings(uid: string | null) {

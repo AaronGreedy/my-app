@@ -9,12 +9,13 @@ import { CalendarScreen } from '@/screens/calendar';
 import { BrainScreen } from '@/screens/brain';
 import { MeScreen, MeTab } from '@/screens/me';
 import { FocusScreen } from '@/screens/focus';
+import { NovaScreen } from '@/screens/nova';
 import { SettingsScreen } from '@/screens/settings';
 import { BottomNav } from './bottom-nav';
 import { MarkerDiamond } from './markers';
 import { LevelUpCelebration } from './level-up-celebration';
 
-type Screen = 'home' | 'cal' | 'brain' | 'me' | 'focus' | 'settings';
+type Screen = 'home' | 'cal' | 'brain' | 'me' | 'focus' | 'nova' | 'settings';
 type NavScreen = 'home' | 'cal' | 'brain' | 'me';
 
 function LoadingScreen() {
@@ -30,12 +31,14 @@ export function AppShell() {
   const { user, loading } = useAuth();
   const [screen, setScreen] = useState<Screen>('home');
   const [meTab, setMeTab] = useState<MeTab | undefined>(undefined);
+  const [novaBriefing, setNovaBriefing] = useState(false);
 
   if (loading) return <LoadingScreen />;
   if (!user)   return <LoginScreen />;
 
-  const navigate = (s: Screen, opts?: { meTab?: MeTab }) => {
+  const navigate = (s: Screen, opts?: { meTab?: MeTab; novaBriefing?: boolean }) => {
     if (opts?.meTab) setMeTab(opts.meTab);
+    setNovaBriefing(!!opts?.novaBriefing);
     setScreen(s);
   };
 
@@ -45,13 +48,14 @@ export function AppShell() {
     brain:    <BrainScreen />,
     me:       <MeScreen initialTab={meTab} />,
     focus:    <FocusScreen onBack={() => setScreen('home')} />,
+    nova:     <NovaScreen  onBack={() => setScreen('home')} initialBriefing={novaBriefing} />,
     settings: <SettingsScreen onBack={() => setScreen('home')} />,
   };
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: p.bg }}>
       {content[screen]}
-      {screen !== 'focus' && screen !== 'settings' && (
+      {screen !== 'focus' && screen !== 'nova' && screen !== 'settings' && (
         <BottomNav
           screen={screen as NavScreen}
           setScreen={(s, opts) => navigate(s, opts)}

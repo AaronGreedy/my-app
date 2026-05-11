@@ -1,15 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { p } from '@/lib/design';
 import { NeonGlass, SectionLabel } from '@/components/neon-glass';
 import { MarkerPlus } from '@/components/markers';
 import { useAuth } from '@/lib/auth-context';
-import { useNotes, useWorkItems, WorkItem } from '@/lib/user-store';
-
-const WORK = 25 * 60;
-const SHORT = 5 * 60;
-const LONG = 15 * 60;
+import { useNotes, useWorkItems, useUserSettings, WorkItem } from '@/lib/user-store';
 
 function timeAgoDays(ts: number): string {
   const diff = Date.now() - ts;
@@ -108,13 +104,25 @@ function WorkTrackerSection({ uid }: { uid: string | null }) {
 export function FocusScreen({ onBack }: { onBack: () => void }) {
   const { user } = useAuth();
   const { addNote } = useNotes(user?.uid ?? null);
+  const { settings, saveSettings } = useUserSettings(user?.uid ?? null);
+  // Durate pomodoro lette dai settings utente (modificabili anche da qui).
+  const WORK  = Math.max(1, settings.pomodoroWorkMin)       * 60;
+  const SHORT = Math.max(1, settings.pomodoroShortBreakMin) * 60;
+  const LONG  = Math.max(1, settings.pomodoroLongBreakMin)  * 60;
+
   const [phase, setPhase] = useState<'idle'|'work'|'break'>('idle');
   const [timeLeft, setTimeLeft] = useState(WORK);
   const [session, setSession] = useState(0);
-  const [dumpOpen, setDumpOpen] = useState(false);
+  const [showTimerCfg, setShowTimerCfg] = useState(false);
+
+  // Se l'utente cambia la durata del lavoro in idle, aggiorno il counter mostrato.
+  useEffect(() => {
+    if (phase === 'idle') setTimeLeft(WORK);
+  }, [WORK, phase]);
   const [dumpText, setDumpText] = useState('');
   const [dumpSaving, setDumpSaving] = useState(false);
   const [dumpSaved, setDumpSaved] = useState(false);
+  const dumpRef = React.useRef<HTMLTextAreaElement | null>(null);
 
   const saveDump = async () => {
     const body = dumpText.trim();
@@ -122,9 +130,11 @@ export function FocusScreen({ onBack }: { onBack: () => void }) {
     setDumpSaving(true);
     try {
       await addNote(body, ['idea']);
-      setDumpSaved(true);
       setDumpText('');
-      setTimeout(() => { setDumpSaved(false); setDumpOpen(false); }, 900);
+      setDumpSaved(true);
+      setTimeout(() => setDumpSaved(false), 1200);
+      // Mantieni il focus per il prossimo pensiero
+      dumpRef.current?.focus();
     } finally {
       setDumpSaving(false);
     }
@@ -188,7 +198,7 @@ export function FocusScreen({ onBack }: { onBack: () => void }) {
             </div>
           </div>
           <div style={{ fontFamily:p.monoFont, fontSize:9.5, color:p.dim, marginTop:14, letterSpacing:0.15 }}>SESSIONE {session+1} · {session} completate</div>
-          <div style={{ marginTop:16 }}>
+          <div style={{ marginTop:16, display:'flex', gap:8, alignItems:'center', flexWrap:'wrap', justifyContent:'center' }}>
             {phase === 'idle' ? (
               <NeonGlass onClick={() => { setPhase('work'); setTimeLeft(WORK); }} tint="linear-gradient(135deg,rgba(255,0,64,0.3),rgba(255,106,0,0.2))" edge="rgba(255,106,0,0.6)" glow="#ff6a00" radius={20}>
                 <div style={{ padding:'12px 40px', fontFamily:p.monoFont, fontSize:12, letterSpacing:0.2, fontWeight:700, textTransform:'uppercase', color:p.fg }}>▶ INIZIA</div>
@@ -198,46 +208,76 @@ export function FocusScreen({ onBack }: { onBack: () => void }) {
                 <div style={{ padding:'12px 36px', fontFamily:p.monoFont, fontSize:12, letterSpacing:0.2, textTransform:'uppercase', color:p.muted }}>■ STOP</div>
               </NeonGlass>
             )}
+            <button onClick={() => setShowTimerCfg(s => !s)} title="Imposta durate timer" style={{ background:'rgba(255,255,255,0.06)', border:`1px solid ${p.border}`, borderRadius:14, padding:'10px 14px', color:p.muted, fontFamily:p.monoFont, fontSize:10, textTransform:'uppercase', letterSpacing:0.15, cursor:'pointer' }}>⚙ {settings.pomodoroWorkMin}/{settings.pomodoroShortBreakMin}/{settings.pomodoroLongBreakMin}</button>
+            <a href="https://www.brain.fm" target="_blank" rel="noopener noreferrer" style={{ textDecoration:'none' }}>
+              <div style={{ background:'linear-gradient(135deg,rgba(107,0,255,0.2),rgba(0,240,255,0.12))', border:`1px solid rgba(107,0,255,0.5)`, borderRadius:14, padding:'10px 14px', color:'#a78bfa', fontFamily:p.monoFont, fontSize:10, textTransform:'uppercase', letterSpacing:0.15, cursor:'pointer' }}>♪ Brain.fm ↗</div>
+            </a>
           </div>
+          {showTimerCfg && (
+            <NeonGlass style={{ marginTop:14, width:'100%' }} tint="rgba(255,255,255,0.04)" radius={16}>
+              <div style={{ padding:'12px 14px' }}>
+                <div style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim, textTransform:'uppercase', letterSpacing:0.18, marginBottom:8 }}>DURATE TIMER · MINUTI</div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
+                  {([
+                    { k:'pomodoroWorkMin',       l:'LAVORO',     min:1, max:120 },
+                    { k:'pomodoroShortBreakMin', l:'PAUSA',      min:1, max:60  },
+                    { k:'pomodoroLongBreakMin',  l:'PAUSA LUNGA',min:1, max:120 },
+                  ] as const).map(row => {
+                    const v = settings[row.k];
+                    return (
+                      <div key={row.k}>
+                        <div style={{ fontFamily:p.monoFont, fontSize:8.5, color:p.dim, marginBottom:4 }}>{row.l}</div>
+                        <input type="number" min={row.min} max={row.max} value={v}
+                          onChange={e => { const n = Math.max(row.min, Math.min(row.max, parseInt(e.target.value || '0', 10) || 0)); saveSettings({ [row.k]: n } as Partial<typeof settings>); }}
+                          style={{ width:'100%', background:'rgba(255,255,255,0.06)', border:`1px solid ${p.border}`, borderRadius:10, padding:'8px 10px', color:p.fg, fontFamily:p.displayFont, fontSize:20, fontWeight:700, outline:'none' }}/>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{ display:'flex', gap:6, marginTop:10, flexWrap:'wrap' }}>
+                  {([[25,5,15,'classico'],[50,10,20,'lungo'],[15,3,10,'sprint']] as [number,number,number,string][]).map(([w, s, l, lbl]) => (
+                    <button key={lbl} onClick={() => saveSettings({ pomodoroWorkMin:w, pomodoroShortBreakMin:s, pomodoroLongBreakMin:l })} style={{ padding:'6px 10px', borderRadius:10, border:`1px solid ${p.border}`, background:'rgba(255,255,255,0.04)', color:p.muted, fontFamily:p.monoFont, fontSize:9, textTransform:'uppercase', cursor:'pointer' }}>↻ {lbl} {w}/{s}/{l}</button>
+                  ))}
+                </div>
+              </div>
+            </NeonGlass>
+          )}
         </div>
 
-        {/* Dump pensiero */}
-        <SectionLabel num="02" title="DUMP" hint="butta giù → Brain"/>
-        {!dumpOpen ? (
-          <NeonGlass style={{ marginTop:8 }} tint="rgba(255,255,255,0.04)" radius={18} onClick={() => setDumpOpen(true)}>
-            <div style={{ padding:'12px 16px', fontFamily:p.monoFont, fontSize:10, color:p.dim, textTransform:'uppercase', letterSpacing:0.15, display:'flex', alignItems:'center', gap:8 }}>
+        {/* Dump pensiero — sempre attivo, Ctrl+Invio per inviare in Brain */}
+        <SectionLabel num="02" title="DUMP" hint="ctrl+invio → Brain"/>
+        <NeonGlass style={{ marginTop:8 }} tint="rgba(255,106,0,0.08)" edge="rgba(255,106,0,0.3)" radius={18}>
+          <div style={{ padding:'14px 16px' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8, fontFamily:p.monoFont, fontSize:10, color:p.orange, textTransform:'uppercase', letterSpacing:0.15 }}>
               <MarkerPlus size={11} color={p.orange}/>
-              DUMP PENSIERO — scrivi dopo, non fermarti
-              <span style={{ flex:1 }}/><span style={{ color:p.orange }}>→</span>
+              DUMP — sempre attivo
+              <span style={{ flex:1 }}/>
+              {dumpSaved && <span style={{ color:p.green, fontWeight:700 }}>✓ SALVATO</span>}
             </div>
-          </NeonGlass>
-        ) : (
-          <NeonGlass style={{ marginTop:8 }} tint="rgba(255,106,0,0.08)" edge="rgba(255,106,0,0.3)" radius={18}>
-            <div style={{ padding:'14px 16px' }}>
-              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8, fontFamily:p.monoFont, fontSize:10, color:p.orange, textTransform:'uppercase', letterSpacing:0.15 }}>
-                <MarkerPlus size={11} color={p.orange}/>
-                DUMP — salva subito nel Brain
-                <span style={{ flex:1 }}/>
-                {dumpSaved && <span style={{ color:p.green, fontWeight:700 }}>✓ SALVATO</span>}
-              </div>
-              <textarea
-                value={dumpText}
-                onChange={e => setDumpText(e.target.value)}
-                onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') saveDump(); }}
-                disabled={dumpSaving}
-                rows={3}
-                autoFocus
-                placeholder="Pensiero veloce, idea, distrazione… butta giù."
-                style={{ width:'100%', resize:'none', border:0, outline:0, background:'transparent', color:p.fg, fontFamily:p.bodyFont, fontSize:15, lineHeight:1.35 }}
-              />
-              <div style={{ display:'flex', gap:8, marginTop:8 }}>
-                <button onClick={() => { setDumpOpen(false); setDumpText(''); }} disabled={dumpSaving} style={{ padding:'9px 14px', borderRadius:12, border:0, cursor:dumpSaving?'not-allowed':'pointer', background:'rgba(255,255,255,0.08)', color:p.fg, fontFamily:p.monoFont, fontSize:10, textTransform:'uppercase' }}>Esc</button>
-                <div style={{ flex:1 }}/>
-                <button onClick={saveDump} disabled={!dumpText.trim() || dumpSaving} style={{ padding:'9px 20px', borderRadius:12, border:0, cursor:(!dumpText.trim()||dumpSaving)?'not-allowed':'pointer', background:p.orange, color:'#0a0a0a', fontFamily:p.monoFont, fontSize:10, textTransform:'uppercase', fontWeight:800, opacity:(!dumpText.trim()||dumpSaving)?0.5:1 }}>{dumpSaving ? '...' : '↵ Salva'}</button>
-              </div>
+            <textarea
+              ref={dumpRef}
+              value={dumpText}
+              onChange={e => setDumpText(e.target.value)}
+              onKeyDown={e => {
+                if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                  e.preventDefault();
+                  saveDump();
+                }
+              }}
+              disabled={dumpSaving}
+              rows={3}
+              autoFocus
+              tabIndex={1}
+              placeholder="Pensiero veloce, idea, distrazione… butta giù. ctrl+invio per salvare."
+              style={{ width:'100%', resize:'none', border:0, outline:0, background:'transparent', color:p.fg, fontFamily:p.bodyFont, fontSize:15, lineHeight:1.35 }}
+            />
+            <div style={{ display:'flex', gap:8, marginTop:8, alignItems:'center' }}>
+              <span style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim, letterSpacing:0.1 }}>{dumpText.length>0?`${dumpText.length} car.`:'idea? scrivi e ctrl+invio'}</span>
+              <div style={{ flex:1 }}/>
+              <button onClick={saveDump} disabled={!dumpText.trim() || dumpSaving} tabIndex={2} style={{ padding:'9px 20px', borderRadius:12, border:0, cursor:(!dumpText.trim()||dumpSaving)?'not-allowed':'pointer', background:p.orange, color:'#0a0a0a', fontFamily:p.monoFont, fontSize:10, textTransform:'uppercase', fontWeight:800, opacity:(!dumpText.trim()||dumpSaving)?0.5:1 }}>{dumpSaving ? '...' : '↵ ctrl+invio'}</button>
             </div>
-          </NeonGlass>
-        )}
+          </div>
+        </NeonGlass>
 
         {/* Work tracker */}
         <WorkTrackerSection uid={user?.uid ?? null}/>

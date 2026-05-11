@@ -82,7 +82,9 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `personal-growth-${new Date().toISOString().slice(0,10)}.json`;
+      const d = new Date();
+      const stamp = `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`;
+      a.download = `personal-growth-${stamp}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -159,6 +161,15 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
         <NeonGlass style={{ marginTop:8 }} tint="rgba(255,255,255,0.04)" radius={18}>
           <div style={{ padding:'10px 12px' }}>
             <ToggleRow label="Toast XP" hint="mostra +XP a ogni azione" value={settings.showXpToast} onChange={v => saveSettings({ showXpToast: v })}/>
+          </div>
+        </NeonGlass>
+
+        {/* NOVA */}
+        <SectionLabel num="05a" title="NOVA · AI" hint="super-assistente"/>
+        <NeonGlass style={{ marginTop:8 }} tint="rgba(167,139,250,0.08)" edge="rgba(167,139,250,0.3)" radius={18}>
+          <div style={{ padding:'10px 12px' }}>
+            <ToggleRow label="Voce automatica" hint="NOVA legge le risposte ad alta voce" value={settings.novaTtsAuto} onChange={v => saveSettings({ novaTtsAuto: v })}/>
+            <ToggleRow label="Briefing all'apertura" hint="appena apri l'app, NOVA fa il briefing del giorno (1 volta a sessione)" value={settings.novaBriefingOnOpen} onChange={v => saveSettings({ novaBriefingOnOpen: v })}/>
           </div>
         </NeonGlass>
 
