@@ -57,12 +57,21 @@ interface DocData {
 }
 
 export async function GET(req: NextRequest) {
-  // Allow either Vercel cron (with header) or manual auth via secret query param.
+  // Auth obbligatoria via CRON_SECRET. Vercel cron passa il secret in due modi:
+  //  1. Header `Authorization: Bearer <CRON_SECRET>` (preferito, fornito automaticamente
+  //     dal Vercel runtime se CRON_SECRET è configurato come env var)
+  //  2. Header `x-vercel-cron-secret` (alcune versioni cron lo usano)
+  // Se CRON_SECRET NON è configurato → 500 (fail-closed, niente bypass silenzioso).
+  // Vecchio check `x-vercel-cron == "1"` rimosso: era mockabile da chiunque.
   const cronSecret = process.env.CRON_SECRET;
-  const isVercelCron = req.headers.get('x-vercel-cron') === '1';
-  const queryAuth   = req.nextUrl.searchParams.get('secret');
-  const authorized = isVercelCron || (cronSecret && queryAuth === cronSecret);
-  if (cronSecret && !authorized) {
+  if (!cronSecret) {
+    return Response.json({ error: 'CRON_SECRET non configurata · cron disabilitato' }, { status: 500 });
+  }
+  const authHeader = req.headers.get('authorization') ?? '';
+  const altHeader  = req.headers.get('x-vercel-cron-secret') ?? '';
+  const okBearer = authHeader === `Bearer ${cronSecret}`;
+  const okAlt    = altHeader === cronSecret;
+  if (!okBearer && !okAlt) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

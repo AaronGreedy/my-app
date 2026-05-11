@@ -142,15 +142,16 @@ function speakBrowser(text: string) {
 // Singleton audio element per la voce premium (così "stop" funziona davvero)
 let premiumAudio: HTMLAudioElement | null = null;
 interface PremiumResult { ok: boolean; status?: number; error?: string }
-async function speakPremium(text: string, voiceId?: string): Promise<PremiumResult> {
+async function speakPremium(text: string, token: string | null, voiceId?: string): Promise<PremiumResult> {
   if (typeof window === 'undefined') return { ok: false, error: 'no window' };
+  if (!token) return { ok: false, status: 401, error: 'non loggato' };
   const clean = stripForTTS(text);
   if (!clean) return { ok: false, error: 'testo vuoto' };
   try {
     if (premiumAudio) { try { premiumAudio.pause(); } catch {} premiumAudio = null; }
     const res = await fetch('/api/ai/nova/tts', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ text: clean, ...(voiceId ? { voice_id: voiceId } : {}) }),
     });
     if (!res.ok) {
@@ -209,16 +210,16 @@ export function NovaScreen({ onBack, initialBriefing = false }: { onBack: () => 
   const speak = useCallback(async (text: string) => {
     if (!text.trim()) return;
     if (premiumOn) {
-      const r = await speakPremium(text);
+      const token = user ? await user.getIdToken() : null;
+      const r = await speakPremium(text, token);
       if (r.ok) return;
-      // Mostro l'errore reale almeno una volta, poi cado in browser TTS
       if (r.status || r.error) {
         toast.err(`TTS ${r.status ?? '—'}: ${(r.error ?? 'fallita').slice(0, 120)}`);
       }
     }
     speakBrowser(text);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [premiumOn]);
+  }, [premiumOn, user]);
   const recRef = useRef<SRInstance | null>(null);
   const baseTextRef = useRef('');
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -315,9 +316,11 @@ export function NovaScreen({ onBack, initialBriefing = false }: { onBack: () => 
     setLoading(true);
     try {
       const history = [...messages, userMsg].map(m => ({ role: m.role, content: m.content }));
+      const token = user ? await user.getIdToken() : null;
+      if (!token) throw new Error('non loggato');
       const res = await fetch('/api/ai/nova', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ messages: history, context: buildContext(), mode }),
       });
       const json = await res.json();

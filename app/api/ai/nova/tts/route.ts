@@ -4,6 +4,7 @@
 // Voce di default: Aria (mature, naturale). Override con ELEVENLABS_VOICE_ID.
 
 import { NextRequest } from 'next/server';
+import { verifyAuthHeader } from '@/lib/admin';
 
 export const runtime = 'nodejs';
 
@@ -22,6 +23,9 @@ const MAX_CHARS = 1500;
 const DEFAULT_VOICE = 'EXAVITQu4vr4xnSDxMaL';
 
 export async function POST(req: NextRequest) {
+  const decoded = await verifyAuthHeader(req.headers.get('authorization'));
+  if (!decoded) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+
   const key = process.env.ELEVENLABS_API_KEY;
   if (!key) {
     return Response.json({ error: 'ELEVENLABS_API_KEY non configurata' }, { status: 503 });

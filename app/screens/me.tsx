@@ -611,6 +611,7 @@ function MoodTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayData
   const noteA     = data.moodNoteA;
   const noteE     = data.moodNoteE;
   const { addNote } = useNotes(uid);
+  const { user }   = useAuth();
 
   const [aiLoading, setAiLoading] = useState(false);
   const [aiResponse, setAiResponse] = useState('');
@@ -697,9 +698,11 @@ function MoodTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayData
       }
       setAiDebug(lines.join('\n'));
       const system = `Sei un coach di Aaron, analizzi il suo log mood + journal + allenamenti.\n\nREGOLE FERREE:\n1. Usa SOLO i dati nel blocco DATI sotto. NON inventare workout, date, note, citazioni o eventi non letteralmente presenti. Se citi una data o una frase, deve apparire identica nei DATI.\n2. Se hai meno di 5 entry per categoria (mood, workout, journal), DILLO e spiega che il dataset è troppo piccolo per pattern affidabili — non estrapolare comunque.\n3. Se non vedi correlazioni reali, scrivi "non emergono pattern significativi con questi dati" invece di inventare.\n4. Italiano, max 6 bullet, asciutto, senza preamboli tipo "Ciao Aaron". Vai dritto.\n5. Niente banalità tipo "fai più sport", "dormi di più". Solo pattern osservati.\n\nDATI (ordine cronologico, ultimi 30gg loggati):\n${lines.join('\n')}`;
+      const token = user ? await user.getIdToken() : null;
+      if (!token) throw new Error('non loggato');
       const res = await fetch('/api/ai', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ system, messages: [{ role: 'user', content: 'Analizza i pattern di umore, allenamento e pensieri.' }] }),
       });
       const json = await res.json();

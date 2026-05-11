@@ -4,6 +4,7 @@
 // rispondere con azioni strutturate in coda alla risposta (blocco ```json …```).
 
 import { NextRequest } from 'next/server';
+import { verifyAuthHeader } from '@/lib/admin';
 
 export const runtime = 'nodejs';
 
@@ -201,6 +202,9 @@ ${lines.join('\n')}`;
 }
 
 export async function POST(req: NextRequest) {
+  const decoded = await verifyAuthHeader(req.headers.get('authorization'));
+  if (!decoded) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+
   const key = process.env.GEMINI_API_KEY;
   if (!key) {
     return Response.json({ error: 'GEMINI_API_KEY non configurata su Vercel' }, { status: 500 });

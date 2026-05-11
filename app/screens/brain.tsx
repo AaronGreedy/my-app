@@ -576,9 +576,11 @@ export function BrainScreen() {
         return `· ${date}${tags} ${n.title}\n  ${n.body.slice(0, 240)}`;
       }).join('\n');
       const system = `Sei l'AI del Second Brain di Aaron. Rispondi in italiano, breve e diretto, senza fronzoli. Se ti chiede di riorganizzare/cercare/collegare/sintetizzare le note, usa SOLO il contesto qui sotto. Se non c'è abbastanza materiale, dillo chiaramente invece di inventare.${ctx ? `\n\nNOTE (più recenti, max 30):\n${ctx}` : '\n\n(Nessuna nota ancora.)'}`;
+      const token = user ? await user.getIdToken() : null;
+      if (!token) throw new Error('non loggato');
       const res = await fetch('/api/ai', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ system, messages: [{ role: 'user', content: q }] }),
       });
       const json = await res.json();

@@ -1,0 +1,63 @@
+// Firebase Firestore security rules per Personal Growth — Aaron Edition.
+// Modello dati: tutto sotto `users/{uid}` è privato al proprietario.
+// Nessuna collezione top-level aperta. Default: deny.
+//
+// Deploy: dalla root del repo
+//   firebase login        (1 volta)
+//   firebase use <project_id>
+//   firebase deploy --only firestore:rules
+//
+// Verifica: tab "Rules" su console.firebase.google.com → "Simulator" → fingi
+// di essere un altro utente e prova a leggere users/<altro_uid>/notes → deny.
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny: qualsiasi path non esplicitamente permesso sotto è negato.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ─── USER ROOT ───────────────────────────────────────────────────────
+    // /users/{uid} contiene: prs, countdowns, supplements, xp,
+    // weeklyChallenges, workItems, weightLog, settings, notifPrefs,
+    // pushSub, notifFired, gifts (sotto-mappa).
+    match /users/{uid} {
+      allow read, write: if isOwner(uid);
+
+      // ─── DAYS ──────────────────────────────────────────────────────────
+      // /users/{uid}/days/{YYYY-MM-DD} : log giornaliero (mood, journal,
+      // workout, kcal, water, sleep, weatherSnap, moonPhase). Molto sensibile.
+      match /days/{dateId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      // ─── NOTES (Brain) ─────────────────────────────────────────────────
+      // /users/{uid}/notes/{noteId} : note del Second Brain.
+      match /notes/{noteId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      // ─── LISTS (shopping, todos, gifts) ────────────────────────────────
+      // /users/{uid}/lists/{listDoc} : doc singolo per ogni lista con
+      // array `items` dentro.
+      match /lists/{listDoc} {
+        allow read, write: if isOwner(uid);
+      }
+
+      // ─── Sub-collezioni future ─────────────────────────────────────────
+      // Wildcard sicura: qualsiasi altra sub-collezione sotto users/{uid}/**
+      // è permessa SOLO al proprietario. Le aggiunte future ereditano la
+      // protezione automaticamente.
+      match /{anyCollection=**} {
+        allow read, write: if isOwner(uid);
+      }
+    }
+  }
+
+  // Helper: utente loggato che coincide col proprietario del path
+  function isOwner(uid) {
+    return request.auth != null && request.auth.uid == uid;
+  }
+}

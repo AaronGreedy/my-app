@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { verifyAuthHeader } from '@/lib/admin';
 
 export const runtime = 'nodejs';
 
@@ -12,6 +13,11 @@ const MAX_MESSAGES = 60;
 const MAX_TOTAL_CHARS = 60_000;
 
 export async function POST(req: NextRequest) {
+  // Auth: solo utenti loggati a Firebase. Senza, chiunque conosca l'URL
+  // brucerebbe la quota Gemini.
+  const decoded = await verifyAuthHeader(req.headers.get('authorization'));
+  if (!decoded) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+
   const key = process.env.GEMINI_API_KEY;
   if (!key) {
     return Response.json({ error: 'GEMINI_API_KEY non configurata su Vercel' }, { status: 500 });
