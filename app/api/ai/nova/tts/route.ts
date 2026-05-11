@@ -9,14 +9,17 @@ export const runtime = 'nodejs';
 
 const MAX_CHARS = 1500;
 
-// Default voice: "Aria" (femminile, matura, ottima resa multilingua).
-// Aaron può cambiarla via env ELEVENLABS_VOICE_ID. Alcune alternative
-// note in libreria gratis (test su elevenlabs.io/voice-library):
+// Default voice: "Sarah" (femminile, giovane, suona più naturale di Aria su
+// italiano colloquiale). Aaron può cambiarla via env ELEVENLABS_VOICE_ID.
+// Alternative note in libreria gratis (test su elevenlabs.io/voice-library):
+//  · Sarah       EXAVITQu4vr4xnSDxMaL  — giovane, naturale (default)
 //  · Lily        pFZP5JQG7iQjIQuC4Bku  — calma, soothing
 //  · Charlotte   XB0fDUnXU5powFXDhCwa  — intima, soft british
-//  · Sarah       EXAVITQu4vr4xnSDxMaL  — giovane, brillante
-//  · Aria        9BWtsMINqrJLrRacOk9x  — matura, elegante (default)
-const DEFAULT_VOICE = '9BWtsMINqrJLrRacOk9x';
+//  · Aria        9BWtsMINqrJLrRacOk9x  — matura, scura (un po' robotica su IT)
+// Per una voce italiana NATIVA cerca su voice-library filtrando per lingua
+// italiano: troverai "Bianca", "Giorgia", "Federica" ecc. Copia il voice_id
+// e mettilo in ELEVENLABS_VOICE_ID — non serve toccare il codice.
+const DEFAULT_VOICE = 'EXAVITQu4vr4xnSDxMaL';
 
 export async function POST(req: NextRequest) {
   const key = process.env.ELEVENLABS_API_KEY;
@@ -52,12 +55,12 @@ export async function POST(req: NextRequest) {
     },
     body: JSON.stringify({
       text,
-      // multilingual_v2 supporta italiano nativo con buona prosodia
-      model_id: 'eleven_multilingual_v2',
+      // turbo_v2_5: prosodia più naturale, supporta italiano, latenza più bassa
+      model_id: 'eleven_turbo_v2_5',
       voice_settings: {
-        stability: 0.42,        // più espressivo (più basso = più variabilità)
-        similarity_boost: 0.78, // mantiene il timbro coerente
-        style: 0.35,            // un filo di "carattere" — chiacchiera
+        stability: 0.50,        // medio — non troppo monotono ma stabile
+        similarity_boost: 0.75,
+        style: 0.0,             // 0 = naturale puro, niente "carattere" forzato
         use_speaker_boost: true,
       },
       output_format: 'mp3_44100_128',
