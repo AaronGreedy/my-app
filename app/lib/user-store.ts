@@ -522,6 +522,7 @@ export interface UserSettings {
   pomodoroLongBreakMin: number;  // pausa lunga ogni 4
   novaTtsAuto: boolean;          // NOVA legge a voce di default
   novaBriefingOnOpen: boolean;   // mostra prompt di briefing NOVA all'apertura app
+  novaVoicePremium: boolean;     // usa OpenAI TTS (voce naturale) se configurata
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -540,6 +541,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   pomodoroLongBreakMin: 15,
   novaTtsAuto: true,
   novaBriefingOnOpen: false,
+  novaVoicePremium: true,
 };
 
 export function useUserSettings(uid: string | null) {

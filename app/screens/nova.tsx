@@ -82,23 +82,93 @@ function parseActionsAndStrip(raw: string): { text: string; actions: Action[] } 
 
 // ─── TTS (browser SpeechSynthesis) ──────────────────────────────────────────
 
-function speakIt(text: string) {
+// Toglie markdown/emoji/punteggiatura "rumorosa" prima di passare a TTS,
+// così la voce non legge "asterisco asterisco" o emoji come parole.
+function stripForTTS(text: string): string {
+  return text
+    .replace(/```[\s\S]*?```/g, '')                 // blocchi code fence
+    .replace(/`([^`]+)`/g, '$1')                    // inline code
+    .replace(/\*\*([^*]+)\*\*/g, '$1')              // **bold**
+    .replace(/\*([^*]+)\*/g, '$1')                  // *italic*
+    .replace(/__([^_]+)__/g, '$1')                  // __bold__
+    .replace(/_([^_]+)_/g, '$1')                    // _italic_
+    .replace(/^#{1,6}\s+/gm, '')                    // # headings
+    .replace(/^[\s]*[-*•·–—]\s+/gm, '')             // bullet markers a inizio riga
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')        // [link](url) → link
+    // Emoji unicode (range principali)
+    .replace(/[\u{1F300}-\u{1FAFF}]|[\u{2600}-\u{27BF}]|[\u{2700}-\u{27BF}]|[\u{1F900}-\u{1F9FF}]|[\u{1F600}-\u{1F64F}]/gu, '')
+    .replace(/[—–]/g, ',')                          // dash lunghi → pausa breve
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+// Scegli una voce italiana "decente" tra quelle del sistema. Preferisci voci
+// neural/premium (Google, Microsoft) e femminili/più naturali quando disponibili.
+function pickItalianVoice(): SpeechSynthesisVoice | null {
+  if (typeof window === 'undefined' || !window.speechSynthesis) return null;
+  const voices = window.speechSynthesis.getVoices();
+  const it = voices.filter(v => v.lang?.toLowerCase().startsWith('it'));
+  if (it.length === 0) return null;
+  // priorità: Google > Microsoft > qualsiasi italiana
+  const preferOrder = [
+    /google.*ital/i, /italian.*google/i,
+    /microsoft.*elsa/i, /microsoft.*isabella/i, /microsoft.*cosimo/i,
+    /natural/i, /neural/i, /premium/i,
+    /female/i,
+  ];
+  for (const rx of preferOrder) {
+    const found = it.find(v => rx.test(v.name));
+    if (found) return found;
+  }
+  return it[0];
+}
+
+function speakBrowser(text: string) {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  const clean = stripForTTS(text);
+  if (!clean) return;
   try {
     window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
+    const u = new SpeechSynthesisUtterance(clean);
     u.lang = 'it-IT';
-    u.rate = 1.05;
+    u.rate = 1.08;
     u.pitch = 1.0;
-    const voices = window.speechSynthesis.getVoices();
-    const it = voices.find(v => v.lang?.toLowerCase().startsWith('it'));
-    if (it) u.voice = it;
+    const v = pickItalianVoice();
+    if (v) u.voice = v;
     window.speechSynthesis.speak(u);
   } catch { /* swallow */ }
 }
+
+// Singleton audio element per la voce premium (così "stop" funziona davvero)
+let premiumAudio: HTMLAudioElement | null = null;
+async function speakPremium(text: string): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  const clean = stripForTTS(text);
+  if (!clean) return false;
+  try {
+    if (premiumAudio) { try { premiumAudio.pause(); } catch {} premiumAudio = null; }
+    const res = await fetch('/api/ai/nova/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: clean, voice: 'nova', model: 'tts-1' }),
+    });
+    if (!res.ok) return false;
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.onended = () => { URL.revokeObjectURL(url); if (premiumAudio === audio) premiumAudio = null; };
+    premiumAudio = audio;
+    await audio.play();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function stopSpeaking() {
   if (typeof window === 'undefined') return;
   try { window.speechSynthesis.cancel(); } catch {}
+  if (premiumAudio) { try { premiumAudio.pause(); } catch {} premiumAudio = null; }
 }
 
 // ─── NovaScreen ──────────────────────────────────────────────────────────────
@@ -125,6 +195,18 @@ export function NovaScreen({ onBack, initialBriefing = false }: { onBack: () => 
   const [recording, setRecording] = useState(false);
   const [voiceErr, setVoiceErr] = useState<string | null>(null);
   const [ttsOn, setTtsOn] = useState<boolean>(settings.novaTtsAuto ?? true);
+  // Stato voce premium: true = OpenAI TTS, false = browser. Sticky alla settings.
+  const [premiumOn, setPremiumOn] = useState<boolean>(settings.novaVoicePremium ?? true);
+  // Speak unificato: prova premium se attivo, fallback al browser TTS.
+  const speak = useCallback(async (text: string) => {
+    if (!text.trim()) return;
+    if (premiumOn) {
+      const ok = await speakPremium(text);
+      if (ok) return;
+      // Se la premium fallisce (env mancante o errore), uso browser
+    }
+    speakBrowser(text);
+  }, [premiumOn]);
   const recRef = useRef<SRInstance | null>(null);
   const baseTextRef = useRef('');
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -138,6 +220,15 @@ export function NovaScreen({ onBack, initialBriefing = false }: { onBack: () => 
     // Cleanup all'unmount: ferma voce e TTS
     stopSpeaking();
     if (recRef.current) { try { recRef.current.stop(); } catch {} recRef.current = null; }
+  }, []);
+
+  // Warm-up voci TTS (Chrome le carica async; trigger l'evento voiceschanged)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    window.speechSynthesis.getVoices();
+    const handler = () => window.speechSynthesis.getVoices();
+    window.speechSynthesis.addEventListener?.('voiceschanged', handler);
+    return () => window.speechSynthesis.removeEventListener?.('voiceschanged', handler);
   }, []);
 
   // Auto-briefing all'apertura — aspetta che il primo snapshot Firestore sia
@@ -223,7 +314,7 @@ export function NovaScreen({ onBack, initialBriefing = false }: { onBack: () => 
       const { text: clean, actions } = parseActionsAndStrip(raw);
       const aiMsg: ChatMsg = { role: 'assistant', content: clean || raw, raw, actions, appliedActionIdx: new Set() };
       setMessages(prev => [...prev, aiMsg]);
-      if (ttsOn && clean.trim()) speakIt(clean);
+      if (ttsOn && clean.trim()) speak(clean);
     } catch (e) {
       const err = e instanceof Error ? e.message : 'errore di rete';
       setMessages(prev => [...prev, { role: 'assistant', content: `⚠ ${err}` }]);
@@ -384,7 +475,7 @@ export function NovaScreen({ onBack, initialBriefing = false }: { onBack: () => 
                   </div>
                 )}
                 {m.role === 'assistant' && tts && (
-                  <button onClick={() => speakIt(m.content)} title="Riascolta" style={{ marginTop:8, padding:'3px 8px', borderRadius:8, border:`1px solid ${p.border}`, background:'transparent', color:p.dim, fontFamily:p.monoFont, fontSize:9, cursor:'pointer', textTransform:'uppercase', letterSpacing:0.15 }}>🔊 ripeti</button>
+                  <button onClick={() => speak(m.content)} title="Riascolta" style={{ marginTop:8, padding:'3px 8px', borderRadius:8, border:`1px solid ${p.border}`, background:'transparent', color:p.dim, fontFamily:p.monoFont, fontSize:9, cursor:'pointer', textTransform:'uppercase', letterSpacing:0.15 }}>🔊 ripeti</button>
                 )}
               </div>
             </div>
