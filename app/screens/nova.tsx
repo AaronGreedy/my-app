@@ -141,10 +141,11 @@ function speakBrowser(text: string) {
 
 // Singleton audio element per la voce premium (così "stop" funziona davvero)
 let premiumAudio: HTMLAudioElement | null = null;
-async function speakPremium(text: string, voiceId?: string): Promise<boolean> {
-  if (typeof window === 'undefined') return false;
+interface PremiumResult { ok: boolean; status?: number; error?: string }
+async function speakPremium(text: string, voiceId?: string): Promise<PremiumResult> {
+  if (typeof window === 'undefined') return { ok: false, error: 'no window' };
   const clean = stripForTTS(text);
-  if (!clean) return false;
+  if (!clean) return { ok: false, error: 'testo vuoto' };
   try {
     if (premiumAudio) { try { premiumAudio.pause(); } catch {} premiumAudio = null; }
     const res = await fetch('/api/ai/nova/tts', {
@@ -152,16 +153,20 @@ async function speakPremium(text: string, voiceId?: string): Promise<boolean> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: clean, ...(voiceId ? { voice_id: voiceId } : {}) }),
     });
-    if (!res.ok) return false;
+    if (!res.ok) {
+      let detail = '';
+      try { const j = await res.json(); detail = j?.error ?? ''; } catch {}
+      return { ok: false, status: res.status, error: detail || `HTTP ${res.status}` };
+    }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
     audio.onended = () => { URL.revokeObjectURL(url); if (premiumAudio === audio) premiumAudio = null; };
     premiumAudio = audio;
     await audio.play();
-    return true;
-  } catch {
-    return false;
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'fetch fallita' };
   }
 }
 
@@ -231,8 +236,8 @@ export function NovaScreen({ onBack, initialBriefing = false }: { onBack: () => 
   const speak = useCallback(async (text: string) => {
     if (!text.trim()) return;
     if (premiumOn) {
-      const ok = await speakPremium(text, currentVoiceId || undefined);
-      if (ok) return;
+      const r = await speakPremium(text, currentVoiceId || undefined);
+      if (r.ok) return;
       // Se la premium fallisce (env mancante o errore), uso browser
     }
     speakBrowser(text);
@@ -243,8 +248,11 @@ export function NovaScreen({ onBack, initialBriefing = false }: { onBack: () => 
     if (voiceSampling) return;
     setVoiceSampling(voiceId);
     try {
-      const ok = await speakPremium(SAMPLE_PHRASE, voiceId);
-      if (!ok) toast.err('Voce non disponibile (verifica ELEVENLABS_API_KEY / voice_id)');
+      const r = await speakPremium(SAMPLE_PHRASE, voiceId);
+      if (!r.ok) {
+        const code = r.status ?? '—';
+        toast.err(`TTS ${code}: ${(r.error ?? 'fallita').slice(0, 120)}`);
+      }
     } finally {
       // Lascia il loading per la durata stimata della frase, poi spegne
       setTimeout(() => setVoiceSampling(null), 4500);
