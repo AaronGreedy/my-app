@@ -150,7 +150,7 @@ async function speakPremium(text: string): Promise<boolean> {
     const res = await fetch('/api/ai/nova/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: clean, voice: 'nova', model: 'tts-1' }),
+      body: JSON.stringify({ text: clean }),
     });
     if (!res.ok) return false;
     const blob = await res.blob();

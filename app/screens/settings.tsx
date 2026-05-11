@@ -169,7 +169,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
         <NeonGlass style={{ marginTop:8 }} tint="rgba(167,139,250,0.08)" edge="rgba(167,139,250,0.3)" radius={18}>
           <div style={{ padding:'10px 12px' }}>
             <ToggleRow label="Voce automatica" hint="NOVA legge le risposte ad alta voce" value={settings.novaTtsAuto} onChange={v => saveSettings({ novaTtsAuto: v })}/>
-            <ToggleRow label="Voce premium" hint="OpenAI TTS, voce naturale (richiede OPENAI_API_KEY su Vercel · fallback su voce browser)" value={settings.novaVoicePremium} onChange={v => saveSettings({ novaVoicePremium: v })}/>
+            <ToggleRow label="Voce premium" hint="ElevenLabs (free tier 10k char/mese · richiede ELEVENLABS_API_KEY su Vercel · fallback su voce browser)" value={settings.novaVoicePremium} onChange={v => saveSettings({ novaVoicePremium: v })}/>
             <ToggleRow label="Briefing all'apertura" hint="appena apri l'app, NOVA fa il briefing del giorno (1 volta a sessione)" value={settings.novaBriefingOnOpen} onChange={v => saveSettings({ novaBriefingOnOpen: v })}/>
           </div>
         </NeonGlass>
