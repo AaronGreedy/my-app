@@ -244,6 +244,7 @@ function getDailyPrompts(): Prompt[] {
 }
 
 const PIN_KEY = 'gifts_pin_hash';
+const DEFAULT_GIFTS_PIN = '9559'; // PIN di default deciso da Aaron il 2026-05-23
 function hashPin(pin: string): string { return btoa(pin + 'pgapp_salt'); }
 function verifyPin(pin: string): boolean {
   if (typeof window === 'undefined') return false;
@@ -257,6 +258,14 @@ function storePin(pin: string) {
 function hasPin(): boolean {
   if (typeof window === 'undefined') return false;
   return !!localStorage.getItem(PIN_KEY);
+}
+// Se non c'è ancora un PIN salvato, inizializza al default 9559.
+// Se invece c'è già un PIN diverso (settato in passato), NON lo tocca.
+function ensureDefaultPin() {
+  if (typeof window === 'undefined') return;
+  if (!localStorage.getItem(PIN_KEY)) {
+    storePin(DEFAULT_GIFTS_PIN);
+  }
 }
 
 // ─── PIN Pad ──────────────────────────────────────────────────────────────────
@@ -321,92 +330,6 @@ function PinPad({ title, onSubmit, onCancel, confirmMode }: {
   );
 }
 
-// ─── News Section ──────────────────────────────────────────────────────────────
-
-interface NewsItem {
-  title: string;
-  link: string;
-  source: string;
-  pubDate: number;
-  description: string;
-}
-
-function relTime(ms: number): string {
-  const diff = Date.now() - ms;
-  const min = Math.floor(diff / 60000);
-  if (min < 1) return 'ora';
-  if (min < 60) return `${min}min fa`;
-  const h = Math.floor(min / 60);
-  if (h < 24) return `${h}h fa`;
-  const d = Math.floor(h / 24);
-  return `${d}g fa`;
-}
-
-function NewsSection() {
-  const [items, setItems] = useState<NewsItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [lastFetch, setLastFetch] = useState<number>(0);
-
-  const load = async () => {
-    setLoading(true); setError('');
-    try {
-      const res = await fetch('/api/news', { cache: 'no-store' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      setItems((data.items ?? []) as NewsItem[]);
-      setLastFetch(Date.now());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Errore caricamento');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { load(); }, []);
-
-  return (
-    <div>
-      <SectionLabel num="01" title="NEWS FEED" hint={`${items.length} · AI · Design`}/>
-      <div style={{ display:'flex', gap:8, marginTop:8, alignItems:'center' }}>
-        <button onClick={load} disabled={loading} style={{ padding:'10px 14px', borderRadius:14, border:`1px solid ${p.border}`, background:'rgba(255,255,255,0.04)', color:p.muted, fontFamily:p.monoFont, fontSize:10, letterSpacing:0.12, textTransform:'uppercase', cursor:loading?'wait':'pointer' }}>
-          {loading ? '· · · CARICO ·  · ·' : '↻ Aggiorna'}
-        </button>
-        {lastFetch > 0 && !loading && (
-          <span style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim }}>aggiornato {relTime(lastFetch)}</span>
-        )}
-      </div>
-
-      {error && (
-        <div style={{ marginTop:12, padding:'12px 14px', borderRadius:12, border:`1px solid rgba(255,0,64,0.4)`, background:'rgba(255,0,64,0.08)', color:p.red, fontFamily:p.monoFont, fontSize:10 }}>{error}</div>
-      )}
-
-      <div style={{ display:'flex', flexDirection:'column', gap:8, marginTop:12 }}>
-        {items.map(it => (
-          <a key={it.link} href={it.link} target="_blank" rel="noopener noreferrer" style={{ textDecoration:'none' }}>
-            <NeonGlass tint="rgba(255,255,255,0.03)" radius={16}>
-              <div style={{ padding:'12px 14px' }}>
-                <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:5 }}>
-                  <span style={{ fontFamily:p.monoFont, fontSize:9, color:p.cyan, letterSpacing:0.15, textTransform:'uppercase' }}>{it.source}</span>
-                  <span style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim }}>· {relTime(it.pubDate)}</span>
-                </div>
-                <div style={{ fontFamily:p.bodyFont, fontSize:14, color:p.fg, lineHeight:1.35, fontWeight:600 }}>{it.title}</div>
-                {it.description && (
-                  <div style={{ fontFamily:p.bodyFont, fontSize:12, color:p.muted, lineHeight:1.4, marginTop:4 }}>{it.description}</div>
-                )}
-              </div>
-            </NeonGlass>
-          </a>
-        ))}
-      </div>
-
-      {!loading && !error && items.length === 0 && (
-        <div style={{ textAlign:'center', padding:'40px 0', fontFamily:p.monoFont, fontSize:11, color:p.dim }}>nessuna news disponibile</div>
-      )}
-    </div>
-  );
-}
-
 // ─── Gifts Section ─────────────────────────────────────────────────────────────
 
 function GiftsSection({ uid }: { uid: string | null }) {
@@ -417,6 +340,8 @@ function GiftsSection({ uid }: { uid: string | null }) {
   const [newNote, setNewNote] = useState('');
 
   useEffect(() => {
+    // Al primo accesso garantisce il PIN default (9559) se non già settato
+    ensureDefaultPin();
     if (!verified) setPinMode(hasPin() ? 'verify' : 'set');
   }, [verified]);
 
@@ -431,7 +356,7 @@ function GiftsSection({ uid }: { uid: string | null }) {
   if (pinMode !== 'none' && !verified) {
     return (
       <PinPad
-        title={pinMode === 'set' ? '🎁 CREA PIN REGALI' : '🎁 INSERISCI PIN'}
+        title={pinMode === 'set' ? 'CREA PIN REGALI' : 'INSERISCI PIN REGALI'}
         onSubmit={handlePinSubmit}
         onCancel={() => setPinMode('none')}
         confirmMode={pinMode === 'set'}
@@ -449,7 +374,7 @@ function GiftsSection({ uid }: { uid: string | null }) {
 
   return (
     <div>
-      <SectionLabel num="01" title="IDEE REGALO" hint="per lei 🤍"/>
+      <SectionLabel num="01" title="IDEE REGALO" hint="per lei"/>
       <div style={{ display:'flex',gap:8,marginTop:8 }}>
         <div style={{ flex:1 }}>
           <input value={newLabel} onChange={e=>setNewLabel(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') add(); }} placeholder="Idea regalo…" style={{ width:'100%',padding:'12px 16px',borderRadius:14,border:`1px solid ${p.border}`,background:'rgba(255,255,255,0.05)',color:p.fg,fontFamily:p.bodyFont,fontSize:15,outline:'none' }}/>
@@ -480,7 +405,7 @@ function GiftsSection({ uid }: { uid: string | null }) {
       </div>
 
       <NeonGlass style={{ marginTop:16 }} tint="rgba(255,0,64,0.06)" radius={14} onClick={() => { setVerified(false); setPinMode(hasPin()?'verify':'set'); }}>
-        <div style={{ padding:'10px 16px',textAlign:'center',fontFamily:p.monoFont,fontSize:9,color:p.dim,textTransform:'uppercase' }}>🔒 Blocca · cambia PIN</div>
+        <div style={{ padding:'10px 16px',textAlign:'center',fontFamily:p.monoFont,fontSize:9,color:p.dim,textTransform:'uppercase' }}>Blocca · cambia PIN</div>
       </NeonGlass>
     </div>
   );
@@ -495,8 +420,8 @@ export function BrainScreen() {
   const { items, addItem, toggleItem, removeItem, moveItem, clearAll } = useShoppingList(user?.uid ?? null);
   const { todos, addTodo, toggleTodo, updateTodo, removeTodo, clearDone: clearDoneTodos } = useTodos(user?.uid ?? null);
 
-  const [section, setSection] = useState<'brain'|'spesa'|'regali'|'news'>('brain');
-  const [view, setView]     = useState<'todo'|'graph'|'list'>('list');
+  const [section, setSection] = useState<'brain'|'spesa'|'regali'>('brain');
+  const [view, setView]     = useState<'graph'|'list'>('list');
   // Stato del form nuovo todo
   const [newTodoText, setNewTodoText] = useState('');
   const [newTodoPrio, setNewTodoPrio] = useState<TodoPriority>(2);
@@ -649,16 +574,13 @@ export function BrainScreen() {
               BRAIN<br/><span style={{ color:p.cyan }}>DUMP.</span>
             </div>
           </div>
-          {section === 'brain' && (
-            <NeonGlass radius={16} onClick={() => setShowNew(true)} tint="rgba(0,240,255,0.12)" edge="rgba(0,240,255,0.4)">
-              <div style={{ padding:'10px 16px', fontFamily:p.monoFont, fontSize:10, color:p.cyan, letterSpacing:0.15, textTransform:'uppercase' }}>+ NOTA</div>
-            </NeonGlass>
-          )}
+          {/* Pulsante "+ NOTA" rimosso 2026-05-23: il FAB centrale (Quick Capture)
+              gestisce già la creazione note. Era un doppione confuso. */}
         </div>
 
         {/* Section tabs */}
         <div style={{ display:'flex', gap:5, marginTop:18 }}>
-          {([['brain','🧠 BRAIN'],['spesa','🛒 SPESA'],['regali','🎁 REGALI'],['news','📰 NEWS']] as [typeof section, string][]).map(([s, lbl]) => (
+          {([['brain','BRAIN'],['spesa','SPESA'],['regali','REGALI']] as [typeof section, string][]).map(([s, lbl]) => (
             <button key={s} onClick={() => setSection(s)} style={{ flex:1, padding:'10px 4px', borderRadius:14, border:`1px solid ${section===s?(s==='regali'?p.magenta:p.cyan):'rgba(255,255,255,0.1)'}`, background:section===s?(s==='regali'?'rgba(255,20,184,0.12)':'rgba(0,240,255,0.12)'):'transparent', color:section===s?p.fg:p.muted, cursor:'pointer', fontFamily:p.monoFont, fontSize:9, letterSpacing:0.12, textTransform:'uppercase' }}>
               {lbl}
             </button>
@@ -670,14 +592,14 @@ export function BrainScreen() {
           <>
             {/* View toggle (subito visibile, è il primo gesto) */}
             <div style={{ display:'flex', gap:5, marginTop:16 }}>
-              {([['todo','✓ TODO'],['graph','◇ GRAPH'],['list','☰ LISTA']] as [typeof view, string][]).map(([v, lbl]) => (
+              {([['list','☰ LISTA'],['graph','◇ GRAPH']] as [typeof view, string][]).map(([v, lbl]) => (
                 <button key={v} onClick={() => setView(v)} style={{ flex:1, padding:'9px 4px', borderRadius:12, border:`1px solid ${view===v?p.cyan:'rgba(255,255,255,0.1)'}`, background:view===v?'rgba(0,240,255,0.12)':'transparent', color:view===v?p.cyan:p.muted, fontFamily:p.monoFont, fontSize:10, letterSpacing:0.12, textTransform:'uppercase', cursor:'pointer', fontWeight:700 }}>
                   {lbl}
                 </button>
               ))}
             </div>
             <div style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim, marginTop:6, textAlign:'right' }}>
-              {view === 'todo' ? `${todos.filter(t=>!t.done).length} todo · ${todos.filter(t=>t.done).length} fatti` : `${filtered.length} nota${filtered.length!==1?'e':''} · ${graphEdges.length} link`}
+              {`${filtered.length} nota${filtered.length!==1?'e':''} · ${graphEdges.length} link`}
             </div>
 
             {/* Riga compatta: ricerca + filtri + prompts. Tutto collassabile. */}
@@ -685,7 +607,7 @@ export function BrainScreen() {
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cerca…"
                 style={{ flex:1, padding:'10px 12px', borderRadius:12, border:`1px solid ${p.border}`, background:'rgba(255,255,255,0.05)', color:p.fg, fontFamily:p.bodyFont, fontSize:14, outline:'none' }} />
               <button onClick={() => setShowFilters(s => !s)} style={{ padding:'10px 12px', borderRadius:12, border:`1px solid ${(showFilters||activeTag) ? p.cyan : p.border}`, background: (showFilters||activeTag) ? 'rgba(0,240,255,0.10)' : 'rgba(255,255,255,0.03)', color: (showFilters||activeTag) ? p.cyan : p.muted, fontFamily:p.monoFont, fontSize:9.5, textTransform:'uppercase', cursor:'pointer' }}>
-                🏷 {activeTag ?? 'tag'}
+                # {activeTag ?? 'tag'}
               </button>
               <button onClick={() => setShowPrompts(s => !s)} style={{ padding:'10px 12px', borderRadius:12, border:`1px solid ${showPrompts ? '#ffd400' : p.border}`, background: showPrompts ? 'rgba(255,212,0,0.10)' : 'rgba(255,255,255,0.03)', color: showPrompts ? '#ffd400' : p.muted, fontFamily:p.monoFont, fontSize:9.5, textTransform:'uppercase', cursor:'pointer' }}>
                 ✦ prompts
@@ -718,88 +640,13 @@ export function BrainScreen() {
               </div>
             )}
 
-            {/* TODO view */}
-            {view === 'todo' && (
-              <div style={{ marginTop:10 }}>
-                <div style={{ display:'flex', gap:6, alignItems:'stretch' }}>
-                  <input
-                    value={newTodoText}
-                    onChange={e => setNewTodoText(e.target.value)}
-                    onKeyDown={e => { if(e.key==='Enter' && newTodoText.trim()){ addTodo(newTodoText, newTodoPrio); setNewTodoText(''); } }}
-                    placeholder="Nuovo todo… invio per aggiungere"
-                    style={{ flex:1, padding:'12px 14px', borderRadius:14, border:`1px solid ${p.border}`, background:'rgba(255,255,255,0.05)', color:p.fg, fontFamily:p.bodyFont, fontSize:15, outline:'none' }}
-                  />
-                  <NeonGlass radius={14} tint="rgba(0,240,255,0.12)" edge="rgba(0,240,255,0.4)" onClick={() => { if (newTodoText.trim()) { addTodo(newTodoText, newTodoPrio); setNewTodoText(''); } }}>
-                    <div style={{ padding:'12px 18px', fontFamily:p.monoFont, fontSize:11, color:p.cyan }}>+</div>
-                  </NeonGlass>
-                </div>
-                <div style={{ display:'flex', gap:6, marginTop:8 }}>
-                  {([1,2,3] as TodoPriority[]).map(pr => {
-                    const sel = newTodoPrio === pr;
-                    const col = pr === 3 ? p.red : pr === 2 ? p.orange : '#ffd400';
-                    return (
-                      <button key={pr} onClick={() => setNewTodoPrio(pr)} style={{ flex:1, padding:'7px 4px', borderRadius:10, border:`1px solid ${sel?col:'rgba(255,255,255,0.1)'}`, background:sel?`${col}22`:'transparent', color:sel?col:p.muted, fontFamily:p.monoFont, fontSize:11, letterSpacing:0.12, cursor:'pointer', fontWeight:800 }}>
-                        {'!'.repeat(pr)}<span style={{ fontSize:8, opacity:0.7, marginLeft:6 }}>{pr===3?'urgente':pr===2?'normale':'basso'}</span>
-                      </button>
-                    );
-                  })}
-                </div>
+            {/* La view TODO è stata spostata fuori da Brain (decisione 2026-05-23):
+                Brain ora gestisce SOLO note + grafo. I todo li gestiremo in
+                FASE 7 (Quick Capture routing). */}
 
-                {todos.length === 0 && (
-                  <div style={{ textAlign:'center', padding:'40px 0', fontFamily:p.monoFont, fontSize:11, color:p.dim }}>nessun todo · aggiungine uno</div>
-                )}
-
-                {/* Active todos ordered by priority desc then date asc */}
-                <div style={{ display:'flex', flexDirection:'column', gap:6, marginTop:12 }}>
-                  {[...todos]
-                    .filter(t => !t.done)
-                    .sort((a,b) => b.priority - a.priority || a.createdAt - b.createdAt)
-                    .map(t => {
-                      const col = t.priority === 3 ? p.red : t.priority === 2 ? p.orange : '#ffd400';
-                      return (
-                        <NeonGlass key={t.id} tint={`${col}10`} edge={`${col}55`} radius={14}>
-                          <div style={{ padding:'12px 14px', display:'flex', alignItems:'center', gap:10 }}>
-                            <button onClick={() => toggleTodo(t.id)} title="Segna come fatto" style={{ width:22,height:22,borderRadius:7,border:`1.5px solid ${col}`,background:'transparent',flexShrink:0,cursor:'pointer' }}/>
-                            <span style={{ fontFamily:p.monoFont, fontSize:13, color:col, fontWeight:900, letterSpacing:0.1, flexShrink:0 }}>{'!'.repeat(t.priority)}</span>
-                            <span style={{ flex:1, fontFamily:p.bodyFont, fontSize:14, color:p.fg, wordBreak:'break-word' }}>{t.text}</span>
-                            <button onClick={() => removeTodo(t.id)} style={{ background:'transparent', border:'none', color:p.dim, cursor:'pointer', fontSize:16, padding:'0 2px' }}>×</button>
-                          </div>
-                        </NeonGlass>
-                      );
-                    })}
-                </div>
-
-                {/* Done todos */}
-                {todos.some(t => t.done) && (
-                  <>
-                    <div style={{ fontFamily:p.monoFont,fontSize:9,color:p.dim,textTransform:'uppercase',letterSpacing:0.18,marginTop:14,marginBottom:6,display:'flex',alignItems:'center',gap:8 }}>
-                      ✓ FATTI · {todos.filter(t=>t.done).length}
-                      <span style={{ flex:1, height:1, background:p.border }}/>
-                      <button onClick={clearDoneTodos} style={{ background:'transparent',border:`1px solid ${p.border}`,borderRadius:8,padding:'3px 8px',color:p.dim,fontFamily:p.monoFont,fontSize:8.5,textTransform:'uppercase',cursor:'pointer' }}>svuota</button>
-                    </div>
-                    <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
-                      {[...todos]
-                        .filter(t => t.done)
-                        .sort((a,b) => (b.doneAt ?? b.createdAt) - (a.doneAt ?? a.createdAt))
-                        .slice(0, 30)
-                        .map(t => (
-                          <NeonGlass key={t.id} tint="rgba(166,255,0,0.05)" radius={12}>
-                            <div style={{ padding:'9px 12px', display:'flex', alignItems:'center', gap:10 }}>
-                              <button onClick={() => toggleTodo(t.id)} title="Riapri" style={{ width:20,height:20,borderRadius:6,border:`1.5px solid ${p.green}`,background:p.green,flexShrink:0,cursor:'pointer',color:'#0a0a0a',fontSize:12,fontWeight:900,display:'flex',alignItems:'center',justifyContent:'center' }}>✓</button>
-                              <span style={{ flex:1, fontFamily:p.bodyFont, fontSize:13, color:p.muted, textDecoration:'line-through' }}>{t.text}</span>
-                              <button onClick={() => removeTodo(t.id)} style={{ background:'transparent', border:'none', color:p.dim, cursor:'pointer', fontSize:14, padding:'0 2px' }}>×</button>
-                            </div>
-                          </NeonGlass>
-                        ))}
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-
-            {view !== 'todo' && filtered.length === 0 && (
+            {filtered.length === 0 && (
               <div style={{ textAlign:'center', padding:'40px 0', fontFamily:p.monoFont, fontSize:11, color:p.dim }}>
-                nessuna nota · premi + NOTA per iniziare<br/>
+                nessuna nota · usa il + centrale per crearne una<br/>
                 <span style={{ fontSize:10 }}>tip: usa <code style={{ color:p.cyan }}>[[titolo]]</code> per linkare note tra loro</span>
               </div>
             )}
@@ -962,9 +809,6 @@ export function BrainScreen() {
         {/* ── REGALI TAB ── */}
         {section === 'regali' && <GiftsSection uid={user?.uid ?? null} />}
 
-        {/* ── NEWS TAB ── */}
-        {section === 'news' && <NewsSection/>}
-
       </div>
 
       {/* AI modal */}
@@ -993,13 +837,13 @@ export function BrainScreen() {
 
             {aiError && (
               <div style={{ marginTop:14, padding:'12px 14px', borderRadius:12, border:`1px solid rgba(255,0,64,0.4)`, background:'rgba(255,0,64,0.08)', color:p.red, fontFamily:p.monoFont, fontSize:11 }}>
-                {aiError.toLowerCase().includes('gemini_api_key') || aiError.toLowerCase().includes('non configurata') ? (
+                {aiError.toLowerCase().includes('groq_api_key') || aiError.toLowerCase().includes('gemini_api_key') || aiError.toLowerCase().includes('non configurata') ? (
                   <>
-                    <div style={{ fontWeight:700, marginBottom:6 }}>⚠ AI non configurata</div>
+                    <div style={{ fontWeight:700, marginBottom:6 }}>[!] AI non configurata</div>
                     <div style={{ color:p.fg, fontSize:10.5, lineHeight:1.5, fontFamily:p.bodyFont }}>
-                      Per attivare l&apos;AI:<br/>
-                      1. crea una key gratuita su <span style={{ color:p.cyan }}>aistudio.google.com/apikey</span><br/>
-                      2. Vercel → Environments → aggiungi <code style={{ color:p.orange }}>GEMINI_API_KEY</code><br/>
+                      Per attivare l&apos;AI (free tier Groq):<br/>
+                      1. crea una key gratuita su <span style={{ color:p.cyan }}>console.groq.com/keys</span><br/>
+                      2. Vercel → Environments → aggiungi <code style={{ color:p.orange }}>GROQ_API_KEY</code><br/>
                       3. Redeploy
                     </div>
                   </>

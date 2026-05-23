@@ -77,7 +77,7 @@ export function LevelUpCelebration() {
         animation: 'celebPop 0.5s cubic-bezier(.2,1.4,.3,1.1)',
       } as CSSProperties}>
         <div style={{ fontFamily: p.monoFont, fontSize: 12, color: '#ffd400', letterSpacing: 0.3, textTransform: 'uppercase', marginBottom: 8 }}>
-          ★ LEVEL UP ★
+          ·· LEVEL UP ··
         </div>
         <div style={{
           fontFamily: p.displayFont, fontWeight: 800, fontSize: 88,

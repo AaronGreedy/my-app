@@ -8,72 +8,15 @@ import { MarkerTarget, MarkerDiamond, MarkerStar4, MarkerTriangle, MarkerHex } f
 import { useAuth } from '@/lib/auth-context';
 import { useDayStore, MoodId, useMonthData } from '@/lib/day-store';
 import { getMealTotals } from '@/lib/meals';
-import { useXP, useCountdowns, useWeeklyChallenge, daysUntil, useUserSettings } from '@/lib/user-store';
+import { useXP, useCountdowns, useWeeklyChallenge, daysUntil, useUserSettings, useWeightLog, useNotes, useTodos } from '@/lib/user-store';
 import { useToast } from '@/lib/toast';
 import { CountdownEditor } from '@/components/countdown-editor';
-
-// ─── Refresh button + build stamp ─────────────────────────────────────────────
-
-const BUILD_SHA = process.env.NEXT_PUBLIC_BUILD_SHA ?? 'dev';
-
-function TopRightButtons({ onSettings, onNova }: { onSettings: () => void; onNova: () => void }) {
-  const [spin, setSpin] = useState(false);
-  const onRefresh = () => {
-    setSpin(true);
-    setTimeout(() => window.location.reload(), 120);
-  };
-  const baseStyle: CSSProperties = {
-    width: 32, height: 32, borderRadius: '50%',
-    border: '1px solid rgba(255,255,255,0.25)',
-    background: 'rgba(255,255,255,0.08)',
-    backdropFilter: 'blur(8px)',
-    WebkitBackdropFilter: 'blur(8px)',
-    color: '#fff',
-    fontFamily: p.monoFont, fontSize: 16, fontWeight: 500,
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    cursor: 'pointer', padding: 0,
-  };
-  const novaStyle: CSSProperties = {
-    ...baseStyle,
-    border: '1px solid rgba(167,139,250,0.55)',
-    background: 'linear-gradient(135deg, rgba(167,139,250,0.35), rgba(0,240,255,0.20))',
-    boxShadow: '0 0 14px rgba(167,139,250,0.55), inset 0 0 8px rgba(255,255,255,0.15)',
-    color: '#fff',
-    fontSize: 14, fontWeight: 800, letterSpacing: 0.2,
-  };
-  return (
-    <>
-      <div style={{ position:'fixed', top:'calc(env(safe-area-inset-top, 0px) + 12px)', right:14, zIndex:100, display:'flex', gap:6 }}>
-        <button onClick={onNova} aria-label="NOVA" title="Apri NOVA" style={novaStyle}>✦</button>
-        <button onClick={onSettings} aria-label="Settings" style={baseStyle}>⚙</button>
-        <button onClick={onRefresh} aria-label="Aggiorna" style={baseStyle}>
-          <span style={{ display:'inline-block', animation: spin ? 'rfSpin 0.6s linear infinite' : 'none' }}>↻</span>
-        </button>
-      </div>
-      <style>{`@keyframes rfSpin { to { transform: rotate(360deg); } }`}</style>
-    </>
-  );
-}
 
 // ─── Weather (Bolzano) ────────────────────────────────────────────────────────
 
 interface WeatherData {
   current: { temperature_2m: number; apparent_temperature: number; weather_code: number; relative_humidity_2m: number; wind_speed_10m: number; is_day: number };
   daily:   { temperature_2m_max: number[]; temperature_2m_min: number[]; precipitation_probability_max: number[]; weather_code: number[] };
-}
-
-function wmoEmoji(code: number, isDay = 1): string {
-  if (code === 0) return isDay ? '☀️' : '🌙';
-  if (code <= 2)  return isDay ? '🌤' : '☁️';
-  if (code === 3) return '☁️';
-  if (code === 45 || code === 48) return '🌫';
-  if (code >= 51 && code <= 57)   return '🌦';
-  if (code >= 61 && code <= 67)   return '🌧';
-  if (code >= 71 && code <= 77)   return '🌨';
-  if (code >= 80 && code <= 82)   return '🌧';
-  if (code >= 85 && code <= 86)   return '🌨';
-  if (code >= 95)                 return '⛈';
-  return '🌡';
 }
 
 function wmoLabel(code: number): string {
@@ -132,7 +75,6 @@ function WeatherCard() {
   const max = Math.round(w.daily.temperature_2m_max[0]);
   const min = Math.round(w.daily.temperature_2m_min[0]);
   const rain = w.daily.precipitation_probability_max[0] ?? 0;
-  const emoji = wmoEmoji(cur.weather_code, cur.is_day);
   const label = wmoLabel(cur.weather_code);
 
   // Apre 3bmeteo Bolzano in nuova tab — 3bmeteo non espone API pubblica gratuita,
@@ -143,7 +85,6 @@ function WeatherCard() {
   return (
     <NeonGlass style={{ marginTop: 12 }} tint="linear-gradient(135deg, rgba(0,240,255,0.18), rgba(166,255,0,0.08))" edge="rgba(0,240,255,0.4)" radius={20} onClick={OPEN_3BMETEO}>
       <div style={{ padding:'14px 16px', display:'flex', alignItems:'center', gap:14 }}>
-        <div style={{ fontSize:46, lineHeight:1, flexShrink:0, filter:'drop-shadow(0 4px 12px rgba(0,240,255,0.4))' }}>{emoji}</div>
         <div style={{ flex:1, minWidth:0 }}>
           <div style={{ display:'flex', alignItems:'center', gap:8, fontFamily:p.monoFont, fontSize:9.5, color:p.cyan, textTransform:'uppercase', letterSpacing:0.18 }}>
             <span>BOLZANO · METEO</span>
@@ -158,115 +99,12 @@ function WeatherCard() {
             <span>perc {Math.round(cur.apparent_temperature)}°</span>
             <span style={{ color:p.green }}>↓{min}°</span>
             <span style={{ color:p.orange }}>↑{max}°</span>
-            <span>💧{rain}%</span>
+            <span>pioggia {rain}%</span>
             <span>{Math.round(cur.wind_speed_10m)} km/h</span>
           </div>
         </div>
       </div>
     </NeonGlass>
-  );
-}
-
-// ─── News Feed ────────────────────────────────────────────────────────────────
-
-interface NewsItem {
-  title: string;
-  link: string;
-  source: string;
-  pubDate: number;
-  description: string;
-}
-
-function timeAgo(ts: number): string {
-  const diff = Date.now() - ts;
-  const m = Math.round(diff / 60000);
-  if (m < 60) return `${Math.max(1, m)}m`;
-  const h = Math.round(m / 60);
-  if (h < 24) return `${h}h`;
-  const d = Math.round(h / 24);
-  if (d < 7)  return `${d}g`;
-  return fmtItDateFromDate(new Date(ts));
-}
-
-const SRC_COLOR: Record<string, string> = {
-  'TechCrunch AI': '#a6ff00',
-  'The Verge':     '#ff14b8',
-  'Hacker News':   '#ff6a00',
-  'Smashing':      '#00f0ff',
-};
-
-function NewsFeed() {
-  const [items, setItems]     = useState<NewsItem[] | null>(null);
-  const [err, setErr]         = useState<string | null>(null);
-  const [expanded, setExpanded] = useState(false);
-
-  useEffect(() => {
-    let alive = true;
-    fetch('/api/news')
-      .then(r => r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`))
-      .then(d => { if (alive) setItems((d.items ?? []) as NewsItem[]); })
-      .catch(e => { if (alive) setErr(typeof e === 'string' ? e : 'Errore news'); });
-    return () => { alive = false; };
-  }, []);
-
-  if (err) {
-    return (
-      <NeonGlass style={{ marginTop: 8 }} radius={18} tint="rgba(255,255,255,0.03)">
-        <div style={{ padding:'12px 16px', fontFamily:p.monoFont, fontSize:10, color:p.dim }}>News non disponibili · {err}</div>
-      </NeonGlass>
-    );
-  }
-  if (!items) {
-    return (
-      <div style={{ marginTop: 8, display:'flex', flexDirection:'column', gap:5 }}>
-        {Array.from({length:3}).map((_,i) => (
-          <NeonGlass key={i} tint="rgba(255,255,255,0.03)" radius={14}>
-            <div style={{ padding:'10px 12px', display:'flex', gap:10, alignItems:'flex-start' }}>
-              <div className="skel" style={{ width:3, alignSelf:'stretch', height:42, borderRadius:2, flexShrink:0 }}/>
-              <div style={{ flex:1 }}>
-                <div className="skel" style={{ width:60, height:8, marginBottom:6 }}/>
-                <div className="skel" style={{ width:'90%', height:12, marginBottom:4 }}/>
-                <div className="skel" style={{ width:'65%', height:12 }}/>
-              </div>
-            </div>
-          </NeonGlass>
-        ))}
-      </div>
-    );
-  }
-
-  const visible = expanded ? items.slice(0, 30) : items.slice(0, 5);
-
-  return (
-    <div style={{ marginTop: 8 }}>
-      <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
-        {visible.map((it, i) => {
-          const c = SRC_COLOR[it.source] ?? p.cyan;
-          return (
-            <a key={`${i}-${it.link}`} href={it.link} target="_blank" rel="noopener noreferrer" style={{ display:'block', textDecoration:'none' }}>
-              <NeonGlass tint="rgba(255,255,255,0.03)" radius={14}>
-                <div style={{ padding:'10px 12px', display:'flex', gap:10, alignItems:'flex-start' }}>
-                  <div style={{ width:3, alignSelf:'stretch', background:c, borderRadius:2, flexShrink:0, boxShadow:`0 0 6px ${c}` }}/>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ display:'flex', justifyContent:'space-between', gap:8, alignItems:'center', marginBottom:3 }}>
-                      <span style={{ fontFamily:p.monoFont, fontSize:8.5, color:c, textTransform:'uppercase', letterSpacing:0.18, fontWeight:700 }}>{it.source}</span>
-                      <span style={{ fontFamily:p.monoFont, fontSize:8.5, color:p.dim }}>{timeAgo(it.pubDate)}</span>
-                    </div>
-                    <div style={{ fontFamily:p.bodyFont, fontWeight:600, fontSize:13, color:p.fg, lineHeight:1.3 }}>{it.title}</div>
-                  </div>
-                </div>
-              </NeonGlass>
-            </a>
-          );
-        })}
-      </div>
-
-      {items.length > 5 && (
-        <button onClick={() => setExpanded(e => !e)} style={{ width:'100%', marginTop:6, padding:'9px', borderRadius:12, border:`1px solid ${p.border}`, background:'transparent', color:p.muted, fontFamily:p.monoFont, fontSize:9.5, textTransform:'uppercase', letterSpacing:0.15, cursor:'pointer' }}>
-          {expanded ? '↑ Riduci' : `↓ Mostra altre ${Math.min(items.length, 30) - 5}`}
-        </button>
-      )}
-    </div>
   );
 }
 
@@ -278,43 +116,117 @@ const MOODS = [
   { id: 'great' as MoodId, c: '#00f0ff', label: 'TOP' },
 ];
 
-const HABITS: [string, number][] = [   // [label, xp]
-  ['Stretching',          15],
-  ['No scroll a letto',   20],
-  ['Luci rosse',          10],
-  ['Candle',10],
+// Le 6 abitudini "core" che devono andare a 100% per la giornata.
+// Lo slot indica l'indice in data.meHabits (lo stesso array usato dalla
+// sezione Me → Habits, così sono coerenti tra home e Me).
+const HOME_CORE_HABITS = [
+  { label: 'Stretching',         slot: 0, xp: 15 },
+  { label: 'No scroll a letto',  slot: 1, xp: 20 },
+  { label: 'Luci rosse',         slot: 2, xp: 10 },
+  { label: 'Candle',             slot: 3, xp: 10 },
+  { label: 'Meditazione',        slot: 4, xp: 15 },
+  { label: 'Allenamento',        slot: 7, xp: 30 },
+] as const;
+
+// Doccia fredda = abitudine OPZIONALE, non rientra nel 100% giornaliero.
+// Aaron non la fa ogni giorno (decisione 2026-05-23).
+const HOME_OPT_HABIT = { label: 'Doccia fredda', slot: 6, xp: 20 } as const;
+
+// Frasi motivazionali al 100% — rotazione random.
+// Placeholder draft 2026-05-23: rileggere e tagliare/cambiare quelle che
+// non suonano. Mai più di una al giorno (lock via localStorage).
+const MOTIVATIONAL_PHRASES = [
+  'Giornata chiusa pulita. Non era scontato.',
+  'Sei arrivato in fondo. Costanza > intensità.',
+  'Sei a 100%. Domani ricominciamo da zero, ma stasera vinci.',
+  'Tutto fatto. Non per oggi — per il tipo di persona che diventi facendolo.',
+  'Hai chiuso tutti i 6. Questa è disciplina, non motivazione.',
+  'Sei stato tu, non l\'algoritmo. Goditi i 60 secondi di pace.',
+  'Sei al 100%. Adesso stacca davvero, non controllare l\'app altre 4 volte.',
+  'Tutto spuntato. Anche nei giorni di merda, hai tenuto la rotta.',
+  'Non era una bella giornata e l\'hai chiusa lo stesso. Quello che conta.',
+  'Sei più avanti di una settimana fa. Anche se non si vede a occhio.',
+  'I 6 sono fatti. La doccia fredda è bonus — domani decidi tu.',
+  'Hai vinto la giornata con la testa, non con la voglia.',
+  '100%. Questa è la base sotto cui non scendi più.',
+  'Routine completata. Adesso il tuo corpo sa cosa aspettarsi dal prossimo giorno.',
+  'Tutto fatto. Niente discorso lungo — solo: ben fatto.',
+  'Sei arrivato. Le abitudini stanno smettendo di essere uno sforzo.',
+  'Ogni giorno chiuso è una promessa mantenuta con te stesso.',
+  'Tutto verde. Goditi il momento prima di girarti dall\'altra parte.',
+  'Sei tu che hai costruito questa giornata, mattoncino per mattoncino.',
+  '6/6. Una giornata identica a quelle che ti hanno portato dove sei adesso.',
+  'Fatto. Il segreto è che non c\'è segreto, solo continuità.',
+  '100%. Hai vinto sulla versione di te che voleva saltare uno.',
+  'Sei al massimo del giorno. Domani la base resta la stessa.',
+  'Disciplina silenziosa, non performance. È quello che ti porta lontano.',
+  'Tutto chiuso. Senza fanfare — è quello che ti rende affidabile.',
+  'Sei al 100%. Anche quando nessuno guarda, sei tu che guardi.',
+  'Hai tenuto la giornata. Domani non sarà più dura — sarà solo un\'altra.',
+  'I 6 sono fatti. Questo è il template della settimana migliore.',
+  'Sei in regola con te stesso. Quello pesa più di tutto il resto.',
+  'Routine completata. La testa adesso può rilassarsi davvero.',
 ];
 
-// Compute consecutive-day streak (backward from today) for each habit slot
-function computeHomeHabitStreaks(allDays: Record<string, Partial<{ habits: boolean[] }>>, count: number): number[] {
+// Pool prompts del giorno — placeholder draft 2026-05-23.
+// Da rileggere: tagliare/cambiare le frasi che non suonano. La scelta del
+// prompt di oggi è deterministica (modulo data), non random, così se cambi
+// pagina e torni resta lo stesso.
+const PROMPTS_POOL = [
+  'Cosa ti ha innervosito ieri? Cosa avresti potuto evitare?',
+  'Una persona che ti stuzzica: cosa ti dice di te?',
+  'Se domani potessi rifare la giornata di oggi diversamente — cosa cambieresti?',
+  'Una cosa che ti sta evitando il futuro — perché non la fai?',
+  'Cosa stai posticipando da più di una settimana? Perché?',
+  'Una decisione che vorresti aver preso 6 mesi fa.',
+  'Cosa ti darà fastidio dei prossimi giorni — meglio nominarlo ora.',
+  'Una vecchia abitudine che non ha più senso ma continui a fare.',
+  'Cos\'è una cosa che stai rifiutando di vedere?',
+  'Quando ti sei sentito davvero te stesso recentemente?',
+  'Una persona da chiamare oggi. Perché non l\'hai ancora fatto?',
+  'Un piccolo "sì" che hai detto e ora rimpiangi.',
+  'Cosa rifaresti uguale alla giornata di oggi?',
+  'Una paura: qual è la cosa più piccola che potresti fare per affrontarla?',
+  'Tre cose che stai trattenendo dal dire a qualcuno.',
+  'Cos\'è cambiato in te da un anno fa?',
+  'Una skill che vuoi sviluppare ma non hai ancora iniziato.',
+  'Cosa farebbe la versione di te che vorresti essere — nei prossimi 30 minuti?',
+  'Un compromesso recente: era necessario o eri solo stanco?',
+  'Cosa sai fare meglio di chiunque conosci? Perché non lo monetizzi?',
+  'Una scelta che hai fatto solo per piacere a qualcuno.',
+  'Quale rumore di fondo nella tua testa puoi spegnere stasera?',
+  'Cos\'è una bugia che ti racconti ogni giorno?',
+  'Una cosa che hai imparato la settimana scorsa che cambierebbe il modo in cui pensi.',
+  'Se questa giornata fosse l\'unico ricordo di te, cosa lascerebbe?',
+  'Cos\'è una cosa che stai dando per scontato e che invece dovresti notare?',
+];
+
+// Calcola lo streak (giorni consecutivi all'indietro) per uno slot di meHabits
+function computeMeHabitStreakHome(allDays: Record<string, Partial<{ meHabits: boolean[] }>>, slot: number): number {
   const today = new Date(); today.setHours(0, 0, 0, 0);
-  const out = new Array(count).fill(0);
-  for (let i = 0; i < count; i++) {
-    let s = 0;
-    for (let d = 0; d < 60; d++) {
-      const dt = new Date(today); dt.setDate(today.getDate() - d);
-      const key = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
-      if (allDays[key]?.habits?.[i]) s++; else break;
-    }
-    out[i] = s;
+  let s = 0;
+  for (let d = 0; d < 60; d++) {
+    const dt = new Date(today); dt.setDate(today.getDate() - d);
+    const key = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+    if (allDays[key]?.meHabits?.[slot]) s++; else break;
   }
-  return out;
+  return s;
 }
 
+// 2 orb sole: uno caldo in alto-sinistra, uno freddo in basso-destra.
+// Bastano a dare profondità senza riempire lo schermo di colore.
 const ORBS = [
-  { t: -100, l: -80,  w: 380, c: '#ff6a00', o: 0.95 },
-  { t:  200, r: -120, w: 340, c: '#ff14b8', o: 0.70 },
-  { t:  480, l: -80,  w: 340, c: '#a6ff00', o: 0.65 },
-  { t:  720, r: -60,  w: 300, c: '#00f0ff', o: 0.55 },
-  { b:   40, l:  60,  w: 240, c: '#ff0040', o: 0.50 },
+  { t: -100, l: -80,  w: 380, c: '#ff6a00', o: 0.55 },
+  { b:   80, r: -60,  w: 320, c: '#a6ff00', o: 0.30 },
 ] as const;
 
 // ─── HomeScreen ───────────────────────────────────────────────────────────────
 
-function computeTodayXP(habits: boolean[], moodM: MoodId|null, moodA: MoodId|null, moodE: MoodId|null, meals: (string|null)[], waterMl: number, workouts: string[]): number {
-  const habitXP = [15, 20, 10, 10];
+function computeTodayXP(meHabits: boolean[], moodM: MoodId|null, moodA: MoodId|null, moodE: MoodId|null, meals: (string[] | null)[], waterMl: number, workouts: string[]): number {
   let xp = 0;
-  habits.forEach((on, i) => { if (on) xp += habitXP[i] ?? 10; });
+  // Habits home: 6 core + 1 opzionale, sommo xp se attivi
+  HOME_CORE_HABITS.forEach(h => { if (meHabits[h.slot]) xp += h.xp; });
+  if (meHabits[HOME_OPT_HABIT.slot]) xp += HOME_OPT_HABIT.xp;
   if (moodM) xp += 10;
   if (moodA) xp += 10;
   if (moodE) xp += 10;
@@ -324,7 +236,7 @@ function computeTodayXP(habits: boolean[], moodM: MoodId|null, moodA: MoodId|nul
   return xp;
 }
 
-type MeTabHint = 'cibo'|'fitness'|'mood'|'habits'|'suppl';
+type MeTabHint = 'cibo'|'fitness'|'mood'|'habits';
 export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brain'|'me'|'focus'|'nova'|'settings', opts?: { meTab?: MeTabHint; novaBriefing?: boolean }) => void }) {
   const { user } = useAuth();
   const toast = useToast();
@@ -333,7 +245,14 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
   const { countdowns, saveCountdowns } = useCountdowns(user?.uid ?? null);
   const weekly = useWeeklyChallenge(user?.uid ?? null);
   const { settings } = useUserSettings(user?.uid ?? null);
+  const { entries: weightEntries, logWeight } = useWeightLog(user?.uid ?? null);
+  const { todos, toggleTodo } = useTodos(user?.uid ?? null);
   const [showEditor, setShowEditor] = useState(false);
+  const [showWeightEditor, setShowWeightEditor] = useState(false);
+  const [weightDraft, setWeightDraft] = useState('');
+  const [showPromptEditor, setShowPromptEditor] = useState(false);
+  const [promptDraft, setPromptDraft] = useState('');
+  const [promptDoneToday, setPromptDoneToday] = useState(false);
 
   // Auto-briefing NOVA all'apertura app (1 volta per sessione, se attivo nei settings)
   const novaAutoFiredRef = useRef(false);
@@ -350,17 +269,16 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
     return () => clearTimeout(t);
   }, [settings.novaBriefingOnOpen, onNavigate]);
 
-  // Real habit streaks (consecutive days backward) — pulls curr + prev month
+  // Mesi corrente + precedente per calcolare gli streak delle habit
   const nowD = new Date();
   const currMonth = useMonthData(user?.uid ?? null, nowD.getFullYear(), nowD.getMonth());
   const prevMo = nowD.getMonth() === 0 ? 11 : nowD.getMonth() - 1;
   const prevYr = nowD.getMonth() === 0 ? nowD.getFullYear() - 1 : nowD.getFullYear();
   const prevMonth = useMonthData(user?.uid ?? null, prevYr, prevMo);
   const allDays = { ...prevMonth, ...currMonth };
-  const habitStreaks = computeHomeHabitStreaks(allDays, HABITS.length);
 
   const waterMl  = data.water;
-  const habits   = data.habits;
+  const meHabits = data.meHabits;
 
   const WATER_TARGET = data.workouts.length > 0 ? settings.waterTargetTraining : settings.waterTargetRest;
 
@@ -372,12 +290,38 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
 
   const addWater = (ml: number) => save({ water: waterMl + ml });
 
-  const toggleHabit = (i: number) => {
-    const wasOn = habits[i];
-    save({ habits: habits.map((v, ix) => ix === i ? !v : v) });
+  // Toggle di un meHabit (stesso array usato in Me → Habits, così sono coerenti)
+  // Quando arriva a 6/6 core scatta il reward del giorno (toast + nota in Brain).
+  const { addNote } = useNotes(user?.uid ?? null);
+
+  const coreCount = HOME_CORE_HABITS.filter(h => meHabits[h.slot]).length;
+  const corePct = Math.round((coreCount / HOME_CORE_HABITS.length) * 100);
+
+  const toggleMeHabit = (slot: number, xp: number, label: string) => {
+    const wasOn = meHabits[slot];
+    const next = meHabits.map((v, ix) => ix === slot ? !v : v);
+    save({ meHabits: next });
     if (!wasOn) {
-      addXP(HABITS[i][1]);
-      if (settings.showXpToast) toast.xp(HABITS[i][1], HABITS[i][0]);
+      addXP(xp);
+      if (settings.showXpToast) toast.xp(xp, label);
+
+      // Controllo reward 100%: scatta SOLO quando l'ultimo core spuntato
+      // porta il count a 6 e non l'ho ancora dato oggi
+      const newCoreCount = HOME_CORE_HABITS.filter(h => next[h.slot]).length;
+      const isCore = HOME_CORE_HABITS.some(h => h.slot === slot);
+      if (isCore && newCoreCount === HOME_CORE_HABITS.length && typeof window !== 'undefined') {
+        const todayK = `${nowD.getFullYear()}-${String(nowD.getMonth()+1).padStart(2,'0')}-${String(nowD.getDate()).padStart(2,'0')}`;
+        const rewardKey = `habit_reward_${todayK}`;
+        if (!localStorage.getItem(rewardKey)) {
+          const phrase = MOTIVATIONAL_PHRASES[Math.floor(Math.random() * MOTIVATIONAL_PHRASES.length)];
+          localStorage.setItem(rewardKey, phrase);
+          // Toast lungo (la frase è il valore, non la decorazione)
+          toast.show(phrase, 'ok');
+          // Salva nella Brain come traccia, taggata 'reward'
+          addNote(`Reward 100% ${todayK}\n\n${phrase}`, ['reward']).catch(() => {});
+          addXP(50);
+        }
+      }
     }
   };
 
@@ -387,7 +331,6 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
   // Slot mood corrente: mattina < 13, pomeriggio 13-18, sera ≥ 19
   const moodSlot: 'morning'|'afternoon'|'evening' = hour < 13 ? 'morning' : hour < 19 ? 'afternoon' : 'evening';
   const slotLabel = moodSlot === 'morning' ? 'MATTINA' : moodSlot === 'afternoon' ? 'POMERIGGIO' : 'SERA';
-  const slotEmoji = moodSlot === 'morning' ? '☀' : moodSlot === 'afternoon' ? '🌤' : '🌙';
 
   const currentMood = moodSlot === 'morning' ? data.moodMorning : moodSlot === 'afternoon' ? data.moodAfternoon : data.moodEvening;
   const chooseMood = (m: MoodId) => {
@@ -399,7 +342,66 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
     }
   };
 
-  const todayXP = computeTodayXP(habits, data.moodMorning, data.moodAfternoon, data.moodEvening, data.mealSelected, waterMl, data.workouts);
+  const todayXP = computeTodayXP(meHabits, data.moodMorning, data.moodAfternoon, data.moodEvening, data.mealSelected, waterMl, data.workouts);
+
+  // Peso: ultima pesata + delta vs ~7 giorni fa.
+  const todayKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const todayWeight = weightEntries.find(e => e.date === todayKey) ?? null;
+  const lastWeight  = weightEntries.length > 0 ? weightEntries[weightEntries.length - 1] : null;
+  const displayWeight = todayWeight ?? lastWeight;
+  // Trova l'entry più vicina a 7 giorni fa (la più recente <= 7gg fa)
+  const sevenAgo = new Date(now); sevenAgo.setDate(sevenAgo.getDate() - 7);
+  const sevenKey = `${sevenAgo.getFullYear()}-${String(sevenAgo.getMonth()+1).padStart(2,'0')}-${String(sevenAgo.getDate()).padStart(2,'0')}`;
+  const weekAgoEntry = [...weightEntries].reverse().find(e => e.date <= sevenKey) ?? null;
+  const weightDelta  = displayWeight && weekAgoEntry && displayWeight.date !== weekAgoEntry.date
+    ? displayWeight.weight - weekAgoEntry.weight
+    : null;
+
+  const openWeightEditor = () => {
+    setWeightDraft(displayWeight?.weight.toString() ?? '');
+    setShowWeightEditor(true);
+  };
+
+  const saveWeight = () => {
+    const n = parseFloat(weightDraft.replace(',', '.'));
+    if (isNaN(n) || n <= 0 || n >= 300) return;
+    const wasLoggedToday = !!todayWeight;
+    logWeight(n);
+    if (!wasLoggedToday) {
+      addXP(5);
+      if (settings.showXpToast) toast.xp(5, 'peso loggato');
+    }
+    setShowWeightEditor(false);
+  };
+
+  // Prompt del giorno: scelta deterministica per data (così non cambia
+  // se ricarichi la pagina) + lock localStorage per sapere se hai già
+  // risposto / saltato oggi.
+  const promptDateNum = parseInt(todayKey.replace(/-/g, ''), 10);
+  const todayPrompt = PROMPTS_POOL[promptDateNum % PROMPTS_POOL.length];
+  const promptKey = `prompt_done_${todayKey}`;
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setPromptDoneToday(localStorage.getItem(promptKey) !== null);
+  }, [promptKey]);
+
+  const openPromptEditor = () => { setPromptDraft(''); setShowPromptEditor(true); };
+  const savePromptAnswer = () => {
+    const body = promptDraft.trim();
+    if (!body) return;
+    const noteHeader = `Prompt del giorno · ${todayKey}\n\nQ: ${todayPrompt}\n\nR: ${body}`;
+    addNote(noteHeader, ['prompt']).catch(() => {});
+    if (typeof window !== 'undefined') localStorage.setItem(promptKey, 'answered');
+    setPromptDoneToday(true);
+    addXP(15);
+    if (settings.showXpToast) toast.xp(15, 'prompt del giorno');
+    setShowPromptEditor(false);
+  };
+  const skipPromptToday = () => {
+    if (typeof window !== 'undefined') localStorage.setItem(promptKey, 'skipped');
+    setPromptDoneToday(true);
+    setShowPromptEditor(false);
+  };
 
   // Sort active countdowns by date ascending, pick upcoming ones
   const sorted = [...countdowns]
@@ -437,42 +439,50 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
   return (
     <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', overflowX: 'hidden', background: p.bg, color: p.fg, fontFamily: p.bodyFont }}>
 
-      <TopRightButtons onSettings={() => onNavigate?.('settings')} onNova={() => onNavigate?.('nova')} />
+      {/* I pulsanti top-right (NOVA, Settings, Refresh) sono montati da
+          AppShell così appaiono su tutte le schermate principali. */}
 
+      {/* Sfondo: 2 orb morbidi + noise sottile. Niente scanlines, niente
+          testi verticali decorativi — il contenuto è il protagonista. */}
       {ORBS.map((orb, i) => (
         <div key={i} style={{ position: 'absolute', top: 't' in orb ? orb.t : undefined, bottom: 'b' in orb ? orb.b : undefined, left: 'l' in orb ? orb.l : undefined, right: 'r' in orb ? orb.r : undefined, width: orb.w, height: orb.w, borderRadius: '50%', background: `radial-gradient(circle, ${orb.c} 0%, transparent 65%)`, filter: 'blur(65px)', opacity: orb.o, zIndex: 0, pointerEvents: 'none' } as CSSProperties} />
       ))}
-      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1, backgroundImage: `url("${NOISE_SVG}")`, opacity: 0.18, mixBlendMode: 'overlay' } as CSSProperties} />
-      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1, opacity: 0.35, backgroundImage: 'linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px)', backgroundSize: '100% 4px' }} />
-
-      <div style={{ position: 'absolute', left: 5, top: 110, zIndex: 5, pointerEvents: 'none', fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.32, color: p.dim, writingMode: 'vertical-rl', transform: 'rotate(180deg)' } as CSSProperties}>SYS::DAY / OPS-{moodSlot.toUpperCase()}</div>
-      <div style={{ position: 'absolute', right: 5, top: 110, zIndex: 5, pointerEvents: 'none', fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.32, color: p.dim, writingMode: 'vertical-rl' } as CSSProperties}>LV·{level} {tier} / XP {totalXP}</div>
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1, backgroundImage: `url("${NOISE_SVG}")`, opacity: 0.10, mixBlendMode: 'overlay' } as CSSProperties} />
 
       <div style={{ position: 'relative', zIndex: 2, padding: 'calc(env(safe-area-inset-top, 0px) + 14px) 18px calc(env(safe-area-inset-bottom, 0px) + 130px)' }}>
 
-        {/* Banner FIT — kick visivo nei giorni di rest. Rosso a 0%, verde quando c'è un workout. */}
-        {(() => {
-          const noFit = data.workouts.length === 0;
-          const col = noFit ? p.red : p.green;
-          return (
-            <NeonGlass style={{ marginTop: 8 }} tint={noFit ? 'rgba(255,0,64,0.12)' : 'rgba(166,255,0,0.10)'} edge={`${col}66`} radius={12} onClick={() => onNavigate?.('me', { meTab: 'fitness' })}>
-              <div style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 10, fontFamily: p.monoFont, fontSize: 10, letterSpacing: 0.18, textTransform: 'uppercase' }}>
-                <span style={{ color: col, fontWeight: 900, fontSize: 13, letterSpacing: 0.2 }}>{noFit ? '0% FIT' : '100% FIT'}</span>
-                <span style={{ color: noFit ? p.muted : p.fg }}>{noFit ? 'oggi non ti sei mosso · tap per loggare' : data.workouts.join(' + ')}</span>
+        {/* PESO — prima cosa al mattino. Card gialla se non ancora pesato oggi,
+            ciano se già fatto. Tap apre bottom-sheet con input rapido. */}
+        <NeonGlass
+          style={{ marginTop: 8 }}
+          tint={todayWeight ? 'linear-gradient(135deg, rgba(0,240,255,0.18), rgba(166,255,0,0.06))' : 'linear-gradient(135deg, rgba(255,212,0,0.22), rgba(255,106,0,0.10))'}
+          edge={todayWeight ? 'rgba(0,240,255,0.4)' : 'rgba(255,212,0,0.55)'}
+          glow={todayWeight ? '#00f0ff' : '#ffd400'}
+          radius={18}
+          onClick={openWeightEditor}
+        >
+          <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ fontFamily: p.monoFont, fontSize: 9.5, color: todayWeight ? p.cyan : '#ffd400', textTransform: 'uppercase', letterSpacing: 0.18, fontWeight: 700, minWidth: 38 }}>PESO</div>
+            {displayWeight ? (
+              <>
+                <div style={{ fontFamily: p.displayFont, fontWeight: 800, fontSize: 30, letterSpacing: -0.8, lineHeight: 1 }}>
+                  {displayWeight.weight.toFixed(1)}<span style={{ fontSize: 13, color: p.muted, marginLeft: 2 }}>kg</span>
+                </div>
+                {weightDelta !== null && (
+                  <div style={{ fontFamily: p.monoFont, fontSize: 10.5, color: weightDelta < 0 ? p.green : weightDelta > 0 ? p.orange : p.muted, fontWeight: 700, letterSpacing: 0.1 }}>
+                    {weightDelta > 0 ? '+' : ''}{weightDelta.toFixed(1)}kg / 7g
+                  </div>
+                )}
                 <span style={{ flex: 1 }} />
-                <span style={{ color: p.dim }}>→</span>
-              </div>
-            </NeonGlass>
-          );
-        })()}
-
-        {/* NOVA · Briefing del giorno — pill verso il super-AI */}
-        <NeonGlass style={{ marginTop: 6 }} tint="linear-gradient(135deg, rgba(167,139,250,0.22), rgba(0,240,255,0.10))" edge="rgba(167,139,250,0.45)" glow="#a78bfa" radius={12} onClick={() => onNavigate?.('nova', { novaBriefing: true })}>
-          <div style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 10, fontFamily: p.monoFont, fontSize: 10, letterSpacing: 0.18, textTransform: 'uppercase' }}>
-            <span style={{ color: '#a78bfa', fontWeight: 900, fontSize: 14, letterSpacing: 0.2 }}>✦ NOVA</span>
-            <span style={{ color: p.muted }}>briefing del giorno · parla / scrivi</span>
-            <span style={{ flex: 1 }} />
-            <span style={{ color: '#a78bfa' }}>→</span>
+                <span style={{ fontFamily: p.monoFont, fontSize: 9, color: todayWeight ? p.dim : '#ffd400', textTransform: 'uppercase', letterSpacing: 0.1 }}>{todayWeight ? 'oggi · edit' : 'pesati ora'}</span>
+              </>
+            ) : (
+              <>
+                <div style={{ fontFamily: p.bodyFont, fontSize: 14, color: '#ffd400', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.1 }}>Pesati ora</div>
+                <span style={{ flex: 1 }} />
+                <span style={{ fontFamily: p.monoFont, fontSize: 10, color: '#ffd400', textTransform: 'uppercase' }}>tap</span>
+              </>
+            )}
           </div>
         </NeonGlass>
 
@@ -490,67 +500,61 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
           <div style={{ fontFamily: p.monoFont, fontSize: 11, letterSpacing: 0.22, color: p.dim, textAlign: 'right', lineHeight: 1.5, marginLeft: 18, marginRight: 3, flexShrink: 0 }}>
             {now.toLocaleDateString('it-IT',{weekday:'short'}).toUpperCase()}<br/>
             {fmtItDateFromDate(now)}
-            <div style={{ fontSize: 10, color: p.fg, fontWeight: 700, marginTop: 4, letterSpacing: 0.25 }}>build·{BUILD_SHA}</div>
           </div>
         </div>
 
-        {/* La cosa di oggi */}
-        <NeonGlass
-          style={{ marginTop: 22 }}
-          tint={data.todayDone
-            ? 'linear-gradient(135deg, rgba(166,255,0,0.28), rgba(0,240,255,0.16))'
-            : hasTodayTask
-              ? 'linear-gradient(135deg, rgba(255,0,64,0.32), rgba(255,20,184,0.18))'
-              : 'rgba(255,255,255,0.04)'}
-          edge={data.todayDone ? 'rgba(166,255,0,0.6)' : hasTodayTask ? 'rgba(255,0,64,0.75)' : p.border}
-          glow={data.todayDone ? '#a6ff00' : hasTodayTask ? '#ff0040' : undefined}
-          radius={26}
-        >
-          <div style={{ padding: '18px 18px 16px', position: 'relative' }}>
-            {!data.todayDone && hasTodayTask && (
-              <div style={{ position: 'absolute', top: 0, right: 0, padding: '5px 10px', background: p.red, color: '#0a0a0a', fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.25, fontWeight: 800, borderBottomLeftRadius: 12 }}>!! WARN</div>
-            )}
-            {data.todayDone && (
-              <div style={{ position: 'absolute', top: 0, right: 0, padding: '5px 10px', background: p.green, color: '#0a0a0a', fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.25, fontWeight: 800, borderBottomLeftRadius: 12 }}>✓ DONE</div>
-            )}
+        {/* La cosa di oggi — appare SOLO se c'è un task settato. La gestione
+            (creazione/edit) si fa altrove (todo, quick capture). Decisione
+            2026-05-23: in home compare solo come reminder visibile per task
+            priorità alta — niente più stato "tap per impostare" vuoto. */}
+        {hasTodayTask && (
+          <NeonGlass
+            style={{ marginTop: 22 }}
+            tint={data.todayDone
+              ? 'linear-gradient(135deg, rgba(166,255,0,0.28), rgba(0,240,255,0.16))'
+              : 'linear-gradient(135deg, rgba(255,0,64,0.32), rgba(255,20,184,0.18))'}
+            edge={data.todayDone ? 'rgba(166,255,0,0.6)' : 'rgba(255,0,64,0.75)'}
+            glow={data.todayDone ? '#a6ff00' : '#ff0040'}
+            radius={26}
+          >
+            <div style={{ padding: '18px 18px 16px', position: 'relative' }}>
+              {!data.todayDone && (
+                <div style={{ position: 'absolute', top: 0, right: 0, padding: '5px 10px', background: p.red, color: '#0a0a0a', fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.25, fontWeight: 800, borderBottomLeftRadius: 12 }}>!! WARN</div>
+              )}
+              {data.todayDone && (
+                <div style={{ position: 'absolute', top: 0, right: 0, padding: '5px 10px', background: p.green, color: '#0a0a0a', fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.25, fontWeight: 800, borderBottomLeftRadius: 12 }}>✓ DONE</div>
+              )}
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: p.monoFont, fontSize: 10, letterSpacing: 0.2, color: data.todayDone ? p.green : hasTodayTask ? p.red : p.muted, textTransform: 'uppercase', fontWeight: 700 }}>
-              <MarkerTarget size={11} color={data.todayDone ? p.green : hasTodayTask ? p.red : p.muted} />
-              LA COSA DI OGGI{hasTodayTask && data.todayDeadline ? ` · scad. ${data.todayDeadline}` : ''}
-            </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: p.monoFont, fontSize: 10, letterSpacing: 0.2, color: data.todayDone ? p.green : p.red, textTransform: 'uppercase', fontWeight: 700 }}>
+                <MarkerTarget size={11} color={data.todayDone ? p.green : p.red} />
+                LA COSA DI OGGI{data.todayDeadline ? ` · scad. ${data.todayDeadline}` : ''}
+              </div>
 
-            {hasTodayTask ? (
               <div onClick={openTodayEditor} style={{ cursor:'pointer', fontFamily: p.displayFont, fontWeight: 700, fontSize: 26, lineHeight: 1.02, letterSpacing: -0.5, textTransform: 'uppercase', marginTop: 8, color: data.todayDone ? p.muted : p.fg, textDecoration: data.todayDone ? 'line-through' : 'none' }}>
                 {data.todayThing}
               </div>
-            ) : (
-              <div onClick={openTodayEditor} style={{ cursor:'pointer', fontFamily: p.displayFont, fontWeight: 700, fontSize: 18, lineHeight: 1.1, marginTop: 8, color: p.muted, textTransform: 'uppercase' }}>
-                Tap per impostare il task del giorno
-              </div>
-            )}
 
-            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-              {hasTodayTask && (
+              <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
                 <NeonGlass style={{ flex: 1 }} tint={data.todayDone ? 'rgba(166,255,0,0.18)' : 'linear-gradient(90deg, rgba(255,0,64,0.45), rgba(255,20,184,0.4))'} edge={data.todayDone ? 'rgba(166,255,0,0.5)' : 'rgba(255,0,64,0.7)'} radius={14} onClick={toggleTodayDone}>
                   <div style={{ padding: '11px 12px', textAlign: 'center', fontFamily: p.monoFont, fontSize: 10.5, letterSpacing: 0.2, fontWeight: 700, color: p.fg, textTransform: 'uppercase' }}>{data.todayDone ? '↺ Riapri' : '✓ Fatto · +20XP'}</div>
                 </NeonGlass>
-              )}
-              {hasTodayTask && !data.todayDone && (
-                <NeonGlass style={{ width: 110 }} radius={14} onClick={() => onNavigate?.('focus')}>
-                  <div style={{ padding: '11px 12px', textAlign: 'center', fontFamily: p.monoFont, fontSize: 10.5, letterSpacing: 0.2, color: p.muted, textTransform: 'uppercase' }}>→ Focus</div>
+                {!data.todayDone && (
+                  <NeonGlass style={{ width: 110 }} radius={14} onClick={() => onNavigate?.('focus')}>
+                    <div style={{ padding: '11px 12px', textAlign: 'center', fontFamily: p.monoFont, fontSize: 10.5, letterSpacing: 0.2, color: p.muted, textTransform: 'uppercase' }}>→ Focus</div>
+                  </NeonGlass>
+                )}
+                <NeonGlass style={{ width: 60 }} radius={14} onClick={openTodayEditor}>
+                  <div style={{ padding: '11px 12px', textAlign: 'center', fontFamily: p.monoFont, fontSize: 10.5, letterSpacing: 0.2, color: p.muted, textTransform: 'uppercase' }}>EDIT</div>
                 </NeonGlass>
-              )}
-              <NeonGlass style={{ width: hasTodayTask ? 60 : '100%' as unknown as number }} radius={14} onClick={openTodayEditor}>
-                <div style={{ padding: '11px 12px', textAlign: 'center', fontFamily: p.monoFont, fontSize: 10.5, letterSpacing: 0.2, color: p.muted, textTransform: 'uppercase' }}>{hasTodayTask ? 'EDIT' : '+ TASK'}</div>
-              </NeonGlass>
+              </div>
             </div>
-          </div>
-        </NeonGlass>
+          </NeonGlass>
+        )}
 
         {/* Weekly challenge — supporta counter quando target > 1 */}
         <NeonGlass style={{ marginTop: 12 }} tint={weekly.completed ? 'linear-gradient(135deg,rgba(166,255,0,0.22),rgba(0,240,255,0.12))' : 'linear-gradient(135deg,rgba(255,212,0,0.22),rgba(255,106,0,0.14))'} edge={weekly.completed ? 'rgba(166,255,0,0.5)' : 'rgba(255,212,0,0.5)'} radius={20}>
           <div style={{ padding:'12px 14px', display:'flex', alignItems:'center', gap:12 }}>
-            <div style={{ fontSize:24, lineHeight:1, flexShrink:0 }}>{weekly.completed ? '✓' : '🎯'}</div>
+            <div style={{ fontSize:24, lineHeight:1, flexShrink:0, fontFamily:p.displayFont, fontWeight:800, color: weekly.completed ? p.green : '#ffd400' }}>{weekly.completed ? '✓' : '·'}</div>
             <div style={{ flex:1, minWidth:0 }}>
               <div style={{ fontFamily:p.monoFont, fontSize:9, color:weekly.completed?p.green:'#ffd400', letterSpacing:0.18, textTransform:'uppercase' }}>SFIDA SETTIMANALE · +{weekly.challenge.xp} XP</div>
               <div style={{ fontFamily:p.bodyFont, fontWeight:700, fontSize:14, color:p.fg, marginTop:2, textTransform:'uppercase', letterSpacing:-0.2, textDecoration:weekly.completed?'line-through':'none' }}>{weekly.challenge.label}</div>
@@ -593,7 +597,7 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
                     minWidth: 54,
                     opacity: weekly.lockedToday ? 0.55 : 1,
                   }}>
-                  {weekly.lockedToday ? '🔒 oggi' : '+1'}
+                  {weekly.lockedToday ? 'oggi fatto' : '+1'}
                 </button>
                 <span style={{ fontFamily:p.monoFont, fontSize:9, color:p.muted }}>{weekly.progress}/{weekly.target}</span>
               </div>
@@ -606,41 +610,61 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
                 }}
                 disabled={weekly.lockedToday}
                 style={{ border:`1px solid ${weekly.lockedToday ? p.border : '#ffd40066'}`, background: weekly.lockedToday ? 'rgba(255,255,255,0.04)' : 'rgba(255,212,0,0.15)', borderRadius:10, padding:'7px 12px', cursor: weekly.lockedToday ? 'not-allowed' : 'pointer', fontFamily:p.monoFont, fontSize:9, color: weekly.lockedToday ? p.dim : '#ffd400', textTransform:'uppercase', fontWeight:700, opacity: weekly.lockedToday ? 0.55 : 1 }}>
-                {weekly.lockedToday ? '🔒 oggi' : 'FATTA'}
+                {weekly.lockedToday ? 'oggi fatto' : 'FATTA'}
               </button>
             )}
           </div>
         </NeonGlass>
 
+        {/* PROMPT DEL GIORNO — appare se non ancora risposto/saltato oggi.
+            Pool deterministico per data, salva risposta nel Brain (tag 'prompt'). */}
+        {!promptDoneToday && (
+          <NeonGlass style={{ marginTop: 12 }} tint="linear-gradient(135deg, rgba(167,139,250,0.20), rgba(0,240,255,0.10))" edge="rgba(167,139,250,0.45)" glow="#a78bfa" radius={18} onClick={openPromptEditor}>
+            <div style={{ padding: '14px 16px' }}>
+              <div style={{ fontFamily: p.monoFont, fontSize: 9.5, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: 0.2, fontWeight: 700, marginBottom: 6 }}>
+                PROMPT DEL GIORNO
+              </div>
+              <div style={{ fontFamily: p.bodyFont, fontSize: 14, color: p.fg, lineHeight: 1.4 }}>
+                {todayPrompt}
+              </div>
+              <div style={{ fontFamily: p.monoFont, fontSize: 9, color: p.dim, marginTop: 8, textTransform: 'uppercase', letterSpacing: 0.1 }}>
+                tap per rispondere · +15XP
+              </div>
+            </div>
+          </NeonGlass>
+        )}
+
         {/* Weather Bolzano */}
         <WeatherCard/>
 
-        {/* News Feed */}
-        <SectionLabel num="—" title="NEWS" hint="ai · design · tech"/>
-        <NewsFeed/>
-
-        {/* Mood — time-based: solo mattina prima delle 14, solo sera dopo */}
-        <SectionLabel num="01" title="MOOD CHECK" hint={`${slotEmoji} ${slotLabel.toLowerCase()}`} />
-        <NeonGlass style={{ marginTop: 8 }} tint={moodSlot === 'morning' ? 'linear-gradient(135deg, rgba(255,212,0,0.18), rgba(255,106,0,0.12))' : moodSlot === 'afternoon' ? 'linear-gradient(135deg, rgba(255,106,0,0.18), rgba(255,20,184,0.10))' : 'linear-gradient(135deg, rgba(107,0,255,0.18), rgba(0,240,255,0.10))'} radius={24}>
-          <div style={{ padding: '18px 14px 14px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-              {MOODS.map(m => {
-                const active = currentMood === m.id;
-                return (
-                  <button key={m.id} onClick={() => chooseMood(m.id)} style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, opacity: active ? 1 : (currentMood ? 0.38 : 0.92), transform: active ? 'scale(1.2) translateY(-3px)' : 'scale(1)', transition: 'all .22s cubic-bezier(.2,.8,.3,1.2)', filter: active ? `drop-shadow(0 6px 16px ${m.c}aa)` : 'none' }}>
-                    <MoodFace mood={m.id} bg={m.c} color="#0a0a0a" size={42} />
-                    <div style={{ fontFamily: p.monoFont, fontSize: 8.5, letterSpacing: 0.22, color: active ? m.c : p.dim, fontWeight: 700 }}>{m.label}</div>
-                  </button>
-                );
-              })}
-            </div>
-            {currentMood && (
-              <div style={{ marginTop: 10, fontFamily: p.monoFont, fontSize: 9, color: p.dim, textAlign: 'center', textTransform: 'uppercase', letterSpacing: 0.15 }}>
-                Per il journal completo · vai in Me → Mood
+        {/* Mood — appare SOLO la sera (>= 19), 1 check al giorno. Decisione
+            2026-05-23: ridotto da 3 slot a 1 perché overwhelming + dimentica
+            quando segnare. Mattina/pomeriggio si segnano da Me → Mood. */}
+        {moodSlot === 'evening' && (
+          <>
+            <SectionLabel num="01" title="MOOD CHECK" hint="sera" />
+            <NeonGlass style={{ marginTop: 8 }} tint="linear-gradient(135deg, rgba(107,0,255,0.18), rgba(0,240,255,0.10))" radius={24}>
+              <div style={{ padding: '18px 14px 14px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                  {MOODS.map(m => {
+                    const active = currentMood === m.id;
+                    return (
+                      <button key={m.id} onClick={() => chooseMood(m.id)} style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, opacity: active ? 1 : (currentMood ? 0.38 : 0.92), transform: active ? 'scale(1.2) translateY(-3px)' : 'scale(1)', transition: 'all .22s cubic-bezier(.2,.8,.3,1.2)', filter: active ? `drop-shadow(0 6px 16px ${m.c}aa)` : 'none' }}>
+                        <MoodFace mood={m.id} bg={m.c} color="#0a0a0a" size={42} />
+                        <div style={{ fontFamily: p.monoFont, fontSize: 8.5, letterSpacing: 0.22, color: active ? m.c : p.dim, fontWeight: 700 }}>{m.label}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+                {currentMood && (
+                  <div style={{ marginTop: 10, fontFamily: p.monoFont, fontSize: 9, color: p.dim, textAlign: 'center', textTransform: 'uppercase', letterSpacing: 0.15 }}>
+                    Per il journal completo · vai in Me → Mood
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </NeonGlass>
+            </NeonGlass>
+          </>
+        )}
 
         {/* Vitals */}
         <SectionLabel num="02" title="VITALS" hint="oggi" />
@@ -679,30 +703,102 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
             </div>
           </NeonGlass>
 
-          {/* HABITS */}
-          <NeonGlass style={{ gridColumn: 'span 2' }} tint="rgba(255,255,255,0.05)" radius={22}>
+          {/* HABITS — 6 core con progress aggregata + doccia fredda opzionale.
+              100% = 6/6 core fatti → toast frase motivazionale (1×/giorno). */}
+          <NeonGlass style={{ gridColumn: 'span 2' }} tint={coreCount === HOME_CORE_HABITS.length ? 'linear-gradient(135deg, rgba(166,255,0,0.18), rgba(0,240,255,0.10))' : 'rgba(255,255,255,0.05)'} edge={coreCount === HOME_CORE_HABITS.length ? 'rgba(166,255,0,0.5)' : undefined} radius={22}>
             <div style={{ padding: '13px 13px' }}>
-              <MetricHead icon={<MarkerStar4 size={10} color={p.orange} />} label="HABITS" right={`${habits.filter(Boolean).length}/4 · +${habits.reduce((s,v,i) => s + (v ? HABITS[i][1] : 0), 0)} XP`} />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 8 }}>
-                {HABITS.map(([label, xpVal], i) => {
-                  const on = !!habits[i];
-                  const streak = habitStreaks[i] ?? 0;
+              <MetricHead icon={<MarkerStar4 size={10} color={p.orange} />} label="HABITS" right={`${coreCount}/${HOME_CORE_HABITS.length} · ${corePct}%`} />
+              {/* Progress bar aggregata */}
+              <div style={{ height: 6, marginTop: 10, borderRadius: 99, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${corePct}%`, borderRadius: 99, background: coreCount === HOME_CORE_HABITS.length ? 'linear-gradient(90deg, #a6ff00, #00f0ff)' : 'linear-gradient(90deg, #ff6a00, #ffd400, #a6ff00)', boxShadow: coreCount === HOME_CORE_HABITS.length ? '0 0 14px #a6ff00' : '0 0 8px rgba(255,212,0,0.4)', transition: 'width .3s ease' }} />
+              </div>
+              {/* Lista 6 core in griglia 2x3 */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 10 }}>
+                {HOME_CORE_HABITS.map(h => {
+                  const on = !!meHabits[h.slot];
+                  const streak = computeMeHabitStreakHome(allDays, h.slot);
                   return (
-                    <button key={label} onClick={() => toggleHabit(i)} style={{ padding: '10px 11px', borderRadius: 14, cursor: 'pointer', textAlign: 'left', border: `1px solid ${on ? 'rgba(166,255,0,0.75)' : 'rgba(255,255,255,0.10)'}`, background: on ? 'rgba(166,255,0,0.16)' : 'rgba(255,255,255,0.02)', boxShadow: on ? '0 0 22px rgba(166,255,0,0.4)' : 'none', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <button key={h.slot} onClick={() => toggleMeHabit(h.slot, h.xp, h.label)} style={{ padding: '10px 11px', borderRadius: 14, cursor: 'pointer', textAlign: 'left', border: `1px solid ${on ? 'rgba(166,255,0,0.75)' : 'rgba(255,255,255,0.10)'}`, background: on ? 'rgba(166,255,0,0.16)' : 'rgba(255,255,255,0.02)', boxShadow: on ? '0 0 18px rgba(166,255,0,0.35)' : 'none', display: 'flex', flexDirection: 'column', gap: 4 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <div style={{ width: 14, height: 14, borderRadius: 4, border: `1.5px solid ${on ? p.green : p.muted}`, background: on ? p.green : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0a0a0a', fontSize: 10, fontWeight: 900, boxShadow: on ? `0 0 12px ${p.green}` : 'none' }}>{on ? '✓' : ''}</div>
                         <span style={{ flex: 1 }} />
-                        {streak > 0 && <span style={{ fontFamily: p.monoFont, fontSize: 8.5, color: on ? p.green : p.dim }}>🔥{streak}</span>}
-                        <span style={{ fontFamily: p.monoFont, fontSize: 8, color: p.dim }}>+{xpVal}xp</span>
+                        {streak > 0 && <span style={{ fontFamily: p.monoFont, fontSize: 8.5, color: on ? p.green : p.dim }}>stk·{streak}</span>}
+                        <span style={{ fontFamily: p.monoFont, fontSize: 8, color: p.dim }}>+{h.xp}xp</span>
                       </div>
-                      <div style={{ fontFamily: p.bodyFont, fontWeight: 600, fontSize: 12, color: on ? p.fg : p.muted, textTransform: 'uppercase', letterSpacing: 0.04, lineHeight: 1.2 }}>{label}</div>
+                      <div style={{ fontFamily: p.bodyFont, fontWeight: 600, fontSize: 12, color: on ? p.fg : p.muted, textTransform: 'uppercase', letterSpacing: 0.04, lineHeight: 1.2 }}>{h.label}</div>
                     </button>
                   );
                 })}
               </div>
+              {/* Doccia fredda — opzionale, NON conta nel 100% */}
+              {(() => {
+                const on = !!meHabits[HOME_OPT_HABIT.slot];
+                const streak = computeMeHabitStreakHome(allDays, HOME_OPT_HABIT.slot);
+                return (
+                  <button onClick={() => toggleMeHabit(HOME_OPT_HABIT.slot, HOME_OPT_HABIT.xp, HOME_OPT_HABIT.label)} style={{ width:'100%', marginTop: 6, padding: '8px 11px', borderRadius: 14, cursor: 'pointer', textAlign: 'left', border: `1px dashed ${on ? 'rgba(0,240,255,0.6)' : 'rgba(255,255,255,0.12)'}`, background: on ? 'rgba(0,240,255,0.10)' : 'transparent', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ width: 14, height: 14, borderRadius: 4, border: `1.5px solid ${on ? p.cyan : p.muted}`, background: on ? p.cyan : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0a0a0a', fontSize: 10, fontWeight: 900 }}>{on ? '✓' : ''}</div>
+                    <div style={{ fontFamily: p.bodyFont, fontWeight: 600, fontSize: 12, color: on ? p.fg : p.muted, textTransform: 'uppercase', letterSpacing: 0.04 }}>{HOME_OPT_HABIT.label}</div>
+                    <span style={{ fontFamily: p.monoFont, fontSize: 8.5, color: p.dim }}>opzionale</span>
+                    <span style={{ flex: 1 }} />
+                    {streak > 0 && <span style={{ fontFamily: p.monoFont, fontSize: 8.5, color: on ? p.cyan : p.dim }}>stk·{streak}</span>}
+                    <span style={{ fontFamily: p.monoFont, fontSize: 8, color: p.dim }}>+{HOME_OPT_HABIT.xp}xp</span>
+                  </button>
+                );
+              })()}
             </div>
           </NeonGlass>
         </div>
+
+        {/* TODO ATTIVI — visibili in home solo se ce ne sono.
+            Sono i todo creati via Quick Capture ("ricordami X") + FASE 7.
+            Ordinati per priorità desc, max 4 visibili. Tap = toggle done. */}
+        {(() => {
+          const activeTodos = [...todos]
+            .filter(t => !t.done)
+            .sort((a, b) => b.priority - a.priority || a.createdAt - b.createdAt);
+          if (activeTodos.length === 0) return null;
+          const visible = activeTodos.slice(0, 4);
+          const hidden = activeTodos.length - visible.length;
+          return (
+            <>
+              <SectionLabel num="03" title="TODO" hint={`${activeTodos.length} aperti`} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginTop: 8 }}>
+                {visible.map(t => {
+                  const col = t.priority === 3 ? p.red : t.priority === 2 ? p.orange : '#ffd400';
+                  return (
+                    <NeonGlass key={t.id} tint={`${col}10`} edge={`${col}44`} radius={12} onClick={() => toggleTodo(t.id)}>
+                      <div style={{ padding: '9px 12px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ width: 18, height: 18, borderRadius: 5, border: `1.5px solid ${col}`, background: 'transparent', flexShrink: 0 }} />
+                        <span style={{ fontFamily: p.monoFont, fontSize: 12, color: col, fontWeight: 900, letterSpacing: 0.1, flexShrink: 0 }}>{'!'.repeat(t.priority)}</span>
+                        <span style={{ flex: 1, fontFamily: p.bodyFont, fontSize: 13.5, color: p.fg, wordBreak: 'break-word', lineHeight: 1.25 }}>{t.text}</span>
+                      </div>
+                    </NeonGlass>
+                  );
+                })}
+                {hidden > 0 && (
+                  <div style={{ fontFamily: p.monoFont, fontSize: 9, color: p.dim, textTransform: 'uppercase', letterSpacing: 0.1, textAlign: 'center', padding: '4px 0' }}>+{hidden} altri</div>
+                )}
+              </div>
+            </>
+          );
+        })()}
+
+        {/* Banner FIT — riposizionato dopo VITALS (era sopra il saluto, in mezzo
+            al cazzo come l'ha definito Aaron). Rosso a 0%, verde con workout. */}
+        {(() => {
+          const noFit = data.workouts.length === 0;
+          const col = noFit ? p.red : p.green;
+          return (
+            <NeonGlass style={{ marginTop: 10 }} tint={noFit ? 'rgba(255,0,64,0.10)' : 'rgba(166,255,0,0.10)'} edge={`${col}55`} radius={12} onClick={() => onNavigate?.('me', { meTab: 'fitness' })}>
+              <div style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 10, fontFamily: p.monoFont, fontSize: 10, letterSpacing: 0.18, textTransform: 'uppercase' }}>
+                <span style={{ color: col, fontWeight: 900, fontSize: 13, letterSpacing: 0.2 }}>{noFit ? '0% FIT' : '100% FIT'}</span>
+                <span style={{ color: noFit ? p.muted : p.fg }}>{noFit ? 'oggi non ti sei mosso · tap per loggare' : data.workouts.join(' + ')}</span>
+                <span style={{ flex: 1 }} />
+                <span style={{ color: p.dim }}>→</span>
+              </div>
+            </NeonGlass>
+          );
+        })()}
 
         {/* Countdown — live from Firestore */}
         <SectionLabel num="03" title="COUNTDOWN" hint="tap per modificare" />
@@ -759,6 +855,74 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
 
       {showEditor && (
         <CountdownEditor countdowns={countdowns} saveCountdowns={saveCountdowns} onClose={() => setShowEditor(false)} />
+      )}
+
+      {showPromptEditor && (
+        <div onClick={() => setShowPromptEditor(false)} style={{ position:'absolute',inset:0,zIndex:100,background:'rgba(0,0,0,0.7)',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',display:'flex',alignItems:'flex-end' }}>
+          <div onClick={e => e.stopPropagation()} style={{ width:'100%',padding:'24px 20px 48px',background:'rgba(10,8,6,0.96)',borderTop:`1px solid ${p.border}`,borderTopLeftRadius:28,borderTopRightRadius:28 }}>
+            <div style={{ fontFamily:p.monoFont,fontSize:10,color:'#a78bfa',textTransform:'uppercase',letterSpacing:0.2,marginBottom:8 }}>
+              Prompt del giorno · {fmtItDateFromDate(now)}
+            </div>
+            <div style={{ fontFamily:p.bodyFont,fontSize:15,color:p.fg,lineHeight:1.45,marginBottom:14,fontWeight:600 }}>
+              {todayPrompt}
+            </div>
+            <textarea
+              value={promptDraft}
+              onChange={e => setPromptDraft(e.target.value)}
+              placeholder="Scrivi quello che pensi, anche grezzo. Va nel Brain con tag 'prompt'."
+              rows={5}
+              autoFocus
+              style={{ width:'100%',resize:'none',outline:'none',background:'rgba(255,255,255,0.04)',border:`1px solid ${p.border}`,borderRadius:14,padding:'12px 14px',color:p.fg,fontFamily:p.bodyFont,fontSize:15,lineHeight:1.4 }}
+            />
+            <div style={{ display:'flex',gap:8,marginTop:14,alignItems:'center' }}>
+              <button onClick={() => setShowPromptEditor(false)} style={{ padding:'12px 18px',borderRadius:14,border:'none',background:'rgba(255,255,255,0.08)',color:p.fg,fontFamily:p.monoFont,fontSize:11,textTransform:'uppercase',cursor:'pointer' }}>Annulla</button>
+              <button onClick={skipPromptToday} style={{ padding:'12px 14px',borderRadius:14,border:`1px solid ${p.border}`,background:'transparent',color:p.muted,fontFamily:p.monoFont,fontSize:10,textTransform:'uppercase',cursor:'pointer' }}>Salta oggi</button>
+              <div style={{ flex:1 }}/>
+              <button
+                onClick={savePromptAnswer}
+                disabled={!promptDraft.trim()}
+                style={{ padding:'12px 22px',borderRadius:14,border:'none',background:'#a78bfa',color:'#0a0a0a',fontFamily:p.monoFont,fontSize:11,textTransform:'uppercase',cursor:promptDraft.trim()?'pointer':'not-allowed',fontWeight:800,opacity:promptDraft.trim()?1:0.4 }}>
+                ↵ Salva · +15XP
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showWeightEditor && (
+        <div onClick={() => setShowWeightEditor(false)} style={{ position:'absolute',inset:0,zIndex:100,background:'rgba(0,0,0,0.7)',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',display:'flex',alignItems:'flex-end' }}>
+          <div onClick={e => e.stopPropagation()} style={{ width:'100%',padding:'24px 20px 48px',background:'rgba(10,8,6,0.96)',borderTop:`1px solid ${p.border}`,borderTopLeftRadius:28,borderTopRightRadius:28 }}>
+            <div style={{ fontFamily:p.monoFont,fontSize:10,color:p.cyan,textTransform:'uppercase',letterSpacing:0.2,marginBottom:14 }}>
+              Peso · {fmtItDateFromDate(now)}
+            </div>
+            <input
+              type="number"
+              inputMode="decimal"
+              step="0.1"
+              value={weightDraft}
+              onChange={e => setWeightDraft(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') saveWeight(); }}
+              placeholder="kg"
+              autoFocus
+              style={{ width:'100%',outline:'none',background:'rgba(255,255,255,0.04)',border:`1px solid ${p.border}`,borderRadius:14,padding:'14px 18px',color:p.fg,fontFamily:p.displayFont,fontSize:32,fontWeight:800,letterSpacing:-0.8 }}
+            />
+            {lastWeight && (
+              <div style={{ marginTop:8,fontFamily:p.monoFont,fontSize:10,color:p.dim,textTransform:'uppercase',letterSpacing:0.1 }}>
+                ultima pesata · {lastWeight.weight.toFixed(1)} kg ({fmtItDate(lastWeight.date)})
+              </div>
+            )}
+            <div style={{ display:'flex',gap:8,marginTop:18 }}>
+              <button onClick={() => setShowWeightEditor(false)} style={{ padding:'12px 20px',borderRadius:14,border:'none',background:'rgba(255,255,255,0.08)',color:p.fg,fontFamily:p.monoFont,fontSize:11,textTransform:'uppercase',cursor:'pointer' }}>Annulla</button>
+              <div style={{ flex:1 }}/>
+              <button
+                onClick={saveWeight}
+                disabled={!weightDraft.trim() || isNaN(parseFloat(weightDraft.replace(',', '.')))}
+                style={{ padding:'12px 22px',borderRadius:14,border:'none',background:p.cyan,color:'#0a0a0a',fontFamily:p.monoFont,fontSize:11,textTransform:'uppercase',cursor:weightDraft.trim()?'pointer':'not-allowed',fontWeight:800,opacity:weightDraft.trim()?1:0.4 }}>
+                ↵ Salva{!todayWeight ? ' · +5XP' : ''}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {showTodayEditor && (

@@ -14,10 +14,10 @@ interface PushSub { endpoint: string; keys: { p256dh: string; auth: string } }
 
 const SLOTS: ('morning'|'afternoon'|'task'|'evening')[] = ['morning', 'afternoon', 'task', 'evening'];
 const SLOT_PAYLOAD: Record<typeof SLOTS[number], { title: string; body: string }> = {
-  morning:   { title: 'Mood mattina ☀',     body: 'Come ti senti stamattina?' },
-  afternoon: { title: 'Mood pomeriggio 🌤', body: 'Pausa: come va l’energia?' },
-  task:      { title: 'Cosa di oggi 🎯',    body: 'Hai completato il task del giorno?' },
-  evening:   { title: 'Mood sera 🌙',       body: 'Rifletti sulla giornata' },
+  morning:   { title: 'Mood mattina',     body: 'Come ti senti stamattina?' },
+  afternoon: { title: 'Mood pomeriggio',  body: 'Pausa: come va l’energia?' },
+  task:      { title: 'Cosa di oggi',     body: 'Hai completato il task del giorno?' },
+  evening:   { title: 'Mood sera',        body: 'Rifletti sulla giornata' },
 };
 
 function configureWebPush(): boolean {

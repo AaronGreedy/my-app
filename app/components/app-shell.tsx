@@ -12,6 +12,7 @@ import { FocusScreen } from '@/screens/focus';
 import { NovaScreen } from '@/screens/nova';
 import { SettingsScreen } from '@/screens/settings';
 import { BottomNav } from './bottom-nav';
+import { TopRightButtons } from './top-right-buttons';
 import { MarkerDiamond } from './markers';
 import { LevelUpCelebration } from './level-up-celebration';
 
@@ -52,14 +53,25 @@ export function AppShell() {
     settings: <SettingsScreen onBack={() => setScreen('home')} />,
   };
 
+  // Pulsanti top-right e bottom-nav sono visibili solo sulle schermate
+  // "main" (home/cal/brain/me). Su focus/nova/settings sono profondità,
+  // hanno il loro back e non vogliamo doppi controlli.
+  const isMainScreen = screen !== 'focus' && screen !== 'nova' && screen !== 'settings';
+
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: p.bg }}>
       {content[screen]}
-      {screen !== 'focus' && screen !== 'nova' && screen !== 'settings' && (
-        <BottomNav
-          screen={screen as NavScreen}
-          setScreen={(s, opts) => navigate(s, opts)}
-        />
+      {isMainScreen && (
+        <>
+          <TopRightButtons
+            onSettings={() => navigate('settings')}
+            onNova={() => navigate('nova')}
+          />
+          <BottomNav
+            screen={screen as NavScreen}
+            setScreen={(s, opts) => navigate(s, opts)}
+          />
+        </>
       )}
       <LevelUpCelebration/>
     </div>

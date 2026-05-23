@@ -13,22 +13,25 @@ export interface Meal {
 }
 
 const SNACKS: MealOption[] = [
-  { label: 'Banana + whey',     desc: '1 banana + 25g whey',           kcal: 210, pr: 21, c: 29, g: 2  },
-  { label: 'Noccioline + whey', desc: '15g noccioline + 25g whey',     kcal: 190, pr: 24, c: 5,  g: 9  },
+  { label: 'Banana + whey',     desc: '1 banana + 25g whey',       kcal: 210, pr: 21, c: 29, g: 2  },
+  { label: 'Noccioline + whey', desc: '15g noccioline + 25g whey', kcal: 190, pr: 24, c: 5,  g: 9  },
 ];
 
+// 4 pasti, decisione 2026-05-23:
+//  - Colazione: yogurt+granola e albumi+avena rimosse (Aaron non le fa più)
+//  - Merenda: 1 sola (mattina + pomeriggio unificate) con multi-select
+//    (può spuntare entrambe le opzioni nello stesso giorno)
+//  - Pranzo / Cena: invariate
 export const MEALS: Meal[] = [
   {
     name: 'COLAZIONE',
     options: [
       { label: 'Cereali',          desc: '70g cereali Kellogs Extra + 30g whey + 200g latte p.scremato + 15g BA', kcal: 580, pr: 42, c: 64, g: 17 },
       { label: 'Pancake proteico', desc: '80g avena + 25g whey + 250g albume + cannella',                          kcal: 525, pr: 58, c: 58, g: 8  },
-      { label: 'Albumi e avena',   desc: '250g albume + 80g avena + 1 banana + 20g BA + 8g miele',                 kcal: 685, pr: 44, c: 92, g: 17 },
-      { label: 'Yogurt + granola', desc: '200g yogurt greco 0% + 40g granola + 20g BA',                            kcal: 415, pr: 29, c: 39, g: 17 },
     ],
   },
   {
-    name: 'MERENDA MATTINA',
+    name: 'MERENDA',
     options: SNACKS,
   },
   {
@@ -45,10 +48,6 @@ export const MEALS: Meal[] = [
     ],
   },
   {
-    name: 'MERENDA POMERIGGIO',
-    options: SNACKS,
-  },
-  {
     name: 'CENA',
     options: [
       { label: 'Pollo + insalata',     desc: '150g pollo + insalata',                 kcal: 195, pr: 36, c: 5, g: 4  },
@@ -59,13 +58,22 @@ export const MEALS: Meal[] = [
   },
 ];
 
-export function getMealTotals(mealSelected: (string | null)[]) {
+// L'indice del pasto "MERENDA" nell'array MEALS — utile alle UI per sapere
+// quando applicare multi-select invece di single-select.
+export const MEAL_IDX_MERENDA = 1;
+
+// mealSelected è ora un array di array (string[]|null per riga).
+// Una riga `null` = niente selezionato. Un array di N indici = N opzioni
+// scelte (per i pasti single-select, l'array conterrà sempre 1 elemento).
+export function getMealTotals(mealSelected: (string[] | null)[]) {
   let kcal = 0, pr = 0, c = 0, g = 0;
   mealSelected.forEach((sel, i) => {
     if (sel === null || !MEALS[i]) return;
-    const opt = MEALS[i].options[Number(sel)];
-    if (!opt) return;
-    kcal += opt.kcal; pr += opt.pr; c += opt.c; g += opt.g;
+    for (const idxStr of sel) {
+      const opt = MEALS[i].options[Number(idxStr)];
+      if (!opt) continue;
+      kcal += opt.kcal; pr += opt.pr; c += opt.c; g += opt.g;
+    }
   });
   return { kcal, pr, c, g };
 }

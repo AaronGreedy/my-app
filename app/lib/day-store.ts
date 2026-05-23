@@ -18,7 +18,10 @@ export interface DayData {
   moodNoteA: string;          // afternoon journal note
   moodNoteE: string;          // evening journal note
   meHabits: boolean[];        // 10 me-habits (8 good + 2 bad)
-  mealSelected: (string|null)[];
+  // Multi-select per riga: array di indici opzione selezionata, o null se niente.
+  // La merenda usa l'array per spuntare entrambe (banana+whey E noccioline+whey)
+  // nello stesso giorno. Decisione 2026-05-23.
+  mealSelected: (string[] | null)[];
   caffeine: number;
   dietMode: 'bulk' | 'cut' | 'mantenimento';
   workouts: string[];
@@ -42,7 +45,9 @@ export interface DayData {
 
 const EMPTY_ME_HABITS = Array(10).fill(false) as boolean[];
 
-const EMPTY_MEALS = [null, null, null, null, null] as (string|null)[];
+// 4 pasti: Colazione · Merenda · Pranzo · Cena (decisione 2026-05-23,
+// merende mattina+pomeriggio unificate in una sola con multi-select).
+const EMPTY_MEALS = [null, null, null, null] as (string[] | null)[];
 
 const EMPTY: DayData = {
   water: 0,
@@ -68,9 +73,28 @@ const EMPTY: DayData = {
   sleepQuality: 0,
 };
 
-function padMeals(arr: (string|null)[], len: number): (string|null)[] {
-  if (arr.length >= len) return arr.slice(0, len);
-  return [...arr, ...Array(len - arr.length).fill(null)];
+// Migrazione mealSelected dal formato legacy (5 elementi, string|null) al
+// nuovo (4 elementi, string[]|null). La merenda pomeriggio (vecchio indice 3)
+// viene scartata: i pasti rimasti sono Colazione[0], Merenda[1], Pranzo[2],
+// Cena[4 → 3]. Ogni string singolo viene wrappato in array.
+function padMeals(arr: unknown[], len: number): (string[] | null)[] {
+  // Riconosci legacy 5-element e collassa la merenda
+  const source: unknown[] = arr.length === 5
+    ? [arr[0], arr[1], arr[2], arr[4]] // drop arr[3] = vecchia merenda pomeriggio
+    : arr;
+  const out: (string[] | null)[] = [];
+  for (let i = 0; i < len; i++) {
+    const cell = source[i];
+    if (cell == null) { out.push(null); continue; }
+    if (typeof cell === 'string') { out.push([cell]); continue; }
+    if (Array.isArray(cell)) {
+      const ids = cell.filter((x): x is string => typeof x === 'string');
+      out.push(ids.length > 0 ? ids : null);
+      continue;
+    }
+    out.push(null);
+  }
+  return out;
 }
 
 function todayKey(): string {
@@ -106,7 +130,7 @@ export function useDayStore(uid: string | null) {
           moodNoteA:        typeof d.moodNoteA === 'string'   ? d.moodNoteA        : '',
           moodNoteE:        typeof d.moodNoteE === 'string'   ? d.moodNoteE        : '',
           meHabits:         Array.isArray(d.meHabits)         ? padHabits(d.meHabits, 10) : EMPTY_ME_HABITS,
-          mealSelected:     Array.isArray(d.mealSelected)     ? padMeals(d.mealSelected, 5) : EMPTY_MEALS,
+          mealSelected:     Array.isArray(d.mealSelected)     ? padMeals(d.mealSelected, 4) : EMPTY_MEALS,
           caffeine:         typeof d.caffeine === 'number'    ? d.caffeine         : 0,
           dietMode:         d.dietMode ?? 'cut',
           workouts:         Array.isArray(d.workouts)         ? d.workouts         : [],

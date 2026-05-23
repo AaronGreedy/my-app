@@ -208,9 +208,9 @@ export function FocusScreen({ onBack }: { onBack: () => void }) {
                 <div style={{ padding:'12px 36px', fontFamily:p.monoFont, fontSize:12, letterSpacing:0.2, textTransform:'uppercase', color:p.muted }}>■ STOP</div>
               </NeonGlass>
             )}
-            <button onClick={() => setShowTimerCfg(s => !s)} title="Imposta durate timer" style={{ background:'rgba(255,255,255,0.06)', border:`1px solid ${p.border}`, borderRadius:14, padding:'10px 14px', color:p.muted, fontFamily:p.monoFont, fontSize:10, textTransform:'uppercase', letterSpacing:0.15, cursor:'pointer' }}>⚙ {settings.pomodoroWorkMin}/{settings.pomodoroShortBreakMin}/{settings.pomodoroLongBreakMin}</button>
+            <button onClick={() => setShowTimerCfg(s => !s)} title="Imposta durate timer" style={{ background:'rgba(255,255,255,0.06)', border:`1px solid ${p.border}`, borderRadius:14, padding:'10px 14px', color:p.muted, fontFamily:p.monoFont, fontSize:10, textTransform:'uppercase', letterSpacing:0.15, cursor:'pointer' }}>cfg · {settings.pomodoroWorkMin}/{settings.pomodoroShortBreakMin}/{settings.pomodoroLongBreakMin}</button>
             <a href="https://www.brain.fm" target="_blank" rel="noopener noreferrer" style={{ textDecoration:'none' }}>
-              <div style={{ background:'linear-gradient(135deg,rgba(107,0,255,0.2),rgba(0,240,255,0.12))', border:`1px solid rgba(107,0,255,0.5)`, borderRadius:14, padding:'10px 14px', color:'#a78bfa', fontFamily:p.monoFont, fontSize:10, textTransform:'uppercase', letterSpacing:0.15, cursor:'pointer' }}>♪ Brain.fm ↗</div>
+              <div style={{ background:'linear-gradient(135deg,rgba(107,0,255,0.2),rgba(0,240,255,0.12))', border:`1px solid rgba(107,0,255,0.5)`, borderRadius:14, padding:'10px 14px', color:'#a78bfa', fontFamily:p.monoFont, fontSize:10, textTransform:'uppercase', letterSpacing:0.15, cursor:'pointer' }}>Brain.fm ↗</div>
             </a>
           </div>
           {showTimerCfg && (

@@ -5,8 +5,11 @@ export const runtime = 'nodejs';
 
 type Msg = { role: 'system' | 'user' | 'assistant'; content: string };
 
-const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
-const DEFAULT_MODEL = 'gemini-2.5-flash';
+// Provider AI: priorità Groq (free), fallback Gemini. Decisione 2026-05-23.
+const GROQ_URL    = 'https://api.groq.com/openai/v1/chat/completions';
+const GROQ_MODEL  = 'llama-3.3-70b-versatile';
+const GEMINI_URL  = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
+const GEMINI_MODEL = 'gemini-2.5-flash';
 
 // Limiti per evitare abuso (anche da utenti autenticati)
 const MAX_MESSAGES = 60;
@@ -14,13 +17,24 @@ const MAX_TOTAL_CHARS = 60_000;
 
 export async function POST(req: NextRequest) {
   // Auth: solo utenti loggati a Firebase. Senza, chiunque conosca l'URL
-  // brucerebbe la quota Gemini.
+  // brucerebbe la quota dell'API.
   const decoded = await verifyAuthHeader(req.headers.get('authorization'));
   if (!decoded) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) {
-    return Response.json({ error: 'GEMINI_API_KEY non configurata su Vercel' }, { status: 500 });
+  const groqKey   = process.env.GROQ_API_KEY;
+  const geminiKey = process.env.GEMINI_API_KEY;
+  let providerUrl: string;
+  let providerKey: string;
+  let providerDefault: string;
+  let providerName: string;
+  if (groqKey) {
+    providerUrl = GROQ_URL; providerKey = groqKey; providerDefault = GROQ_MODEL; providerName = 'Groq';
+  } else if (geminiKey) {
+    providerUrl = GEMINI_URL; providerKey = geminiKey; providerDefault = GEMINI_MODEL; providerName = 'Gemini';
+  } else {
+    return Response.json({
+      error: 'AI non configurata · serve GROQ_API_KEY (preferito, free) o GEMINI_API_KEY in .env / Vercel env',
+    }, { status: 500 });
   }
 
   let body: { messages?: Msg[]; system?: string; model?: string };
@@ -46,14 +60,14 @@ export async function POST(req: NextRequest) {
     ? [{ role: 'system', content: body.system }, ...messages]
     : messages;
 
-  const res = await fetch(GEMINI_URL, {
+  const res = await fetch(providerUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${key}`,
+      Authorization: `Bearer ${providerKey}`,
     },
     body: JSON.stringify({
-      model: body.model ?? DEFAULT_MODEL,
+      model: body.model ?? providerDefault,
       messages: finalMessages,
       temperature: 0.3,
       max_tokens: 4096,
@@ -63,12 +77,12 @@ export async function POST(req: NextRequest) {
   if (!res.ok) {
     const text = await res.text();
     return Response.json(
-      { error: `Gemini ${res.status}: ${text.slice(0, 300)}` },
+      { error: `${providerName} ${res.status}: ${text.slice(0, 300)}` },
       { status: res.status },
     );
   }
 
   const data = await res.json();
   const content: string = data?.choices?.[0]?.message?.content ?? '';
-  return Response.json({ content });
+  return Response.json({ content, provider: providerName });
 }

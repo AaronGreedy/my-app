@@ -332,7 +332,7 @@ export function NovaScreen({ onBack, initialBriefing = false }: { onBack: () => 
       if (ttsOn && clean.trim()) speak(clean);
     } catch (e) {
       const err = e instanceof Error ? e.message : 'errore di rete';
-      setMessages(prev => [...prev, { role: 'assistant', content: `⚠ ${err}` }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: `[!] ${err}` }]);
     } finally {
       setLoading(false);
     }
@@ -407,7 +407,7 @@ export function NovaScreen({ onBack, initialBriefing = false }: { onBack: () => 
     } else if (a.type === 'set_countdown') {
       col = p.orange; label = `+ COUNTDOWN`; hint = `${a.label} · ${fmtItDate(a.date)}${a.note ? ` — ${a.note}` : ''}`;
     } else if (a.type === 'warn_conflict') {
-      col = p.red; label = '⚠ CONFLITTO'; hint = `${a.what} · ${a.with}`;
+      col = p.red; label = '[!] CONFLITTO'; hint = `${a.what} · ${a.with}`;
     }
     return (
       <button key={actIdx} disabled={applied} onClick={() => applyAction(msgIdx, actIdx)} style={{
@@ -445,7 +445,7 @@ export function NovaScreen({ onBack, initialBriefing = false }: { onBack: () => 
           {/* Toggle TTS */}
           <button onClick={() => { const next = !ttsOn; setTtsOn(next); saveSettings({ novaTtsAuto: next }); if (!next) stopSpeaking(); }} title={ttsOn ? 'Spegni voce' : 'Accendi voce'}
             style={{ width:34, height:34, borderRadius:11, border:`1px solid ${ttsOn ? '#a78bfa' : p.border}`, background: ttsOn ? 'rgba(167,139,250,0.15)' : 'transparent', color: ttsOn ? '#a78bfa' : p.muted, cursor:'pointer', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center' }}>
-            {ttsOn ? '🔊' : '🔈'}
+            {ttsOn ? 'ON' : 'OFF'}
           </button>
         </div>
 
@@ -490,7 +490,7 @@ export function NovaScreen({ onBack, initialBriefing = false }: { onBack: () => 
                   </div>
                 )}
                 {m.role === 'assistant' && tts && (
-                  <button onClick={() => speak(m.content)} title="Riascolta" style={{ marginTop:8, padding:'3px 8px', borderRadius:8, border:`1px solid ${p.border}`, background:'transparent', color:p.dim, fontFamily:p.monoFont, fontSize:9, cursor:'pointer', textTransform:'uppercase', letterSpacing:0.15 }}>🔊 ripeti</button>
+                  <button onClick={() => speak(m.content)} title="Riascolta" style={{ marginTop:8, padding:'3px 8px', borderRadius:8, border:`1px solid ${p.border}`, background:'transparent', color:p.dim, fontFamily:p.monoFont, fontSize:9, cursor:'pointer', textTransform:'uppercase', letterSpacing:0.15 }}>ripeti</button>
                 )}
               </div>
             </div>
@@ -512,12 +512,12 @@ export function NovaScreen({ onBack, initialBriefing = false }: { onBack: () => 
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') send(input); }}
                 rows={1}
-                placeholder={recording ? '🎤 sto ascoltando…' : 'parla o scrivi a NOVA…  (ctrl+invio invia)'}
+                placeholder={recording ? 'sto ascoltando…' : 'parla o scrivi a NOVA…  (ctrl+invio invia)'}
                 disabled={loading}
                 style={{ flex:1, resize:'none', border:0, outline:0, background:'transparent', color:p.fg, fontFamily:p.bodyFont, fontSize:15, lineHeight:1.35, minHeight: 24, maxHeight: 140 } as CSSProperties}
               />
               <button onClick={() => recording ? stopVoice() : startVoice()} disabled={!sr || loading} title={sr ? (recording ? 'Stop voce' : 'Parla') : 'Voce non supportata'} style={{ width:38, height:38, borderRadius:12, border:0, cursor: sr && !loading ? 'pointer' : 'not-allowed', background: recording ? p.red : 'rgba(167,139,250,0.18)', color: recording ? '#0a0a0a' : '#a78bfa', fontSize: 15, display:'flex', alignItems:'center', justifyContent:'center', boxShadow: recording ? `0 0 18px ${p.red}aa` : 'none', flexShrink:0, opacity: sr ? 1 : 0.4 }}>
-                {recording ? '●' : '🎤'}
+                {recording ? '●' : 'voce'}
               </button>
               <button onClick={() => send(input)} disabled={!input.trim() || loading} style={{ width:38, height:38, borderRadius:12, border:0, cursor: input.trim() && !loading ? 'pointer' : 'not-allowed', background: input.trim() ? '#a78bfa' : 'rgba(167,139,250,0.2)', color: '#0a0a0a', fontSize: 14, fontWeight: 900, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, opacity: input.trim() && !loading ? 1 : 0.4 }}>↵</button>
             </div>

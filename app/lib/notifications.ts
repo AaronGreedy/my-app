@@ -190,10 +190,10 @@ export function useNotifications(uid: string | null) {
         writeFired(fired);
       };
 
-      trySlot('morning',   prefs.morning,   'Mood mattina ☀',     'Come ti senti stamattina?');
-      trySlot('afternoon', prefs.afternoon, 'Mood pomeriggio 🌤', 'Pausa: come va l’energia?');
-      trySlot('evening',   prefs.evening,   'Mood sera 🌙',        'Rifletti sulla giornata');
-      trySlot('task',      prefs.task,      'Cosa di oggi 🎯',     'Hai completato il task del giorno?');
+      trySlot('morning',   prefs.morning,   'Mood mattina',     'Come ti senti stamattina?');
+      trySlot('afternoon', prefs.afternoon, 'Mood pomeriggio',  'Pausa: come va l’energia?');
+      trySlot('evening',   prefs.evening,   'Mood sera',        'Rifletti sulla giornata');
+      trySlot('task',      prefs.task,      'Cosa di oggi',     'Hai completato il task del giorno?');
     };
 
     tick();

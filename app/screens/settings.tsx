@@ -178,7 +178,6 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
         <SectionLabel num="06" title="DATI" hint="export · backup"/>
         <NeonGlass style={{ marginTop:8 }} tint="rgba(255,255,255,0.04)" radius={18} onClick={exportData}>
           <div style={{ padding:'14px 16px', display:'flex', alignItems:'center', gap:10 }}>
-            <span style={{ fontSize:18 }}>💾</span>
             <div style={{ flex:1 }}>
               <div style={{ fontFamily:p.bodyFont, fontSize:13, fontWeight:600, color:p.fg }}>Esporta dati</div>
               <div style={{ fontFamily:p.monoFont, fontSize:9, color:p.dim }}>Scarica JSON con tutti i tuoi log, note, settings</div>

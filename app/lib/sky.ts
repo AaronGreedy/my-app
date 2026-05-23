@@ -36,16 +36,8 @@ export function moonPhase(date: Date = new Date()): MoonPhase {
   return 'new';
 }
 
-export const MOON_EMOJI: Record<MoonPhase, string> = {
-  'new':              '🌑',
-  'waxing-crescent':  '🌒',
-  'first-quarter':    '🌓',
-  'waxing-gibbous':   '🌔',
-  'full':             '🌕',
-  'waning-gibbous':   '🌖',
-  'last-quarter':     '🌗',
-  'waning-crescent':  '🌘',
-};
+// MOON_EMOJI rimosso (richiesta utente, 2026-05-23). Per il rendering uso solo
+// MOON_LABEL_IT — niente emoji.
 
 export const MOON_LABEL_IT: Record<MoonPhase, string> = {
   'new':              'Luna nuova',

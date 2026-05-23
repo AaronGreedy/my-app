@@ -51,8 +51,12 @@ interface NovaRequest {
   mode?: 'chat' | 'briefing';
 }
 
-const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
-const DEFAULT_MODEL = 'gemini-2.5-flash';
+// Provider AI: priorità Groq (free tier, decisione 2026-05-23).
+// Fallback Gemini per backward compat finché Aaron non setta GROQ_API_KEY.
+const GROQ_URL    = 'https://api.groq.com/openai/v1/chat/completions';
+const GROQ_MODEL  = 'llama-3.3-70b-versatile';
+const GEMINI_URL  = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
+const GEMINI_MODEL = 'gemini-2.5-flash';
 
 function buildSystemPrompt(ctx: NovaContext = {}, mode: 'chat' | 'briefing' = 'chat'): string {
   const lines: string[] = [];
@@ -61,14 +65,14 @@ function buildSystemPrompt(ctx: NovaContext = {}, mode: 'chat' | 'briefing' = 'c
   if (t.date) lines.push(`Data: ${t.weekday ?? ''} ${t.date}`);
   if (t.moodMorning || t.moodAfternoon || t.moodEvening)
     lines.push(`Mood oggi: M=${t.moodMorning ?? '—'} P=${t.moodAfternoon ?? '—'} S=${t.moodEvening ?? '—'}`);
-  if (t.moodNoteM) lines.push(`  ☀ note mattina: ${t.moodNoteM.slice(0, 240)}`);
-  if (t.moodNoteA) lines.push(`  🌤 note pomeriggio: ${t.moodNoteA.slice(0, 240)}`);
-  if (t.moodNoteE) lines.push(`  🌙 note sera: ${t.moodNoteE.slice(0, 240)}`);
+  if (t.moodNoteM) lines.push(`  note mattina: ${t.moodNoteM.slice(0, 240)}`);
+  if (t.moodNoteA) lines.push(`  note pomeriggio: ${t.moodNoteA.slice(0, 240)}`);
+  if (t.moodNoteE) lines.push(`  note sera: ${t.moodNoteE.slice(0, 240)}`);
   if (t.sleepHours) lines.push(`Sonno: ${t.sleepHours}h${t.sleepQuality ? ` · qualità ${t.sleepQuality}/5` : ''}`);
   if (t.workouts && t.workouts.length) lines.push(`Workout oggi: ${t.workouts.join(' + ')}`);
   else lines.push('Workout oggi: nessuno (0% FIT)');
   if (t.todayThing) lines.push(`Cosa di oggi: "${t.todayThing}" — ${t.todayDone ? 'FATTA' : 'aperta'}`);
-  if (t.weatherSnap) lines.push(`Meteo Bolzano: ${t.weatherSnap.tempC}° · 💧 ${t.weatherSnap.rainPct}%${t.weatherSnap.label ? ` · ${t.weatherSnap.label}` : ''}`);
+  if (t.weatherSnap) lines.push(`Meteo Bolzano: ${t.weatherSnap.tempC}° · pioggia ${t.weatherSnap.rainPct}%${t.weatherSnap.label ? ` · ${t.weatherSnap.label}` : ''}`);
   if (t.moonPhase) lines.push(`Luna: ${t.moonPhase}`);
   if (typeof t.waterMl === 'number') lines.push(`Acqua oggi: ${(t.waterMl / 1000).toFixed(2)}L`);
   if (typeof t.kcalEaten === 'number') lines.push(`Kcal oggi: ${t.kcalEaten}`);
@@ -105,7 +109,7 @@ function buildSystemPrompt(ctx: NovaContext = {}, mode: 'chat' | 'briefing' = 'c
     if (active.length) {
       lines.push(`\nLavori attivi:`);
       for (const w of active) {
-        const stale = w.lastTouchedDays > 5 ? ' ⚠ stale' : '';
+        const stale = w.lastTouchedDays > 5 ? ' [stale]' : '';
         lines.push(`  [${w.status.toUpperCase()}] ${w.title}${w.notes ? ` — ${w.notes.slice(0, 80)}` : ''}${stale}`);
       }
     }
@@ -205,9 +209,27 @@ export async function POST(req: NextRequest) {
   const decoded = await verifyAuthHeader(req.headers.get('authorization'));
   if (!decoded) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) {
-    return Response.json({ error: 'GEMINI_API_KEY non configurata su Vercel' }, { status: 500 });
+  // Sceglie il provider in base alle env var disponibili (Groq prioritario).
+  const groqKey   = process.env.GROQ_API_KEY;
+  const geminiKey = process.env.GEMINI_API_KEY;
+  let providerUrl: string;
+  let providerKey: string;
+  let providerModel: string;
+  let providerName: string;
+  if (groqKey) {
+    providerUrl = GROQ_URL;
+    providerKey = groqKey;
+    providerModel = GROQ_MODEL;
+    providerName = 'Groq';
+  } else if (geminiKey) {
+    providerUrl = GEMINI_URL;
+    providerKey = geminiKey;
+    providerModel = GEMINI_MODEL;
+    providerName = 'Gemini';
+  } else {
+    return Response.json({
+      error: 'AI non configurata · serve GROQ_API_KEY (preferito, free) o GEMINI_API_KEY in .env / Vercel env',
+    }, { status: 500 });
   }
 
   let body: NovaRequest;
@@ -231,11 +253,11 @@ export async function POST(req: NextRequest) {
 
   const system = buildSystemPrompt(body.context ?? {}, body.mode ?? 'chat');
 
-  const res = await fetch(GEMINI_URL, {
+  const res = await fetch(providerUrl, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${providerKey}` },
     body: JSON.stringify({
-      model: DEFAULT_MODEL,
+      model: providerModel,
       messages: [{ role: 'system', content: system }, ...messages],
       temperature: 0.7,
       max_tokens: 1200,
@@ -244,10 +266,10 @@ export async function POST(req: NextRequest) {
 
   if (!res.ok) {
     const text = await res.text();
-    return Response.json({ error: `Gemini ${res.status}: ${text.slice(0, 300)}` }, { status: res.status });
+    return Response.json({ error: `${providerName} ${res.status}: ${text.slice(0, 300)}` }, { status: res.status });
   }
 
   const data = await res.json();
   const content: string = data?.choices?.[0]?.message?.content ?? '';
-  return Response.json({ content });
+  return Response.json({ content, provider: providerName });
 }

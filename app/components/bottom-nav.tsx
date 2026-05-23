@@ -4,19 +4,17 @@ import { useState, useEffect, useRef, CSSProperties } from 'react';
 import { p } from '@/lib/design';
 import { MarkerPlus } from './markers';
 import { useAuth } from '@/lib/auth-context';
-import { useNotes, useShoppingList, useGifts } from '@/lib/user-store';
-import { useDayStore } from '@/lib/day-store';
+import { useNotes, useShoppingList, useGifts, useTodos } from '@/lib/user-store';
 
 type Screen = 'home' | 'cal' | 'brain' | 'me';
-type MeTab = 'cibo' | 'fitness' | 'mood' | 'habits' | 'suppl';
+type MeTab = 'cibo' | 'fitness' | 'mood' | 'habits';
 type Route = 'todo' | 'brain' | 'spesa' | 'problema' | 'regalo' | 'nota';
 
-const ME_TABS: { id: MeTab; label: string; emoji: string; color: string }[] = [
-  { id: 'cibo',    label: 'Cibo',  emoji: '🍴', color: '#ff6a00' },
-  { id: 'fitness', label: 'Fit',   emoji: '💪', color: '#a6ff00' },
-  { id: 'mood',    label: 'Mood',  emoji: '🌗', color: '#ff14b8' },
-  { id: 'habits',  label: 'Habit', emoji: '✅', color: '#00f0ff' },
-  { id: 'suppl',   label: 'Suppl', emoji: '💊', color: '#a78bfa' },
+const ME_TABS: { id: MeTab; label: string; color: string }[] = [
+  { id: 'cibo',    label: 'Cibo',  color: '#ff6a00' },
+  { id: 'fitness', label: 'Fit',   color: '#a6ff00' },
+  { id: 'mood',    label: 'Mood',  color: '#ff14b8' },
+  { id: 'habits',  label: 'Habit', color: '#00f0ff' },
 ];
 
 // Web Speech API types
@@ -58,7 +56,7 @@ function detectRoute(text: string): { route: Route; label: string; color: string
   if (t.includes('brain') || t.includes('idea'))                                return { route: 'brain',    label: 'BRAIN',         color: p.cyan   };
   if (t.includes('compr') || t.includes('spesa'))                               return { route: 'spesa',    label: 'SPESA',         color: p.green  };
   if (t.includes('problema'))                                                   return { route: 'problema', label: 'PROBLEMA',      color: p.red    };
-  if (t.includes('regalo'))                                                     return { route: 'regalo',   label: 'REGALO 🔒',     color: p.magenta };
+  if (t.includes('regalo'))                                                     return { route: 'regalo',   label: 'REGALO',     color: p.magenta };
   return { route: 'nota', label: 'NOTA', color: p.muted };
 }
 
@@ -73,7 +71,7 @@ function CaptureOverlay({ open, onClose, autoVoice }: { open: boolean; onClose: 
   const uid = user?.uid ?? null;
   const { addNote }    = useNotes(uid);
   const { addItem }    = useShoppingList(uid);
-  const { data, save } = useDayStore(uid);
+  const { addTodo }    = useTodos(uid);
   const { gifts, saveGifts } = useGifts(uid);
 
   const [text, setText]   = useState('');
@@ -140,7 +138,7 @@ function CaptureOverlay({ open, onClose, autoVoice }: { open: boolean; onClose: 
     brain:    { label: 'NOTA',         color: p.cyan    },
     spesa:    { label: 'SPESA',        color: p.green   },
     problema: { label: 'PROBLEMA',     color: p.red     },
-    regalo:   { label: 'REGALO 🔒',    color: p.magenta },
+    regalo:   { label: 'REGALO',    color: p.magenta },
     nota:     { label: 'NOTA',         color: p.muted   },
   };
   const route = presetRoute
@@ -154,21 +152,15 @@ function CaptureOverlay({ open, onClose, autoVoice }: { open: boolean; onClose: 
     const body = cleanText(text);
     const display = body || text.trim();
     try {
+      // Routing 2026-05-23: ogni tipo va nella sua sezione dedicata.
+      // Niente più inbox centrale né fallback su todayThing.
       switch (route.route) {
-        case 'todo': {
-          // Diventa la "cosa di oggi" se non c'è già, altrimenti aggiunge come nota con tag
-          if (!data.todayThing.trim()) {
-            save({ todayThing: display, todayDeadline: '', todayDone: false });
-          } else {
-            await addNote(`TODO · ${display}`, ['progetto']);
-          }
-          break;
-        }
-        case 'brain':    await addNote(display, ['idea']);                  break;
-        case 'spesa':    addItem(display);                                  break;
-        case 'problema': await addNote(display, ['lavoro']);                break;
+        case 'todo':     addTodo(display, 2);                                                                       break;
+        case 'brain':    await addNote(display, ['idea']);                                                          break;
+        case 'spesa':    addItem(display);                                                                          break;
+        case 'problema': await addNote(display, ['lavoro']);                                                        break;
         case 'regalo':   saveGifts([...gifts, { id: Date.now().toString(), label: display, note: '', done: false }]); break;
-        case 'nota':     await addNote(display, []);                        break;
+        case 'nota':     await addNote(display, []);                                                                break;
       }
       setDone(route.label);
       setText('');
@@ -192,10 +184,10 @@ function CaptureOverlay({ open, onClose, autoVoice }: { open: boolean; onClose: 
         </div>
         <div style={{ display:'flex', gap:6, marginBottom:12, flexWrap:'wrap' }}>
           {([
-            { id:'todo' as Route,  label:'⏰ Ricorda', c: p.orange  },
-            { id:'spesa' as Route, label:'🛒 Compra',  c: p.green   },
-            { id:'brain' as Route, label:'🧠 Nota',    c: p.cyan    },
-            { id:'regalo' as Route,label:'🎁 Regalo',  c: p.magenta },
+            { id:'todo' as Route,  label:'Ricorda', c: p.orange  },
+            { id:'spesa' as Route, label:'Compra',  c: p.green   },
+            { id:'brain' as Route, label:'Nota',    c: p.cyan    },
+            { id:'regalo' as Route,label:'Regalo',  c: p.magenta },
           ]).map(b => {
             const active = presetRoute === b.id;
             return (
@@ -235,7 +227,7 @@ function CaptureOverlay({ open, onClose, autoVoice }: { open: boolean; onClose: 
             title={getSpeechRecognition() ? (recording ? 'Stop voice' : 'Start voice') : 'Voice non supportata'}
             style={{ width: 44, height: 44, borderRadius: 14, border: 0, cursor: getSpeechRecognition() ? 'pointer' : 'not-allowed', background: recording ? p.red : 'rgba(255,255,255,0.08)', color: recording ? '#0a0a0a' : p.fg, fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: recording ? `0 0 18px ${p.red}aa` : 'none', opacity: getSpeechRecognition() ? 1 : 0.4 }}
           >
-            {recording ? '●' : '🎤'}
+            {recording ? '●' : 'voce'}
           </button>
           <div style={{ flex: 1 }} />
           <button
@@ -268,6 +260,29 @@ const TABS = [
 export function BottomNav({ screen, setScreen }: { screen: Screen; setScreen: (s: Screen, opts?: { meTab?: MeTab }) => void }) {
   const [capture, setCapture] = useState(false);
   const [autoVoice, setAutoVoice] = useState(false);
+
+  // Auto-hide on scroll: si nasconde scrollando in basso, riappare scrollando
+  // in su. Usa { capture: true } per intercettare gli scroll dei container
+  // interni (gli scroll events non bubblano normalmente).
+  const [navHidden, setNavHidden] = useState(false);
+  const lastScrollYRef = useRef(0);
+  useEffect(() => {
+    const handleScroll = (e: Event) => {
+      const target = e.target as HTMLElement | null;
+      if (!target || typeof target.scrollTop !== 'number') return;
+      const currentY = target.scrollTop;
+      const delta = currentY - lastScrollYRef.current;
+      // Ignora micro-scroll (rumore dito) sotto i 6px
+      if (Math.abs(delta) < 6) { lastScrollYRef.current = currentY; return; }
+      if (delta > 0 && currentY > 80) setNavHidden(true);
+      else if (delta < 0) setNavHidden(false);
+      lastScrollYRef.current = currentY;
+    };
+    window.addEventListener('scroll', handleScroll, true);
+    return () => window.removeEventListener('scroll', handleScroll, true);
+  }, []);
+  // Quando cambi schermata, ripristina visibilità (la nuova non è scrollata)
+  useEffect(() => { setNavHidden(false); lastScrollYRef.current = 0; }, [screen]);
 
   // Hold-to-voice detection: tap = open normally, hold ≥250ms = open in voice mode
   const holdTimer = useRef<number | null>(null);
@@ -376,7 +391,6 @@ export function BottomNav({ screen, setScreen }: { screen: Screen; setScreen: (s
                   onClick={() => pickMeTab(t.id)}
                   style={{ padding:'10px 14px', borderRadius:14, background: hovered ? `${t.color}33` : 'transparent', border:`1px solid ${hovered ? t.color : 'transparent'}`, display:'flex', alignItems:'center', gap:10, fontFamily:p.monoFont, fontSize:11, color: hovered ? t.color : p.fg, textTransform:'uppercase', letterSpacing:0.1, transition:'background .12s, border-color .12s', boxShadow: hovered ? `0 0 14px ${t.color}66` : 'none', userSelect:'none', WebkitUserSelect:'none', WebkitTouchCallout:'none', cursor:'pointer', textAlign:'left', width:'100%' } as CSSProperties}
                 >
-                  <span style={{ fontSize:16 }}>{t.emoji}</span>
                   <span style={{ flex:1 }}>{t.label}</span>
                 </button>
               );
@@ -386,7 +400,7 @@ export function BottomNav({ screen, setScreen }: { screen: Screen; setScreen: (s
         </>
       )}
 
-      <div style={{ position: 'absolute', left: 12, right: 12, bottom: 'calc(env(safe-area-inset-bottom, 0px) + 14px)', zIndex: 30, display: 'flex', alignItems: 'center', gap: 6, padding: '6px', borderRadius: 32, background: p.navBg, backdropFilter: 'blur(24px) saturate(180%)', WebkitBackdropFilter: 'blur(24px) saturate(180%)', border: p.navBorder, boxShadow: p.navShadow } as CSSProperties}>
+      <div style={{ position: 'absolute', left: 12, right: 12, bottom: 'calc(env(safe-area-inset-bottom, 0px) + 14px)', zIndex: 30, display: 'flex', alignItems: 'center', gap: 6, padding: '6px', borderRadius: 32, background: p.navBg, backdropFilter: 'blur(24px) saturate(180%)', WebkitBackdropFilter: 'blur(24px) saturate(180%)', border: p.navBorder, boxShadow: p.navShadow, transform: navHidden ? 'translateY(140%)' : 'translateY(0)', transition: 'transform .28s cubic-bezier(.4,0,.2,1)' } as CSSProperties}>
         {TABS.map(tab => {
           const active = tab.id !== 'fab' && screen === (tab.id as Screen);
           if (tab.id === 'fab') return (

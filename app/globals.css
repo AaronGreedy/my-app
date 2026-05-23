@@ -47,14 +47,22 @@ body > div {
   }
 }
 
-/* Disable iOS native callout/select/drag globally on interactive controls.
-   Inputs and textareas keep selection (they're selector-excluded). */
-button, [role="button"], a, svg, [data-no-callout] {
-  -webkit-touch-callout: none !important;
-  -webkit-user-select: none !important;
-  user-select: none !important;
-  -webkit-user-drag: none !important;
+/* Disabilita la selezione/callout nativi di iOS su tutta l'app.
+   Su long-press la UI non evidenzia più nulla e non appare il menu copia/condividi.
+   Eccezioni: input, textarea, contenteditable e qualunque elemento con
+   data-selectable (es. testo di una nota Brain che vorrai poter copiare). */
+* {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
   -webkit-tap-highlight-color: transparent;
+}
+
+input, textarea, [contenteditable="true"], [data-selectable], [data-selectable] * {
+  -webkit-touch-callout: default;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /* Skeleton shimmer for loading placeholders */
