@@ -6,6 +6,7 @@ import { NeonGlass, SectionLabel } from '@/components/neon-glass';
 import { MarkerDiamond, MarkerStar4 } from '@/components/markers';
 import { MoodFace } from '@/components/mood-face';
 import { useAuth } from '@/lib/auth-context';
+import { VITAL_URL } from '@/lib/links';
 import { useDayStore, MoodId, DayData, useMonthData } from '@/lib/day-store';
 import { useUserProfile, useSupplements, useWeightLog, useNotes, useXP, DEFAULT_PRS, useUserSettings } from '@/lib/user-store';
 import { useNotifications } from '@/lib/notifications';
@@ -159,7 +160,7 @@ function AchievementsSection({ data, uid }: { data: DayData; uid: string | null 
   }
 
   const habitsToday = data.habits.filter(Boolean).length;
-  const goodHabitsToday = data.meHabits.slice(0, 8).filter(Boolean).length;
+  const goodHabitsToday = data.meHabits.slice(0, 7).filter(Boolean).length;
 
   const weightLossKg = entries.length >= 2 ? entries[0].weight - entries[entries.length - 1].weight : 0;
 
@@ -1027,8 +1028,8 @@ const GOOD_HABITS = [
   {n:'Meditazione 5 min',   xp:15},
   {n:'Lettura 15 min',      xp:10},
   {n:'Doccia fredda',       xp:20},
-  {n:'Allenamento',         xp:30},
 ];
+// Allenamento rimosso: il fit vive in Vital.
 
 const BAD_HABITS = [
   {n:'No Fap',   xp:50},
@@ -1294,13 +1295,13 @@ function SupplTab({ data, save, uid }: { data: DayData; save: (p: Partial<DayDat
 export type MeTab = 'cibo'|'fitness'|'mood'|'habits';
 
 export function MeScreen({ initialTab }: { initialTab?: MeTab } = {}) {
-  const [tab, setTab] = useState<MeTab>(initialTab ?? 'cibo');
+  const [tab, setTab] = useState<MeTab>(initialTab ?? 'mood');
   useEffect(() => { if (initialTab) setTab(initialTab); }, [initialTab]);
   const { user } = useAuth();
   const { data, save } = useDayStore(user?.uid ?? null);
   const { prs, savePr } = useUserProfile(user?.uid ?? null);
   const tabs = [
-    {id:'cibo',l:'CIBO'},{id:'fitness',l:'FIT'},{id:'mood',l:'MOOD'},{id:'habits',l:'HABIT'},
+    {id:'mood',l:'MOOD'},{id:'habits',l:'HABIT'},
   ] as const;
 
   return (
@@ -1314,7 +1315,7 @@ export function MeScreen({ initialTab }: { initialTab?: MeTab } = {}) {
             <MarkerDiamond size={8} color={p.magenta}/> PROFILO · ME
           </div>
           <div style={{ fontFamily:p.displayFont,fontWeight:700,fontSize:38,letterSpacing:-1.2,textTransform:'uppercase',lineHeight:0.92,marginTop:6 }}>
-            AARON<br/><span style={{ color:p.magenta }}>84.8 KG.</span>
+            AARON<br/><span style={{ color:p.magenta }}>MENTE.</span>
           </div>
         </div>
         <div style={{ display:'flex', gap:4, marginTop:18 }}>
@@ -1322,6 +1323,16 @@ export function MeScreen({ initialTab }: { initialTab?: MeTab } = {}) {
             <button key={t.id} onClick={() => setTab(t.id)} style={{ flex:1,padding:'8px 2px',borderRadius:13,border:`1px solid ${tab===t.id?p.magenta:'rgba(255,255,255,0.1)'}`,background:tab===t.id?'rgba(255,20,184,0.18)':'transparent',color:tab===t.id?p.fg:p.muted,cursor:'pointer',fontFamily:p.monoFont,fontSize:8.5,letterSpacing:0.06,textTransform:'uppercase' }}>{t.l}</button>
           ))}
         </div>
+        {/* SALUTE → Vital (peso, dieta, allenamento, HRV vivono nell'app Vital) */}
+        <button
+          onClick={() => { if (typeof window !== 'undefined') window.open(VITAL_URL, '_blank'); }}
+          style={{ width:'100%', marginTop:8, padding:'11px 14px', borderRadius:13, border:`1px solid rgba(0,240,255,0.4)`, background:'rgba(0,240,255,0.08)', color:p.cyan, cursor:'pointer', fontFamily:p.monoFont, fontSize:10, letterSpacing:0.1, textTransform:'uppercase', display:'flex', alignItems:'center', gap:8 }}
+        >
+          <span style={{ fontWeight:700 }}>SALUTE</span>
+          <span style={{ color:p.muted }}>peso · dieta · fit</span>
+          <span style={{ flex:1 }} />
+          <span>apri Vital →</span>
+        </button>
         {tab==='cibo'    && <CiboTab    data={data} save={save} uid={user?.uid ?? null}/>}
         {tab==='fitness' && <FitnessTab data={data} save={save} prs={prs} savePr={savePr} uid={user?.uid ?? null}/>}
         {tab==='mood'    && <MoodTab    data={data} save={save} uid={user?.uid ?? null}/>}

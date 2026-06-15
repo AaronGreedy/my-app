@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, CSSProperties } from 'react';
 import { p } from '@/lib/design';
+import { VITAL_URL } from '@/lib/links';
 import { MarkerPlus } from './markers';
 import { useAuth } from '@/lib/auth-context';
 import { useNotes, useShoppingList, useGifts, useTodos } from '@/lib/user-store';
@@ -17,8 +18,6 @@ const LABELS: Record<Route, string> = {
 };
 
 const ME_TABS: { id: MeTab; label: string; color: string }[] = [
-  { id: 'cibo',    label: 'Cibo',  color: '#ff6a00' },
-  { id: 'fitness', label: 'Fit',   color: '#a6ff00' },
   { id: 'mood',    label: 'Mood',  color: '#ff14b8' },
   { id: 'habits',  label: 'Habit', color: '#00f0ff' },
 ];
@@ -52,6 +51,7 @@ function NavIcon({ kind, color, size = 18 }: { kind: string; color: string; size
   if (kind === 'cal')  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke={color} strokeWidth={sw}/><path d="M3 10 H21 M8 3 V7 M16 3 V7" stroke={color} strokeWidth={sw} strokeLinecap="round"/></svg>;
   if (kind === 'brain') return <svg width={size} height={size} viewBox="0 0 24 24" fill="none"><circle cx="8" cy="8" r="2" stroke={color} strokeWidth={sw}/><circle cx="16" cy="8" r="2" stroke={color} strokeWidth={sw}/><circle cx="12" cy="16" r="2" stroke={color} strokeWidth={sw}/><path d="M9.5 9 L11 14.5 M14.5 9 L13 14.5 M10 8 H14" stroke={color} strokeWidth={sw}/></svg>;
   if (kind === 'me')   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none"><circle cx="12" cy="9" r="3.5" stroke={color} strokeWidth={sw}/><path d="M5 21 C5 17 8 15 12 15 C16 15 19 17 19 21" stroke={color} strokeWidth={sw} strokeLinecap="round"/></svg>;
+  if (kind === 'salute') return <svg width={size} height={size} viewBox="0 0 24 24" fill="none"><path d="M3 12 H7 L9 7 L12 17 L15 11 L16.5 12 H21" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"/></svg>;
   return null;
 }
 
@@ -299,11 +299,12 @@ function CaptureOverlay({ open, onClose, autoVoice }: { open: boolean; onClose: 
 }
 
 const TABS = [
-  { id: 'home',  label: 'Home',  icon: 'home'  },
-  { id: 'cal',   label: 'Cal',   icon: 'cal'   },
-  { id: 'fab',   label: '＋',    icon: 'fab'   },
-  { id: 'brain', label: 'Brain', icon: 'brain' },
-  { id: 'me',    label: 'Me',    icon: 'me'    },
+  { id: 'home',   label: 'Home',   icon: 'home'   },
+  { id: 'cal',    label: 'Cal',    icon: 'cal'    },
+  { id: 'fab',    label: '＋',     icon: 'fab'    },
+  { id: 'brain',  label: 'Brain',  icon: 'brain'  },
+  { id: 'me',     label: 'Me',     icon: 'me'     },
+  { id: 'salute', label: 'Salute', icon: 'salute' }, // link esterno a Vital
 ] as const;
 
 export function BottomNav({ screen, setScreen }: { screen: Screen; setScreen: (s: Screen, opts?: { meTab?: MeTab }) => void }) {
@@ -484,6 +485,13 @@ export function BottomNav({ screen, setScreen }: { screen: Screen; setScreen: (s
               title="Tap = Me · Tieni premuto per scegliere sezione"
             >
               <NavIcon kind="me" color={active ? p.fg : p.muted} />
+              {tab.label}
+            </button>
+          );
+          if (tab.id === 'salute') return (
+            // Link esterno: apre la PWA Vital in una nuova scheda
+            <button key="salute" onClick={() => { if (typeof window !== 'undefined') window.open(VITAL_URL, '_blank'); }} style={{ flex: 1, padding: '10px 4px 8px', border: 0, cursor: 'pointer', borderRadius: 22, background: 'transparent', color: p.muted, fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.12, textTransform: 'uppercase', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+              <NavIcon kind="salute" color={p.cyan} />
               {tab.label}
             </button>
           );

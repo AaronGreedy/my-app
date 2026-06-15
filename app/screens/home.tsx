@@ -4,11 +4,11 @@ import { useEffect, useRef, useState, CSSProperties } from 'react';
 import { p, NOISE_SVG, fmtItDate, fmtItDateFromDate } from '@/lib/design';
 import { NeonGlass, SectionLabel, MetricHead } from '@/components/neon-glass';
 import { MoodFace } from '@/components/mood-face';
-import { MarkerTarget, MarkerDiamond, MarkerStar4, MarkerTriangle, MarkerHex } from '@/components/markers';
+import { MarkerTarget, MarkerDiamond, MarkerStar4 } from '@/components/markers';
 import { useAuth } from '@/lib/auth-context';
 import { useDayStore, MoodId, useMonthData } from '@/lib/day-store';
-import { getMealTotals } from '@/lib/meals';
-import { useXP, useCountdowns, useWeeklyChallenge, daysUntil, useUserSettings, useWeightLog, useNotes, useTodos } from '@/lib/user-store';
+import { VITAL_URL } from '@/lib/links';
+import { useXP, useCountdowns, useWeeklyChallenge, daysUntil, useUserSettings, useNotes, useTodos } from '@/lib/user-store';
 import { useToast } from '@/lib/toast';
 import { CountdownEditor } from '@/components/countdown-editor';
 
@@ -125,7 +125,6 @@ const HOME_CORE_HABITS = [
   { label: 'Luci rosse',         slot: 2, xp: 10 },
   { label: 'Candle',             slot: 3, xp: 10 },
   { label: 'Meditazione',        slot: 4, xp: 15 },
-  { label: 'Allenamento',        slot: 7, xp: 30 },
 ] as const;
 
 // Doccia fredda = abitudine OPZIONALE, non rientra nel 100% giornaliero.
@@ -222,17 +221,15 @@ const ORBS = [
 
 // ─── HomeScreen ───────────────────────────────────────────────────────────────
 
-function computeTodayXP(meHabits: boolean[], moodM: MoodId|null, moodA: MoodId|null, moodE: MoodId|null, meals: (string[] | null)[], waterMl: number, workouts: string[]): number {
+function computeTodayXP(meHabits: boolean[], moodM: MoodId|null, moodA: MoodId|null, moodE: MoodId|null): number {
   let xp = 0;
-  // Habits home: 6 core + 1 opzionale, sommo xp se attivi
+  // Habits home: core di disciplina + 1 opzionale, sommo xp se attivi.
+  // Cibo/acqua/allenamento sono passati a Vital → niente più XP qui.
   HOME_CORE_HABITS.forEach(h => { if (meHabits[h.slot]) xp += h.xp; });
   if (meHabits[HOME_OPT_HABIT.slot]) xp += HOME_OPT_HABIT.xp;
   if (moodM) xp += 10;
   if (moodA) xp += 10;
   if (moodE) xp += 10;
-  meals.forEach(m => { if (m !== null) xp += 5; });
-  if (waterMl >= 3000) xp += 25;
-  xp += workouts.length * 30;
   return xp;
 }
 
@@ -245,11 +242,8 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
   const { countdowns, saveCountdowns } = useCountdowns(user?.uid ?? null);
   const weekly = useWeeklyChallenge(user?.uid ?? null);
   const { settings } = useUserSettings(user?.uid ?? null);
-  const { entries: weightEntries, logWeight } = useWeightLog(user?.uid ?? null);
   const { todos, toggleTodo } = useTodos(user?.uid ?? null);
   const [showEditor, setShowEditor] = useState(false);
-  const [showWeightEditor, setShowWeightEditor] = useState(false);
-  const [weightDraft, setWeightDraft] = useState('');
   const [showPromptEditor, setShowPromptEditor] = useState(false);
   const [promptDraft, setPromptDraft] = useState('');
   const [promptDoneToday, setPromptDoneToday] = useState(false);
@@ -277,21 +271,10 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
   const prevMonth = useMonthData(user?.uid ?? null, prevYr, prevMo);
   const allDays = { ...prevMonth, ...currMonth };
 
-  const waterMl  = data.water;
   const meHabits = data.meHabits;
 
-  const WATER_TARGET = data.workouts.length > 0 ? settings.waterTargetTraining : settings.waterTargetRest;
-
-  const { kcal: kcalEaten, pr: totalPr, c: totalC, g: totalG } = getMealTotals(data.mealSelected);
-  const KCAL_TARGET = settings.kcalTarget;
-  const kcalLeft  = KCAL_TARGET - kcalEaten;
-  const kcalPct   = Math.min(100, Math.round((kcalEaten / KCAL_TARGET) * 100));
-  const waterPct  = Math.min(100, Math.round((waterMl / WATER_TARGET) * 100));
-
-  const addWater = (ml: number) => save({ water: waterMl + ml });
-
   // Toggle di un meHabit (stesso array usato in Me → Habits, così sono coerenti)
-  // Quando arriva a 6/6 core scatta il reward del giorno (toast + nota in Brain).
+  // Quando tutti i core sono fatti scatta il reward del giorno (toast + nota Brain).
   const { addNote } = useNotes(user?.uid ?? null);
 
   const coreCount = HOME_CORE_HABITS.filter(h => meHabits[h.slot]).length;
@@ -342,37 +325,10 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
     }
   };
 
-  const todayXP = computeTodayXP(meHabits, data.moodMorning, data.moodAfternoon, data.moodEvening, data.mealSelected, waterMl, data.workouts);
+  const todayXP = computeTodayXP(meHabits, data.moodMorning, data.moodAfternoon, data.moodEvening);
 
-  // Peso: ultima pesata + delta vs ~7 giorni fa.
+  // Chiave data di oggi (usata dal prompt del giorno).
   const todayKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-  const todayWeight = weightEntries.find(e => e.date === todayKey) ?? null;
-  const lastWeight  = weightEntries.length > 0 ? weightEntries[weightEntries.length - 1] : null;
-  const displayWeight = todayWeight ?? lastWeight;
-  // Trova l'entry più vicina a 7 giorni fa (la più recente <= 7gg fa)
-  const sevenAgo = new Date(now); sevenAgo.setDate(sevenAgo.getDate() - 7);
-  const sevenKey = `${sevenAgo.getFullYear()}-${String(sevenAgo.getMonth()+1).padStart(2,'0')}-${String(sevenAgo.getDate()).padStart(2,'0')}`;
-  const weekAgoEntry = [...weightEntries].reverse().find(e => e.date <= sevenKey) ?? null;
-  const weightDelta  = displayWeight && weekAgoEntry && displayWeight.date !== weekAgoEntry.date
-    ? displayWeight.weight - weekAgoEntry.weight
-    : null;
-
-  const openWeightEditor = () => {
-    setWeightDraft(displayWeight?.weight.toString() ?? '');
-    setShowWeightEditor(true);
-  };
-
-  const saveWeight = () => {
-    const n = parseFloat(weightDraft.replace(',', '.'));
-    if (isNaN(n) || n <= 0 || n >= 300) return;
-    const wasLoggedToday = !!todayWeight;
-    logWeight(n);
-    if (!wasLoggedToday) {
-      addXP(5);
-      if (settings.showXpToast) toast.xp(5, 'peso loggato');
-    }
-    setShowWeightEditor(false);
-  };
 
   // Prompt del giorno: scelta deterministica per data (così non cambia
   // se ricarichi la pagina) + lock localStorage per sapere se hai già
@@ -451,38 +407,21 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
 
       <div style={{ position: 'relative', zIndex: 2, padding: 'calc(env(safe-area-inset-top, 0px) + 14px) 18px calc(env(safe-area-inset-bottom, 0px) + 130px)' }}>
 
-        {/* PESO — prima cosa al mattino. Card gialla se non ancora pesato oggi,
-            ciano se già fatto. Tap apre bottom-sheet con input rapido. */}
+        {/* SALUTE → Vital. Peso, dieta, allenamento e HRV vivono nell'app Vital
+            (progetto separato): questa card apre Vital in una nuova scheda. */}
         <NeonGlass
           style={{ marginTop: 8 }}
-          tint={todayWeight ? 'linear-gradient(135deg, rgba(0,240,255,0.18), rgba(166,255,0,0.06))' : 'linear-gradient(135deg, rgba(255,212,0,0.22), rgba(255,106,0,0.10))'}
-          edge={todayWeight ? 'rgba(0,240,255,0.4)' : 'rgba(255,212,0,0.55)'}
-          glow={todayWeight ? '#00f0ff' : '#ffd400'}
+          tint="linear-gradient(135deg, rgba(0,240,255,0.18), rgba(166,255,0,0.06))"
+          edge="rgba(0,240,255,0.4)"
+          glow="#00f0ff"
           radius={18}
-          onClick={openWeightEditor}
+          onClick={() => { if (typeof window !== 'undefined') window.open(VITAL_URL, '_blank'); }}
         >
           <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ fontFamily: p.monoFont, fontSize: 9.5, color: todayWeight ? p.cyan : '#ffd400', textTransform: 'uppercase', letterSpacing: 0.18, fontWeight: 700, minWidth: 38 }}>PESO</div>
-            {displayWeight ? (
-              <>
-                <div style={{ fontFamily: p.displayFont, fontWeight: 800, fontSize: 30, letterSpacing: -0.8, lineHeight: 1 }}>
-                  {displayWeight.weight.toFixed(1)}<span style={{ fontSize: 13, color: p.muted, marginLeft: 2 }}>kg</span>
-                </div>
-                {weightDelta !== null && (
-                  <div style={{ fontFamily: p.monoFont, fontSize: 10.5, color: weightDelta < 0 ? p.green : weightDelta > 0 ? p.orange : p.muted, fontWeight: 700, letterSpacing: 0.1 }}>
-                    {weightDelta > 0 ? '+' : ''}{weightDelta.toFixed(1)}kg / 7g
-                  </div>
-                )}
-                <span style={{ flex: 1 }} />
-                <span style={{ fontFamily: p.monoFont, fontSize: 9, color: todayWeight ? p.dim : '#ffd400', textTransform: 'uppercase', letterSpacing: 0.1 }}>{todayWeight ? 'oggi · edit' : 'pesati ora'}</span>
-              </>
-            ) : (
-              <>
-                <div style={{ fontFamily: p.bodyFont, fontSize: 14, color: '#ffd400', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.1 }}>Pesati ora</div>
-                <span style={{ flex: 1 }} />
-                <span style={{ fontFamily: p.monoFont, fontSize: 10, color: '#ffd400', textTransform: 'uppercase' }}>tap</span>
-              </>
-            )}
+            <div style={{ fontFamily: p.monoFont, fontSize: 9.5, color: p.cyan, textTransform: 'uppercase', letterSpacing: 0.18, fontWeight: 700, minWidth: 38 }}>SALUTE</div>
+            <div style={{ fontFamily: p.bodyFont, fontSize: 14, color: p.fg, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.1 }}>Peso · Dieta · Fit</div>
+            <span style={{ flex: 1 }} />
+            <span style={{ fontFamily: p.monoFont, fontSize: 9, color: p.cyan, textTransform: 'uppercase', letterSpacing: 0.1 }}>apri Vital →</span>
           </div>
         </NeonGlass>
 
@@ -666,45 +605,12 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
           </>
         )}
 
-        {/* Vitals */}
-        <SectionLabel num="02" title="VITALS" hint="oggi" />
+        {/* Routine — habit di disciplina (cibo/acqua/fit sono in Vital) */}
+        <SectionLabel num="02" title="ROUTINE" hint="oggi" />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
 
-          {/* KCAL */}
-          <NeonGlass tint="linear-gradient(135deg, rgba(255,106,0,0.32), rgba(255,212,0,0.10))" edge="rgba(255,106,0,0.55)" glow="#ff6a00" radius={22} onClick={() => onNavigate?.('me', { meTab: 'cibo' })}>
-            <div style={{ padding: '13px 13px 12px' }}>
-              <MetricHead icon={<MarkerTriangle size={9} color={p.orange} />} label="KCAL" right={kcalLeft > 0 ? `−${kcalLeft}` : `+${Math.abs(kcalLeft)}`} />
-              <div style={{ fontFamily: p.displayFont, fontSize: 36, fontWeight: 800, letterSpacing: -1.2, lineHeight: 0.95, marginTop: 4 }}>{kcalEaten}</div>
-              <div style={{ height: 5, marginTop: 10, borderRadius: 99, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${kcalPct}%`, borderRadius: 99, background: 'linear-gradient(90deg, #ffd400, #ff6a00, #ff0040)', boxShadow: '0 0 10px #ff6a00' }} />
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontFamily: p.monoFont, fontSize: 9, color: p.dim }}>
-                <span>P {totalPr}g</span><span>C {totalC}g</span><span>G {totalG}g</span>
-              </div>
-            </div>
-          </NeonGlass>
-
-          {/* ACQUA — dynamic target */}
-          <NeonGlass tint="linear-gradient(135deg, rgba(166,255,0,0.28), rgba(0,240,255,0.18))" edge="rgba(166,255,0,0.55)" glow="#a6ff00" radius={22}>
-            <div style={{ padding: '13px 13px 12px' }}>
-              <MetricHead icon={<MarkerHex size={9} color={p.green} />} label="ACQUA" right={`${waterMl}/${WATER_TARGET}ml`} />
-              <div style={{ fontFamily: p.displayFont, fontSize: 36, fontWeight: 800, letterSpacing: -1.2, lineHeight: 0.95, marginTop: 4 }}>
-                {(waterMl / 1000).toFixed(2)}<span style={{ fontSize: 14, color: p.muted }}>l</span>
-              </div>
-              <div style={{ fontFamily: p.monoFont, fontSize: 8, color: p.dim, marginTop: 2 }}>target: {WATER_TARGET/1000}L · {data.workouts.length > 0 ? '100% FIT' : '0% FIT'}</div>
-              <div style={{ height: 8, marginTop: 6, borderRadius: 99, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${waterPct}%`, borderRadius: 99, background: 'linear-gradient(90deg, #a6ff00, #00f0ff)', boxShadow: '0 0 10px rgba(166,255,0,0.7)' }} />
-              </div>
-              <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
-                {[250, 500, 750, 1000].map(ml => (
-                  <button key={ml} onClick={() => addWater(ml)} style={{ flex: 1, padding: '7px 2px', borderRadius: 9, border: `1px solid ${ml === 250 ? 'rgba(166,255,0,0.35)' : ml === 500 ? 'rgba(166,255,0,0.45)' : ml === 750 ? 'rgba(0,240,255,0.4)' : 'rgba(0,240,255,0.55)'}`, background: ml <= 500 ? 'rgba(166,255,0,0.08)' : 'rgba(0,240,255,0.08)', color: ml <= 500 ? p.green : p.cyan, cursor: 'pointer', fontFamily: p.monoFont, fontSize: 8, textTransform: 'uppercase' }}>+{ml >= 1000 ? '1L' : ml}{ml < 1000 ? 'ml' : ''}</button>
-                ))}
-              </div>
-            </div>
-          </NeonGlass>
-
-          {/* HABITS — 6 core con progress aggregata + doccia fredda opzionale.
-              100% = 6/6 core fatti → toast frase motivazionale (1×/giorno). */}
+          {/* HABITS — core di disciplina con progress aggregata + doccia opzionale.
+              100% = tutti i core fatti → toast frase motivazionale (1×/giorno). */}
           <NeonGlass style={{ gridColumn: 'span 2' }} tint={coreCount === HOME_CORE_HABITS.length ? 'linear-gradient(135deg, rgba(166,255,0,0.18), rgba(0,240,255,0.10))' : 'rgba(255,255,255,0.05)'} edge={coreCount === HOME_CORE_HABITS.length ? 'rgba(166,255,0,0.5)' : undefined} radius={22}>
             <div style={{ padding: '13px 13px' }}>
               <MetricHead icon={<MarkerStar4 size={10} color={p.orange} />} label="HABITS" right={`${coreCount}/${HOME_CORE_HABITS.length} · ${corePct}%`} />
@@ -783,22 +689,7 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
           );
         })()}
 
-        {/* Banner FIT — riposizionato dopo VITALS (era sopra il saluto, in mezzo
-            al cazzo come l'ha definito Aaron). Rosso a 0%, verde con workout. */}
-        {(() => {
-          const noFit = data.workouts.length === 0;
-          const col = noFit ? p.red : p.green;
-          return (
-            <NeonGlass style={{ marginTop: 10 }} tint={noFit ? 'rgba(255,0,64,0.10)' : 'rgba(166,255,0,0.10)'} edge={`${col}55`} radius={12} onClick={() => onNavigate?.('me', { meTab: 'fitness' })}>
-              <div style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 10, fontFamily: p.monoFont, fontSize: 10, letterSpacing: 0.18, textTransform: 'uppercase' }}>
-                <span style={{ color: col, fontWeight: 900, fontSize: 13, letterSpacing: 0.2 }}>{noFit ? '0% FIT' : '100% FIT'}</span>
-                <span style={{ color: noFit ? p.muted : p.fg }}>{noFit ? 'oggi non ti sei mosso · tap per loggare' : data.workouts.join(' + ')}</span>
-                <span style={{ flex: 1 }} />
-                <span style={{ color: p.dim }}>→</span>
-              </div>
-            </NeonGlass>
-          );
-        })()}
+        {/* Banner FIT rimosso: allenamento è in Vital */}
 
         {/* Countdown — live from Firestore */}
         <SectionLabel num="03" title="COUNTDOWN" hint="tap per modificare" />
@@ -889,41 +780,7 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
         </div>
       )}
 
-      {showWeightEditor && (
-        <div onClick={() => setShowWeightEditor(false)} style={{ position:'absolute',inset:0,zIndex:100,background:'rgba(0,0,0,0.7)',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',display:'flex',alignItems:'flex-end' }}>
-          <div onClick={e => e.stopPropagation()} style={{ width:'100%',padding:'24px 20px 48px',background:'rgba(10,8,6,0.96)',borderTop:`1px solid ${p.border}`,borderTopLeftRadius:28,borderTopRightRadius:28 }}>
-            <div style={{ fontFamily:p.monoFont,fontSize:10,color:p.cyan,textTransform:'uppercase',letterSpacing:0.2,marginBottom:14 }}>
-              Peso · {fmtItDateFromDate(now)}
-            </div>
-            <input
-              type="number"
-              inputMode="decimal"
-              step="0.1"
-              value={weightDraft}
-              onChange={e => setWeightDraft(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') saveWeight(); }}
-              placeholder="kg"
-              autoFocus
-              style={{ width:'100%',outline:'none',background:'rgba(255,255,255,0.04)',border:`1px solid ${p.border}`,borderRadius:14,padding:'14px 18px',color:p.fg,fontFamily:p.displayFont,fontSize:32,fontWeight:800,letterSpacing:-0.8 }}
-            />
-            {lastWeight && (
-              <div style={{ marginTop:8,fontFamily:p.monoFont,fontSize:10,color:p.dim,textTransform:'uppercase',letterSpacing:0.1 }}>
-                ultima pesata · {lastWeight.weight.toFixed(1)} kg ({fmtItDate(lastWeight.date)})
-              </div>
-            )}
-            <div style={{ display:'flex',gap:8,marginTop:18 }}>
-              <button onClick={() => setShowWeightEditor(false)} style={{ padding:'12px 20px',borderRadius:14,border:'none',background:'rgba(255,255,255,0.08)',color:p.fg,fontFamily:p.monoFont,fontSize:11,textTransform:'uppercase',cursor:'pointer' }}>Annulla</button>
-              <div style={{ flex:1 }}/>
-              <button
-                onClick={saveWeight}
-                disabled={!weightDraft.trim() || isNaN(parseFloat(weightDraft.replace(',', '.')))}
-                style={{ padding:'12px 22px',borderRadius:14,border:'none',background:p.cyan,color:'#0a0a0a',fontFamily:p.monoFont,fontSize:11,textTransform:'uppercase',cursor:weightDraft.trim()?'pointer':'not-allowed',fontWeight:800,opacity:weightDraft.trim()?1:0.4 }}>
-                ↵ Salva{!todayWeight ? ' · +5XP' : ''}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Modal peso rimosso: il peso si logga in Vital */}
 
       {showTodayEditor && (
         <div onClick={() => setShowTodayEditor(false)} style={{ position:'absolute',inset:0,zIndex:100,background:'rgba(0,0,0,0.7)',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',display:'flex',alignItems:'flex-end' }}>
