@@ -8,7 +8,13 @@ import { useNotes, useShoppingList, useGifts, useTodos } from '@/lib/user-store'
 
 type Screen = 'home' | 'cal' | 'brain' | 'me';
 type MeTab = 'cibo' | 'fitness' | 'mood' | 'habits';
-type Route = 'todo' | 'brain' | 'spesa' | 'problema' | 'regalo' | 'nota';
+type Route = 'todo' | 'brain' | 'spesa' | 'problema' | 'regalo' | 'nota' | 'persona' | 'journal';
+
+// Etichette mostrate dopo il salvataggio (badge "✓ SALVATO IN ...").
+const LABELS: Record<Route, string> = {
+  todo: 'TO-DO', spesa: 'SPESA', regalo: 'REGALO', persona: 'PERSONE',
+  journal: 'DIARIO', brain: 'BRAIN', problema: 'PROBLEMA', nota: 'NOTA',
+};
 
 const ME_TABS: { id: MeTab; label: string; color: string }[] = [
   { id: 'cibo',    label: 'Cibo',  color: '#ff6a00' },
@@ -140,29 +146,73 @@ function CaptureOverlay({ open, onClose, autoVoice }: { open: boolean; onClose: 
     problema: { label: 'PROBLEMA',     color: p.red     },
     regalo:   { label: 'REGALO',    color: p.magenta },
     nota:     { label: 'NOTA',         color: p.muted   },
+    persona:  { label: 'PERSONE',      color: p.magenta },
+    journal:  { label: 'DIARIO',       color: p.cyan    },
   };
-  const route = presetRoute
-    ? { route: presetRoute, ...presetMap[presetRoute] }
-    : detectRoute(text);
+  // In modalità auto è l'AI a smistare al salvataggio: il badge dice "AUTO".
+  const previewRoute = presetRoute ? { route: presetRoute, ...presetMap[presetRoute] } : null;
+  const badgeColor = previewRoute?.color ?? p.orange;
+  const badgeLabel = previewRoute?.label ?? 'AUTO · AI smista';
+
+  // Salva il testo nella sezione giusta. Routing 2026-05-23: ogni tipo va
+  // nella sua sezione dedicata, niente inbox centrale.
+  const saveByRoute = async (r: Route, display: string) => {
+    switch (r) {
+      case 'todo':     addTodo(display, 2);                                                                       break;
+      case 'spesa':    addItem(display);                                                                          break;
+      case 'regalo':   saveGifts([...gifts, { id: Date.now().toString(), label: display, note: '', done: false }]); break;
+      case 'persona':  await addNote(display, ['persona']);                                                       break;
+      case 'journal':  await addNote(display, ['journal']);                                                       break;
+      case 'brain':    await addNote(display, ['idea']);                                                          break;
+      case 'problema': await addNote(display, ['lavoro']);                                                        break;
+      case 'nota':     await addNote(display, []);                                                                break;
+    }
+  };
+
+  // Chiede al classificatore AI dove va il testo. Ritorna null se la AI non
+  // è configurata o fallisce → il chiamante ricade sulle parole-chiave.
+  const classifyWithAI = async (raw: string): Promise<{ route: Route; clean: string; person: string } | null> => {
+    try {
+      const token = user ? await user.getIdToken() : null;
+      if (!token) return null;
+      const res = await fetch('/api/ai/classify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ text: raw }),
+      });
+      if (!res.ok) return null;
+      const d = await res.json();
+      if (!d?.route) return null;
+      return { route: d.route as Route, clean: ((d.clean ?? raw) as string).trim() || raw, person: d.person ?? '' };
+    } catch {
+      return null;
+    }
+  };
 
   const handleSave = async () => {
-    if (!route || !text.trim() || saving) return;
+    if (!text.trim() || saving) return;
     stopVoice();
     setSaving(true);
-    const body = cleanText(text);
-    const display = body || text.trim();
     try {
-      // Routing 2026-05-23: ogni tipo va nella sua sezione dedicata.
-      // Niente più inbox centrale né fallback su todayThing.
-      switch (route.route) {
-        case 'todo':     addTodo(display, 2);                                                                       break;
-        case 'brain':    await addNote(display, ['idea']);                                                          break;
-        case 'spesa':    addItem(display);                                                                          break;
-        case 'problema': await addNote(display, ['lavoro']);                                                        break;
-        case 'regalo':   saveGifts([...gifts, { id: Date.now().toString(), label: display, note: '', done: false }]); break;
-        case 'nota':     await addNote(display, []);                                                                break;
+      let finalRoute: Route;
+      let display: string;
+      if (presetRoute) {
+        // Aaron ha forzato la categoria con una chip: la rispettiamo.
+        finalRoute = presetRoute;
+        display = cleanText(text) || text.trim();
+      } else {
+        // Auto: prova l'AI, ricadi sulle parole-chiave se non risponde.
+        const ai = await classifyWithAI(text.trim());
+        if (ai) {
+          finalRoute = ai.route;
+          display = ai.route === 'persona' && ai.person ? `${ai.person}: ${ai.clean}` : ai.clean;
+        } else {
+          finalRoute = detectRoute(text)?.route ?? 'nota';
+          display = cleanText(text) || text.trim();
+        }
       }
-      setDone(route.label);
+      await saveByRoute(finalRoute, display);
+      setDone(LABELS[finalRoute]);
       setText('');
       setTimeout(() => { setDone(null); onClose(); }, 800);
     } finally {
@@ -179,8 +229,7 @@ function CaptureOverlay({ open, onClose, autoVoice }: { open: boolean; onClose: 
           <span>QUICK CAPTURE</span>
           <span style={{ flex: 1 }} />
           {done ? <span style={{ color: p.green, fontWeight: 700 }}>✓ SALVATO IN {done}</span>
-            : route ? <span style={{ color: route.color, fontWeight: 700 }}>→ {route.label}{presetRoute ? ' (fix)' : ''}</span>
-            : null}
+            : <span style={{ color: badgeColor, fontWeight: 700 }}>→ {badgeLabel}{presetRoute ? ' (fix)' : ''}</span>}
         </div>
         <div style={{ display:'flex', gap:6, marginBottom:12, flexWrap:'wrap' }}>
           {([
@@ -212,7 +261,7 @@ function CaptureOverlay({ open, onClose, autoVoice }: { open: boolean; onClose: 
             presetRoute === 'spesa'  ? 'banane, latte, cereali…' :
             presetRoute === 'brain'  ? 'idea o pensiero…' :
             presetRoute === 'regalo' ? 'idea regalo per lei…' :
-            'parla, scrivi, dump…  →  ricordami / brain / compra / regalo'
+            'parla, scrivi, dump…  →  ci penso io a smistarlo'
           }
           style={{ width: '100%', resize: 'none', border: 0, outline: 0, background: 'transparent', color: p.fg, fontFamily: p.bodyFont, fontSize: 17, lineHeight: 1.35 }}
         />
@@ -236,7 +285,7 @@ function CaptureOverlay({ open, onClose, autoVoice }: { open: boolean; onClose: 
             style={{
               padding: '12px 22px', borderRadius: 14, border: 0,
               cursor: (!text.trim() || saving) ? 'not-allowed' : 'pointer',
-              background: route?.color ?? p.orange, color: '#0a0a0a',
+              background: badgeColor, color: '#0a0a0a',
               fontFamily: p.monoFont, fontSize: 11, letterSpacing: 0.1, textTransform: 'uppercase', fontWeight: 800,
               opacity: (!text.trim() || saving) ? 0.5 : 1,
             }}
