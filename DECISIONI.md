@@ -496,3 +496,57 @@ deploy.
 - Modulo 4 Persone come CRM con schermata dedicata + compleanni + slipping
 - Decisioni di prodotto aperte: A) Reminders superficie ufficiale,
   B) nag ora o fase 2, C) tutto dal capture
+
+---
+
+## 2026-06-15 (2) — Split salute/organizzazione: my-app organizzativa, Vital salute
+
+**Tipo:** decisione di prodotto (confine app) + sviluppo
+**Autore:** Aaron + Quinn (remote control)
+
+### Decisione
+
+Due app distinte con confine netto:
+- **Vital = corpo misurabile** (peso, dieta/macro, allenamento/sforzo,
+  HRV, integratori). Ha già `screen_dieta` completa + `screen_sforzo`
+  + `screen_bio`: copriva già il dominio, lo split non crea buchi.
+- **my-app = testa + vita** (capture, todo, persone, memo, mood,
+  habit di disciplina: stretching, no-scroll, luci rosse, candle,
+  meditazione, lettura, doccia).
+
+Raccomandazione Quinn accolta da Aaron ("Vital health only").
+
+### Fatto in my-app
+
+- home.tsx: rimosse card KCAL, ACQUA, PESO + banner FIT + modal peso.
+  Sezione VITALS → ROUTINE (solo habit). `computeTodayXP` non conta
+  più cibo/acqua/workout. Habit `Allenamento` (slot 7) tolto dai core.
+- me.tsx: tab CIBO e FIT rimosse (default MOOD). Header peso hardcoded
+  "84.8 KG" → "MENTE". `Allenamento` tolto da GOOD_HABITS,
+  `goodHabitsToday` slice(0,8)→(0,7). Bottone "SALUTE → Vital".
+- bottom-nav.tsx: menu long-press "me" ridotto a Mood/Habit; nuova tab
+  "Salute" che apre Vital.
+- `lib/links.ts` nuovo: `VITAL_URL = https://vital-aaron.vercel.app`.
+- 3 deep-link a Vital (card home + bottone Me + tab nav): Aaron li
+  prova tutti e sceglie il comodo → gli altri 2 si rimuovono.
+
+### Architettura
+
+Progetti Firebase separati (my-app vs `vital-9c883`) → collegamento
+via **link**, NON dati condivisi. Unificare i progetti Firebase non
+fatto (grosso/rischioso).
+
+### Debito tecnico (fase 2)
+
+- CiboTab/FitnessTab e librerie `meals`/`food-vision` restano in
+  codice DORMIENTI (lette da Nova per contesto AI) → rimozione fisica
+  quando si ricabla Nova.
+- Achievement categoria `fit`/`water` ora irraggiungibili (workout non
+  più loggabili da my-app): da ripulire.
+- STATO.md da riscrivere al prossimo "salva tutto".
+
+### Collegato (Vital, repo separato)
+
+Fix bug peso virgola decimale IT (84,5 → 84): `store.js` num() e
+`screen_bio.jsx` normalizzano virgola→punto. Commit `6a0c95a` su
+repo vital.
