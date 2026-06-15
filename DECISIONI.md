@@ -441,3 +441,58 @@ per le rotte cancellate (news) si risolvono al prossimo build.
 - **Google Calendar sync (FASE 10)**: bug live, serve DevTools insieme
 - **Frasi motivazionali + Prompts pool**: da rileggere e tagliare/cambiare
 - **PWA test iOS**: dopo prossimo deploy
+
+---
+
+## 2026-06-15 — Capture unico con classificazione AI + accettazione vuln moderate
+
+**Tipo:** sviluppo (modulo 1 del brief "Personal Growth") + decisione sicurezza
+**Autore:** Aaron + Quinn (remote control)
+
+### Contesto
+
+Aaron passa un brief di miglioramento app (capture unico, to-do via
+Reminders, motore-nag, persone CRM, routine+streak, journaling,
+calendario). Ricognizione: l'app è già molto più avanti del brief —
+push/Brain/Calendar/Habits/Streak/prompt esistono. Primo passo del
+brief (CAPTURE UNICO) = upgrade del Quick Capture esistente, che
+smistava a parole-chiave, perché classifichi da solo.
+
+### Fatto
+
+- Nuovo route `app/api/ai/classify` (Groq priorità, Gemini fallback,
+  JSON forzato, auth Firebase come `/api/ai`). Classifica in: todo,
+  spesa, regalo, persona, journal, brain, problema, nota.
+- `CaptureOverlay` (bottom-nav.tsx): in modalità auto chiede all'AI
+  dove va il testo; **fallback al classificatore a parole-chiave** se
+  l'AI non risponde (es. `GROQ_API_KEY` assente) → nessuna regressione.
+  Badge "AUTO". Chip restano come override manuale.
+- Nuove categorie persona/journal → note con tag `persona`/`journal`
+  (la schermata Persone dedicata resta modulo futuro).
+
+### Decisione sicurezza (SEC-004)
+
+`npm audit`: trovata **1 HIGH** (`@grpc/grpc-js`, transitiva di
+firebase-admin) → risolta con `npm audit fix` (no breaking). Restano
+**10 moderate** (catena firebase-admin: uuid, protobufjs,
+retry-request/teeny-request, postcss). Preesistenti, già live.
+**Aaron le accetta consapevolmente** (annotazione richiesta da
+SEC-004); il fix completo richiede breaking change (downgrade next /
+firebase-admin major) → rimandato. Nessuna HIGH/CRITICAL aperta al
+deploy.
+
+### Dipendenze / blocchi
+
+- `GROQ_API_KEY` ancora non settata (Vercel + locale) → la
+  classificazione AI vera parte solo dopo. Senza, capture = keyword.
+- Push fatto (commit `aac03c9`) → deploy Vercel.
+
+### Aperte dal brief (non fatte, in attesa di sequenza Aaron)
+
+- Modulo 2 To-do = Apple Reminders (richiede iOS Shortcut + sync
+  completato→app)
+- Modulo 3 Motore-nag (cron Vercel + push escalation; web-push iOS
+  inaffidabile in background)
+- Modulo 4 Persone come CRM con schermata dedicata + compleanni + slipping
+- Decisioni di prodotto aperte: A) Reminders superficie ufficiale,
+  B) nag ora o fase 2, C) tutto dal capture
