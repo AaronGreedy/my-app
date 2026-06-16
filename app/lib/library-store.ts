@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { addDoc, collection, deleteDoc, doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
 
 // ─── Library / Journal ──────────────────────────────────────────────────────
@@ -39,6 +39,9 @@ export function useLibrary(uid: string | null) {
     });
   }, [uid]);
 
+  // Migrazione one-shot delle note vecchie nella Library (idempotente via flag).
+  useEffect(() => { migrateNotesToLibrary(uid); }, [uid]);
+
   // Crea una nuova voce. Se manca il titolo, lo deriva dal corpo.
   const addItem = async (data: LibraryInput) => {
     if (!uid || !db) return;
@@ -64,6 +67,36 @@ export function useLibrary(uid: string | null) {
   };
 
   return { items, addItem, updateItem, removeItem };
+}
+
+// Migrazione one-shot: copia le note vecchie (collection 'notes', BrainScreen)
+// nella Library come voci type 'note'. Idempotente: scrive un flag su
+// users/<uid>.libraryNotesMigrated per non rifarla.
+export async function migrateNotesToLibrary(uid: string | null): Promise<number> {
+  if (!uid || !db) return 0;
+  const userRef = doc(db, 'users', uid);
+  const userSnap = await getDoc(userRef);
+  if (userSnap.exists() && userSnap.data().libraryNotesMigrated) return 0;
+  const notesSnap = await getDocs(collection(db, 'users', uid, 'notes'));
+  const lib = collection(db, 'users', uid, 'library');
+  let n = 0;
+  for (const d of notesSnap.docs) {
+    const note = d.data() as { title?: string; body?: string; tags?: string[]; createdAt?: number };
+    const body = note.body || '';
+    await addDoc(lib, {
+      title: note.title || body.split('\n')[0].slice(0, 60) || 'Nota',
+      body,
+      type: 'note' as LibraryType,
+      source: 'own' as LibrarySource,
+      tags: Array.isArray(note.tags) ? note.tags : [],
+      needsReview: false,
+      images: [] as string[],
+      createdAt: note.createdAt || Date.now(),
+    });
+    n++;
+  }
+  await setDoc(userRef, { libraryNotesMigrated: true }, { merge: true });
+  return n;
 }
 
 // ─── Compressione immagini lato client ───────────────────────────────────────

@@ -194,6 +194,27 @@ function CaptureOverlay({ open, onClose, autoVoice }: { open: boolean; onClose: 
     }
   };
 
+  // Comando IA: rileva richieste tipo "tra 2 giorni ho X, ricordamelo" e
+  // restituisce un task/reminder già strutturato (data relativa calcolata
+  // lato server). null se non è un comando o l'AI non risponde.
+  const commandWithAI = async (raw: string): Promise<{ intent: string; title: string; dueDate: string; dueTime: string; project: string } | null> => {
+    try {
+      const token = user ? await user.getIdToken() : null;
+      if (!token) return null;
+      const res = await fetch('/api/ai/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ text: raw }),
+      });
+      if (!res.ok) return null;
+      const d = await res.json();
+      if (!d?.intent) return null;
+      return d;
+    } catch {
+      return null;
+    }
+  };
+
   const handleSave = async () => {
     if (!text.trim() || saving) return;
     stopVoice();
@@ -206,7 +227,17 @@ function CaptureOverlay({ open, onClose, autoVoice }: { open: boolean; onClose: 
         finalRoute = presetRoute;
         display = cleanText(text) || text.trim();
       } else {
-        // Auto: prova l'AI, ricadi sulle parole-chiave se non risponde.
+        // Prima: è un comando ("tra 2 giorni ricordami…")? → crea task/reminder
+        // con data/ora già calcolate dal server.
+        const cmd = await commandWithAI(text.trim());
+        if (cmd && (cmd.intent === 'create_task' || cmd.intent === 'create_reminder')) {
+          addTodo(cmd.title || text.trim(), 2, cmd.dueDate || undefined, { dueTime: cmd.dueTime || undefined, project: cmd.project || undefined });
+          setDone('TO-DO');
+          setText('');
+          setTimeout(() => { setDone(null); onClose(); }, 800);
+          return;
+        }
+        // Altrimenti: smistamento normale (ricadi sulle parole-chiave se serve).
         const ai = await classifyWithAI(text.trim());
         if (ai) {
           finalRoute = ai.route;

@@ -8,6 +8,7 @@ import {
   SLOT_LABEL, SLOT_ORDER, isoDay, currentStreak,
 } from '@/lib/routines-store';
 import { MarkerTarget } from '@/components/markers';
+import { ROUTINE_PRESETS } from '@/lib/routine-presets';
 
 // Colore accento per slot (coerente col resto dell'app, solo token).
 const SLOT_COLOR: Record<RoutineSlot, string> = {
@@ -64,6 +65,27 @@ export function RoutinesScreen() {
             </div>
           </div>
         )}
+
+        {/* Aggiungi le routine "core" della Home (preset). Solo quelle non
+            ancora presenti. Tap = creata → Home e Routines combaciano. */}
+        {(() => {
+          const present = new Set(routines.map(r => r.name.toLowerCase()));
+          const toAdd = ROUTINE_PRESETS.filter(pre => !present.has(pre.name.toLowerCase()));
+          if (toAdd.length === 0) return null;
+          return (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontFamily: p.monoFont, fontSize: 9.5, letterSpacing: 0.22, color: p.dim, textTransform: 'uppercase', marginBottom: 8 }}>Aggiungi le tue routine · {toAdd.length}</div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {toAdd.map(pre => (
+                  <button key={pre.name} onClick={() => addRoutine(pre.name, pre.slot, pre.time)} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 11px', borderRadius: 99, border: '1px solid rgba(255,255,255,0.14)', background: 'transparent', color: p.muted, fontFamily: p.monoFont, fontSize: 10, cursor: 'pointer' }}>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: SLOT_COLOR[pre.slot], flexShrink: 0 }} />
+                    {pre.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Vista vuota */}
         {total === 0 ? (
