@@ -11,6 +11,9 @@ export const runtime = 'nodejs';
 
 interface NotifPrefs { enabled: boolean; morning: string; afternoon: string; evening: string; task: string }
 interface PushSub { endpoint: string; keys: { p256dh: string; auth: string } }
+// Forme minime per routine e task lette dal doc utente / sottocollezione lists.
+interface RoutineLite { id: string; name: string; time: string; notify: boolean; done?: Record<string, true> }
+interface TodoLite { id: string; text: string; done: boolean; dueDate?: string; dueTime?: string }
 
 const SLOTS: ('morning'|'afternoon'|'task'|'evening')[] = ['morning', 'afternoon', 'task', 'evening'];
 const SLOT_PAYLOAD: Record<typeof SLOTS[number], { title: string; body: string }> = {
@@ -89,18 +92,16 @@ export async function GET(req: NextRequest) {
     const data = d.data() as DocData;
     const prefs = data.notifPrefs;
     const sub = data.pushSub;
-    if (!prefs?.enabled || !sub) { skipped++; return; }
+    // Serve solo una subscription valida; le notifiche mood restano gate su
+    // prefs.enabled, ma task e routine partono comunque se c'è la subscription.
+    if (!sub) { skipped++; return; }
     const fired = data.notifFired ?? {};
 
-    for (const slot of SLOTS) {
-      const time = (prefs[slot] ?? '') as string;
-      const fireKey = `${dateKey}_${slot}`;
-      if (fired[fireKey]) continue;
-      if (!timeMatches(time, hh, mm)) continue;
-
-      const { title, body } = SLOT_PAYLOAD[slot];
+    // Helper invio + tracking fired + cleanup subscription scaduta.
+    const fire = async (fireKey: string, title: string, body: string) => {
+      if (fired[fireKey]) return;
       try {
-        await webpush.sendNotification(sub, JSON.stringify({ title, body, tag: slot }));
+        await webpush.sendNotification(sub, JSON.stringify({ title, body, tag: fireKey }));
         sent++;
         await d.ref.set({ notifFired: { ...fired, [fireKey]: true } }, { merge: true });
         fired[fireKey] = true;
@@ -108,12 +109,42 @@ export async function GET(req: NextRequest) {
         failed++;
         const err = e as { statusCode?: number; message?: string };
         if (err.statusCode === 404 || err.statusCode === 410) {
-          // Subscription expired → drop it
           await d.ref.set({ pushSub: null }, { merge: true });
         }
-        errors.push(`${d.id}/${slot}: ${err.statusCode ?? '?'} ${err.message ?? ''}`);
+        errors.push(`${d.id}/${fireKey}: ${err.statusCode ?? '?'} ${err.message ?? ''}`);
+      }
+    };
+
+    // ── MOOD (solo se notifiche mood abilitate) ──
+    if (prefs?.enabled) {
+      for (const slot of SLOTS) {
+        const time = (prefs[slot] ?? '') as string;
+        if (!timeMatches(time, hh, mm)) continue;
+        const { title, body } = SLOT_PAYLOAD[slot];
+        await fire(`${dateKey}_${slot}`, title, body);
       }
     }
+
+    // ── ROUTINE con notifiche attive (non ancora completate oggi) ──
+    const routines = Array.isArray((data as DocData & { routines?: RoutineLite[] }).routines)
+      ? (data as DocData & { routines?: RoutineLite[] }).routines! : [];
+    for (const r of routines) {
+      if (!r?.notify || !r?.time) continue;
+      if (r.done && r.done[dateKey]) continue;
+      if (!timeMatches(r.time, hh, mm)) continue;
+      await fire(`${dateKey}_routine_${r.id}`, 'Routine', r.name);
+    }
+
+    // ── TASK con scadenza oraria oggi (non completate) ──
+    try {
+      const todosDoc = await d.ref.collection('lists').doc('todos').get();
+      const todoItems: TodoLite[] = todosDoc.exists ? ((todosDoc.data()?.items as TodoLite[]) ?? []) : [];
+      for (const t of todoItems) {
+        if (t?.done || !t?.dueTime || t?.dueDate !== dateKey) continue;
+        if (!timeMatches(t.dueTime, hh, mm)) continue;
+        await fire(`${dateKey}_task_${t.id}`, 'Task in scadenza', t.text);
+      }
+    } catch { /* lista todos assente: nessun task da notificare */ }
   }));
 
   return Response.json({ ok: true, sent, skipped, failed, errors: errors.slice(0, 10) });
