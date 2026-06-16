@@ -202,9 +202,10 @@ Contiene: **Notes · Quotes · Journal · Books · Inventory**.
 
 ## 🧱 PIANO DI COSTRUZIONE (ordine proposto)
 - **B0** (Quinn, ora): questo spec + decisione nav definitiva.
-- **B1 — TASKS** (no GROQ): screen dedicato, due date/time, status (aperte/fatte/
-  tutte), filtri (scadute/oggi/domani), per-progetto, priorità, ripetizione,
-  reminder push, badge (1). *Cuore dell'app, valore immediato.*
+- **B1 — TASKS** (no GROQ): ✅ FATTO 16/06 — screen dedicato, due date/time, status
+  (aperte/fatte/tutte), filtri (scadute/oggi/domani/prossime/senza), per-progetto,
+  priorità, ripetizione, editor (note/elimina). Nav reference + mobile "Altro" fatti.
+  ⏳ resta: **reminder push** task con ora + **badge (1)** notifica.
 - **B2 — ROUTINES** (no GROQ): routine custom a mano, mattina/pomeriggio/sera,
   streak goal, notifiche, grafico trend settimanale/mensile a punti.
 - **B3 — CAPTURE VOCALE + IA** (richiede GROQ): voice flow + Whisper + cleanup +
