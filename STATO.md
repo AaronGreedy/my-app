@@ -1,7 +1,7 @@
 # App ADHD — stato vivo
 
 > Stato corto del progetto. Aggiornato a fine sessione.
-> Ultimo aggiornamento: 2026-06-15 (split salute/organizzazione + capture AI)
+> Ultimo aggiornamento: 2026-06-16 (responsive desktop + DECISIONE rebranding grande)
 >
 > **Storico cronologico delle decisioni:** [DECISIONI.md](DECISIONI.md)
 > (append-only, non si tocca mai).
@@ -32,7 +32,38 @@ Focus (pomodoro), Me (Mood + Habit), Nova (AI), Settings. PWA iOS.
 - **AI:** Groq free tier (Llama 3.3 70B testo) + fallback Gemini.
   Scelta provider in `app/api/ai/*`. NO Claude API a pagamento.
 
-## Fatto in questa sessione (2026-06-15)
+## 🔭 DIREZIONE GRANDE — rebranding (decisa 2026-06-16, non ancora eseguita)
+
+Aaron vuole avvicinare my-app a un'app productivity reference ("stare al passo
+con tutto"): la mattina logga/guarda/compila, riceve **push proattive**
+("domani hai questo appuntamento") e ha un'**IA integrata** a cui dice "tra 2
+giorni ho un appuntamento ricordamelo" e funziona (NL → reminder → push).
+
+Sezioni target (dalla reference): Today · Tasks · Routines · Projects ·
+Content · People · Library · Domains, + pannello dx (Slipping/Morning/Evening/
+Resurfacing/Needs review) + centro (Top 3 / Up Next / All Open).
+
+**Deciso:** rifare il CODICE da zero NO (base tecnica solida: auth, Firestore,
+Web Push, scaffold AI, calendario — la visione ci si costruisce sopra); rifare
+PRODOTTO/DESIGN (architettura sezioni + layout 3 colonne) SÌ. Sidebar/responsive
+del 16/06 = fondazione del nuovo layout.
+
+**Metodo:** Aaron guarda il video → manda appunti → Quinn scrive documento di
+visione → costruzione a blocchi (NO micro-fix). **Gate:** GROQ_API_KEY non
+settata = motore IA fermo.
+
+## Fatto 2026-06-16 (responsive desktop)
+
+1. **Sidebar desktop** — sopra 820px la bottom-nav diventa sidebar testuale a
+   sinistra (`useIsDesktop`, `SIDEBAR_W=190` in `lib/design.ts`). Mobile
+   invariato. Tolto il "finto telefono 402×874 con alone" da `globals.css`.
+2. **Pannello destro Home** (`components/home-panel.tsx`) — dati reali: to-do
+   aperti, countdown, note recenti (griglia auto-fill). Split in AppShell,
+   `home.tsx` NON toccato. Contenuto cappato + centrato (no buco a destra).
+3. **Fix glow "buggato"** — era compositing (backdrop-filter+orb+mix-blend
+   sotto il cursore), non hover. `isolation`+`translateZ(0)` su `NeonGlass`.
+
+## Fatto in sessione precedente (2026-06-15)
 
 1. **Capture unico con AI** — il Quick Capture (FAB +) ora chiede a
    `/api/ai/classify` dove va il testo (to-do/spesa/regalo/persona/
