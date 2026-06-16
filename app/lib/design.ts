@@ -21,6 +21,10 @@ export const p = {
   captureBg: 'rgba(10,8,6,0.92)',
 } as const;
 
+// Layout desktop (sidebar a sinistra). Condiviso tra AppShell e BottomNav.
+export const SIDEBAR_W = 190;   // larghezza sidebar testuale
+export const CONTENT_MAX = 900; // larghezza max colonna contenuto
+
 // Format helpers
 // ISO YYYY-MM-DD → gg-mm-aaaa (italian dash format).
 // Accepts also empty/invalid input → returns input as-is.

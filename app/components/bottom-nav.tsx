@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, CSSProperties } from 'react';
-import { p } from '@/lib/design';
+import { p, SIDEBAR_W } from '@/lib/design';
 import { VITAL_URL } from '@/lib/links';
 import { MarkerPlus } from './markers';
 import { useAuth } from '@/lib/auth-context';
@@ -422,13 +422,22 @@ export function BottomNav({ screen, setScreen, desktop = false }: { screen: Scre
     if (!meHoldFiredRef.current) meHoldFiredRef.current = false;
   };
 
-  // ── Stili nav: bottom-bar orizzontale (mobile) o sidebar verticale (PC) ──
+  // ── Stili nav ────────────────────────────────────────────────────────────
+  // Mobile: bottom-bar orizzontale flottante. Desktop: sidebar testuale a
+  // tutta altezza, attaccata a sinistra, voci allineate a sinistra.
   const navWrap: CSSProperties = desktop
-    ? { position:'absolute', left:14, top:14, bottom:14, width:72, zIndex:30, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:8, padding:'14px 8px', borderRadius:26, background:p.navBg, backdropFilter:'blur(24px) saturate(180%)', WebkitBackdropFilter:'blur(24px) saturate(180%)', border:p.navBorder, boxShadow:p.navShadow }
+    ? { position:'absolute', left:0, top:0, bottom:0, width:SIDEBAR_W, zIndex:30, display:'flex', flexDirection:'column', alignItems:'stretch', justifyContent:'flex-start', gap:2, padding:'20px 12px', background:'rgba(255,255,255,0.025)', borderRight:p.navBorder, backdropFilter:'blur(24px)', WebkitBackdropFilter:'blur(24px)' }
     : { position:'absolute', left:12, right:12, bottom:'calc(env(safe-area-inset-bottom, 0px) + 14px)', zIndex:30, display:'flex', alignItems:'center', gap:6, padding:'6px', borderRadius:32, background:p.navBg, backdropFilter:'blur(24px) saturate(180%)', WebkitBackdropFilter:'blur(24px) saturate(180%)', border:p.navBorder, boxShadow:p.navShadow, transform: navHidden ? 'translateY(140%)' : 'translateY(0)', transition:'transform .28s cubic-bezier(.4,0,.2,1)' };
-  // I tab si allargano in riga (mobile) o restano ad altezza naturale (PC).
-  const tabFlex: CSSProperties['flex'] = desktop ? '0 0 auto' : 1;
-  const tabWidth: CSSProperties['width'] = desktop ? '100%' : undefined;
+
+  // Stile di una voce nav. Desktop = riga (icona + testo a sinistra),
+  // mobile = colonna (icona sopra, label sotto). Tiene il mobile identico.
+  const itemStyle = (opts: { active?: boolean; bg?: string; color?: string } = {}): CSSProperties => {
+    const background = opts.bg !== undefined ? opts.bg : (opts.active ? p.navActive : 'transparent');
+    const color = opts.color !== undefined ? opts.color : (opts.active ? p.fg : p.muted);
+    return desktop
+      ? { display:'flex', flexDirection:'row', alignItems:'center', justifyContent:'flex-start', gap:12, width:'100%', padding:'11px 12px', border:0, borderRadius:12, cursor:'pointer', background, color, fontFamily:p.monoFont, fontSize:12.5, letterSpacing:0.3, textTransform:'none', textAlign:'left' }
+      : { flex:1, padding:'10px 4px 8px', border:0, borderRadius:22, cursor:'pointer', background, color, fontFamily:p.monoFont, fontSize:9, letterSpacing:0.12, textTransform:'uppercase', display:'flex', flexDirection:'column', alignItems:'center', gap:4 };
+  };
 
   return (
     <>
@@ -474,13 +483,16 @@ export function BottomNav({ screen, setScreen, desktop = false }: { screen: Scre
               onPointerCancel={cancelHold}
               onContextMenu={e => e.preventDefault()}
               aria-label="Quick capture"
-              style={{ width: 56, height: 56, borderRadius: '50%', border: 0, cursor: 'pointer', flexShrink: 0, background: p.fabBg, color: '#0a0a0a', boxShadow: p.fabShadow, marginTop: desktop ? 0 : -22, display: 'flex', alignItems: 'center', justifyContent: 'center', touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none', WebkitUserDrag: 'none' as never } as CSSProperties}
+              style={desktop
+                ? { display:'flex', flexDirection:'row', alignItems:'center', justifyContent:'flex-start', gap:12, width:'100%', padding:'11px 12px', border:0, borderRadius:12, cursor:'pointer', background:'rgba(255,106,0,0.16)', color:p.orange, fontFamily:p.monoFont, fontSize:12.5, letterSpacing:0.3, marginTop:4, marginBottom:4, touchAction:'none', userSelect:'none', WebkitUserSelect:'none', WebkitTouchCallout:'none', WebkitUserDrag:'none' as never } as CSSProperties
+                : { width:56, height:56, borderRadius:'50%', border:0, cursor:'pointer', flexShrink:0, background:p.fabBg, color:'#0a0a0a', boxShadow:p.fabShadow, marginTop:-22, display:'flex', alignItems:'center', justifyContent:'center', touchAction:'none', userSelect:'none', WebkitUserSelect:'none', WebkitTouchCallout:'none', WebkitUserDrag:'none' as never } as CSSProperties}
             >
-              {/* SVG plus instead of "+" char so iOS long-press doesn't fire the paste/select menu */}
-              <span style={{ pointerEvents: 'none', display: 'flex' } as CSSProperties}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
-                  <path d="M12 4 V20 M4 12 H20" stroke="#0a0a0a" strokeWidth="3" strokeLinecap="round"/>
+              {/* SVG plus invece del carattere "+" così su iOS il long-press non apre il menu copia/incolla */}
+              <span style={{ pointerEvents: 'none', display: 'flex', alignItems: 'center', gap: desktop ? 12 : 0 } as CSSProperties}>
+                <svg width={desktop ? 18 : 22} height={desktop ? 18 : 22} viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <path d="M12 4 V20 M4 12 H20" stroke={desktop ? p.orange : '#0a0a0a'} strokeWidth="3" strokeLinecap="round"/>
                 </svg>
+                {desktop && <span>Cattura</span>}
               </span>
             </button>
           );
@@ -493,7 +505,7 @@ export function BottomNav({ screen, setScreen, desktop = false }: { screen: Scre
               onPointerCancel={meCancel}
               onPointerLeave={() => { /* keep menu open if dragging out, hover handled by elementFromPoint */ }}
               onContextMenu={e => e.preventDefault()}
-              style={{ flex: tabFlex, width: tabWidth, padding: '10px 4px 8px', border: 0, cursor: 'pointer', borderRadius: 22, background: active ? p.navActive : 'transparent', color: active ? p.fg : p.muted, fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.12, textTransform: 'uppercase', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' } as CSSProperties}
+              style={{ ...itemStyle({ active }), touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' } as CSSProperties}
               title="Tap = Me · Tieni premuto per scegliere sezione"
             >
               <NavIcon kind="me" color={active ? p.fg : p.muted} />
@@ -502,13 +514,13 @@ export function BottomNav({ screen, setScreen, desktop = false }: { screen: Scre
           );
           if (tab.id === 'salute') return (
             // Link esterno: apre la PWA Vital in una nuova scheda
-            <button key="salute" onClick={() => { if (typeof window !== 'undefined') window.open(VITAL_URL, '_blank'); }} style={{ flex: tabFlex, width: tabWidth, padding: '10px 4px 8px', border: 0, cursor: 'pointer', borderRadius: 22, background: 'transparent', color: p.muted, fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.12, textTransform: 'uppercase', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+            <button key="salute" onClick={() => { if (typeof window !== 'undefined') window.open(VITAL_URL, '_blank'); }} style={itemStyle({ bg: 'transparent', color: p.muted })}>
               <NavIcon kind="salute" color={p.cyan} />
               {tab.label}
             </button>
           );
           return (
-            <button key={tab.id} onClick={() => setScreen(tab.id as Screen)} style={{ flex: tabFlex, width: tabWidth, padding: '10px 4px 8px', border: 0, cursor: 'pointer', borderRadius: 22, background: active ? p.navActive : 'transparent', color: active ? p.fg : p.muted, fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.12, textTransform: 'uppercase', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+            <button key={tab.id} onClick={() => setScreen(tab.id as Screen)} style={itemStyle({ active })}>
               <NavIcon kind={tab.icon} color={active ? p.fg : p.muted} />
               {tab.label}
             </button>
