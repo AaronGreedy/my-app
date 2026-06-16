@@ -40,7 +40,7 @@ export function RoutinesScreen() {
   const pct = total === 0 ? 0 : Math.round((doneToday / total) * 100);
 
   return (
-    <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', overflowX: 'hidden', background: p.bg, color: p.fg, fontFamily: p.bodyFont }}>
+    <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', overflowX: 'hidden', background: 'transparent', color: p.fg, fontFamily: p.bodyFont }}>
       <div style={{ padding: 'calc(env(safe-area-inset-top, 0px) + 18px) 18px calc(env(safe-area-inset-bottom, 0px) + 130px)', maxWidth: 760, margin: '0 auto' }}>
 
         {/* Header */}
@@ -191,40 +191,59 @@ function RoutineCard({ r, accent, today, onToggleDone, onEdit }: {
   );
 }
 
-// ─── Grafico trend a punti (SVG a mano, niente librerie) ───────────────────────
-// Mostra i giorni del periodo come punti distinti su una linea di base:
-// punto pieno (acceso) = fatto, punto vuoto (spento) = non fatto.
+// ─── Grafico trend a punti (HTML, niente librerie) ─────────────────────────────
+// Una riga di punti, uno per ogni giorno del periodo (da sinistra=più vecchio a
+// destra=oggi). Punto PIENO acceso = fatto, punto VUOTO tenue = non fatto.
+// Sotto a ogni punto una mini-etichetta del giorno; in alto una legenda chiara.
+// Niente SVG stirato: i punti restano cerchi perfetti a qualsiasi larghezza.
+
+// Iniziali dei giorni della settimana (la data JS getDay(): 0=domenica).
+const WD_INITIAL = ['D', 'L', 'M', 'M', 'G', 'V', 'S'];
+
 function TrendChart({ done, accent }: { done: Record<string, true>; accent: string }) {
   const [range, setRange] = useState<'sett' | 'mese'>('sett');
   const days = range === 'sett' ? 7 : 30;
 
-  // Costruisco la lista dei giorni dal più vecchio (sinistra) a oggi (destra).
+  // Lista dei giorni dal più vecchio (sinistra) a oggi (destra).
+  // Per ogni giorno tengo anche l'iniziale del weekday e il numero del mese,
+  // così posso mostrare l'etichetta giusta (settimana = lettera, mese = numero).
   const points = useMemo(() => {
-    const arr: { day: string; on: boolean }[] = [];
-    for (let i = days - 1; i >= 0; i--) {
-      const day = isoDay(-i);
-      arr.push({ day, on: !!done[day] });
-    }
-    return arr;
+    return Array.from({ length: days }, (_, idx) => {
+      const offset = -(days - 1 - idx);
+      const day = isoDay(offset);
+      const d = new Date(day + 'T00:00:00');
+      return {
+        day,
+        on: !!done[day],
+        wd: WD_INITIAL[d.getDay()],   // iniziale giorno settimana
+        dn: d.getDate(),              // numero del giorno nel mese
+        isToday: offset === 0,
+      };
+    });
   }, [done, days]);
 
   const completed = points.filter(pt => pt.on).length;
-
-  // Dimensioni SVG: larghezza in viewBox, scala fluida via width 100%.
-  const W = 320;
-  const H = 38;
-  const padX = 6;
-  const baseY = H / 2;                          // linea di base centrale
-  const step = (W - padX * 2) / (days - 1);     // distanza tra punti
-  const dotR = range === 'sett' ? 5 : 3;        // punti più piccoli sul mese
+  const dot = range === 'sett' ? 12 : 9;   // punto più piccolo sul mese (più giorni)
 
   return (
     <div style={{ marginTop: 12 }}>
-      {/* Toggle periodo + conteggio */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+      {/* Riga 1: titolo + legenda + toggle periodo */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
         <span style={{ fontFamily: p.monoFont, fontSize: 8.5, color: p.dim, textTransform: 'uppercase', letterSpacing: 0.18 }}>Trend</span>
+
+        {/* Legenda: spiega cosa sono i punti, così non restano "orfani" */}
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: p.monoFont, fontSize: 8.5, color: p.muted }}>
+          <span style={{ width: 9, height: 9, borderRadius: '50%', background: accent, flexShrink: 0 }} />
+          fatto
+        </span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: p.monoFont, fontSize: 8.5, color: p.muted }}>
+          <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'transparent', border: '1.5px solid rgba(255,255,255,0.28)', flexShrink: 0 }} />
+          no
+        </span>
+
         <div style={{ flex: 1 }} />
-        <span style={{ fontFamily: p.monoFont, fontSize: 8.5, color: p.muted, marginRight: 4 }}>{completed}/{days} fatti</span>
+
+        <span style={{ fontFamily: p.monoFont, fontSize: 8.5, color: p.muted }}>{completed}/{days}</span>
         {(['sett', 'mese'] as const).map(rg => (
           <button key={rg} onClick={() => setRange(rg)} style={{ padding: '3px 8px', borderRadius: 99, border: `1px solid ${range === rg ? accent : 'rgba(255,255,255,0.12)'}`, background: range === rg ? `${accent}22` : 'transparent', color: range === rg ? accent : p.muted, fontFamily: p.monoFont, fontSize: 8, textTransform: 'uppercase', letterSpacing: 0.1, cursor: 'pointer' }}>
             {rg === 'sett' ? 'Settimana' : 'Mese'}
@@ -232,19 +251,33 @@ function TrendChart({ done, accent }: { done: Record<string, true>; accent: stri
         ))}
       </div>
 
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" style={{ display: 'block' }}>
-        {/* Linea di base */}
-        <line x1={padX} y1={baseY} x2={W - padX} y2={baseY} stroke="rgba(255,255,255,0.1)" strokeWidth={1} />
-        {/* Punti distinti: pieno = fatto, contorno = non fatto */}
+      {/* Riga 2: i punti, distribuiti in egual misura, con etichetta sotto.
+          Su "settimana" l'etichetta è l'iniziale del giorno (L M M G…);
+          su "mese" mostro il numero solo ogni 5 giorni + oggi (niente affollamento). */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 0 }}>
         {points.map((pt, i) => {
-          const cx = padX + i * step;
-          return pt.on ? (
-            <circle key={pt.day} cx={cx} cy={baseY} r={dotR} fill={accent} />
-          ) : (
-            <circle key={pt.day} cx={cx} cy={baseY} r={dotR} fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth={1.2} />
+          const showLabel = range === 'sett' || i % 5 === 0 || pt.isToday;
+          const label = range === 'sett' ? pt.wd : pt.dn;
+          return (
+            <div key={pt.day} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, minWidth: 0 }}>
+              {/* Il punto: pieno acceso = fatto, contorno tenue = non fatto.
+                  Oggi: piccolo anello attorno per orientarsi nel periodo. */}
+              <span
+                style={{
+                  width: dot, height: dot, borderRadius: '50%', flexShrink: 0,
+                  background: pt.on ? accent : 'transparent',
+                  border: pt.on ? 'none' : '1.5px solid rgba(255,255,255,0.24)',
+                  boxShadow: pt.isToday ? `0 0 0 2px ${p.bg}, 0 0 0 3px ${accent}` : 'none',
+                }}
+              />
+              {/* Etichetta giorno (tenue), accesa per "oggi" */}
+              <span style={{ fontFamily: p.monoFont, fontSize: 7.5, lineHeight: 1, color: pt.isToday ? accent : p.dim, height: 8 }}>
+                {showLabel ? label : ''}
+              </span>
+            </div>
           );
         })}
-      </svg>
+      </div>
     </div>
   );
 }

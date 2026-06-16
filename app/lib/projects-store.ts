@@ -80,12 +80,35 @@ export function areaName(pr: Project): string {
   return AREA_LABEL[pr.area];
 }
 
+// Normalizza un doc grezzo da Firestore: i doc vecchi o scritti a metà
+// possono non avere i campi array (milestones/checklist/ricorrenti). Qui li
+// forziamo sempre a [] così card e completion() non esplodono leggendo .length
+// su undefined. Senza questo, UN solo doc malformato fa crashare l'intera
+// schermata e i progetti "non si aprono".
+export function normalizeProject(raw: Partial<Project> & { id: string }): Project {
+  return {
+    id: raw.id,
+    name: raw.name ?? 'Senza nome',
+    area: raw.area ?? 'lavoro',
+    areaCustom: raw.areaCustom,
+    kind: raw.kind ?? 'progetto',
+    color: raw.color ?? 'orange',
+    note: raw.note,
+    milestones: raw.milestones ?? [],
+    checklist: raw.checklist ?? [],
+    recurringTasks: raw.recurringTasks ?? [],
+    recurringChecklist: raw.recurringChecklist ?? [],
+    createdAt: raw.createdAt ?? 0,
+  };
+}
+
 // % completamento: media tra milestone fatte e checklist fatte. Per i retainer
 // conta anche ricorrenti + checklist ricorrente. Ritorna 0..100 intero.
+// I `?? []` proteggono da doc senza i campi array (vedi normalizeProject).
 export function completion(pr: Project): number {
-  const pools: CheckItem[][] = [pr.milestones, pr.checklist];
+  const pools: CheckItem[][] = [pr.milestones ?? [], pr.checklist ?? []];
   if (pr.kind === 'retainer') {
-    pools.push(pr.recurringTasks, pr.recurringChecklist);
+    pools.push(pr.recurringTasks ?? [], pr.recurringChecklist ?? []);
   }
   const all = pools.flat();
   if (all.length === 0) return 0;
@@ -108,7 +131,9 @@ export function useProjects(uid: string | null) {
     // Collection dedicata 'projects' sotto l'utente (come 'notes').
     const col = collection(db, 'users', uid, 'projects');
     return onSnapshot(col, snap => {
-      const result = snap.docs.map(d => ({ id: d.id, ...d.data() } as Project));
+      // normalizeProject riempie i campi array mancanti: doc vecchi/parziali
+      // non fanno più crashare la lista.
+      const result = snap.docs.map(d => normalizeProject({ id: d.id, ...d.data() }));
       // più recenti in cima
       result.sort((a, b) => b.createdAt - a.createdAt);
       setProjects(result);

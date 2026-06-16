@@ -3,65 +3,46 @@ import { verifyAuthHeader } from '@/lib/admin';
 
 export const runtime = 'nodejs';
 
-// Capture comandi: prende una frase ("tra 2 giorni ho un appuntamento, ricordamelo")
-// e ne estrae un comando strutturato (crea task / promemoria) con la data già
-// calcolata lato server. Stesso provider/stile di /api/ai/classify.
+// Brain dump: prende un testo scritto/detto di getto (anche lungo e disordinato)
+// ed ESTRAE tutte le azioni da fare come task separati, lasciando il resto
+// (riflessioni/sfoghi) in "rest". Le date sono calcolate lato server da un
+// offset in giorni, così "tra 2 giorni" è sempre giusto. Stesso provider di classify.
 const GROQ_URL   = 'https://api.groq.com/openai/v1/chat/completions';
 const GROQ_MODEL = 'llama-3.3-70b-versatile';
 
-// Intent possibili. Devono combaciare con ciò che il client sa gestire.
-const INTENTS = ['create_task', 'create_reminder', 'none'] as const;
-type Intent = typeof INTENTS[number];
+// Task estratto, con data già assoluta, restituito al client.
+type ExtractedTask = { title: string; dueDate: string; dueTime: string; priority: number };
+type CommandResult = { tasks: ExtractedTask[]; rest: string };
 
-// Risultato finale restituito al client (date già assolute).
-type CommandResult = {
-  intent: Intent;
-  title: string;
-  dueDate: string; // YYYY-MM-DD o stringa vuota
-  dueTime: string; // HH:MM o stringa vuota
-  project: string; // opzionale, stringa vuota se assente
-};
+const SYSTEM = `Sei l'estrattore di azioni di un'app personale. Ricevi un testo scritto o detto di getto (anche un dump lungo e disordinato, con sfoghi e pensieri) e fai DUE cose:
 
-// Cosa fa il modello: NON calcola le date. Restituisce un offset relativo
-// (giorni da oggi) + ora, così il calcolo della data resta deterministico
-// lato server e non dipende dal fuso/oggi che "crede" il modello.
-const SYSTEM = `Sei l'estrattore di comandi di un'app personale. Ricevi UNA frase detta o scritta di getto e capisci se l'utente vuole creare un task o un promemoria, e per quando. Rispondi SOLO con JSON valido, niente testo attorno.
+1. ESTRAI ogni cosa che l'utente DEVE FARE come task separato. Esempio: "devo fare la denuncia della carta d'identità, le foto e la spesa" -> 3 task distinti. Spezza sempre gli elenchi.
+   Per ogni task:
+   - "title": breve e fedele, ripulito da "devo", "ho da", "mi sa che"; in italiano.
+   - "dayOffset": giorni da oggi (oggi 0, domani 1, dopodomani 2, "tra N giorni" N, "tra una settimana" 7); null se nessun riferimento temporale.
+   - "time": "HH:MM" se c'è un orario, altrimenti "".
+   - "priority": 1 normale, 2 importante, 3 urgente/scadenza. Default 1.
+2. Tutto il testo che NON è un'azione (riflessioni, stati d'animo, sfoghi, contesto) mettilo in "rest" (testo, può essere vuoto). NON inventare task da frasi riflessive.
 
-Intent:
-- "create_task": l'utente vuole ricordarsi di FARE qualcosa (commissione, scadenza, azione).
-- "create_reminder": l'utente fissa un evento/appuntamento per un momento preciso (ha un orario o un "alle X").
-- "none": la frase non è un comando di task/promemoria.
+Se non c'è nessuna azione, "tasks" è [].
 
-Per la data NON dare una data assoluta. Dai un offset in giorni da oggi:
-- "oggi" -> dayOffset 0
-- "domani" -> dayOffset 1
-- "dopodomani" -> dayOffset 2
-- "tra N giorni" -> dayOffset N
-- "tra una settimana" -> dayOffset 7
-- nessun riferimento temporale -> dayOffset null
-
-Formato risposta:
-{"intent":"<create_task|create_reminder|none>","title":"<cosa fare, ripulito dalle parole-comando tipo 'ricordami','ho','devo', breve e fedele>","dayOffset":<numero intero o null>,"time":"<HH:MM se detto un orario, altrimenti stringa vuota>","project":"<nome progetto/contesto se citato (es. lavoro, casa), altrimenti stringa vuota>"}`;
+Rispondi SOLO con JSON valido, niente testo attorno:
+{"tasks":[{"title":"...","dayOffset":<intero|null>,"time":"<HH:MM o vuoto>","priority":<1|2|3>}],"rest":"<testo non azionabile o vuoto>"}`;
 
 export async function POST(req: NextRequest) {
-  // Solo utenti loggati: senza, chiunque conosca l'URL brucerebbe la quota.
   const decoded = await verifyAuthHeader(req.headers.get('authorization'));
   if (!decoded) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-  // La key sta SOLO qui lato server. Se manca, 503 con messaggio chiaro.
   const groqKey = process.env.GROQ_API_KEY;
   if (!groqKey) {
-    return Response.json(
-      { error: 'AI non configurata · serve GROQ_API_KEY in .env / Vercel env' },
-      { status: 503 },
-    );
+    return Response.json({ error: 'AI non configurata · serve GROQ_API_KEY' }, { status: 503 });
   }
 
   let body: { text?: string };
   try { body = await req.json(); } catch { return Response.json({ error: 'JSON non valido' }, { status: 400 }); }
   const text = (body.text ?? '').trim();
   if (!text)              return Response.json({ error: 'text mancante' }, { status: 400 });
-  if (text.length > 2000) return Response.json({ error: 'testo troppo lungo' }, { status: 413 });
+  if (text.length > 4000) return Response.json({ error: 'testo troppo lungo' }, { status: 413 });
 
   const res = await fetch(GROQ_URL, {
     method: 'POST',
@@ -70,8 +51,8 @@ export async function POST(req: NextRequest) {
       model: GROQ_MODEL,
       messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: text }],
       temperature: 0,
-      max_tokens: 300,
-      response_format: { type: 'json_object' }, // forza JSON pulito
+      max_tokens: 700,
+      response_format: { type: 'json_object' },
     }),
   });
   if (!res.ok) {
@@ -79,34 +60,32 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: `Groq ${res.status}: ${t.slice(0, 200)}` }, { status: res.status });
   }
 
-  // Parsing difensivo: se il modello sbaglia formato, ritorno intent "none".
   const data = await res.json();
   const raw: string = data?.choices?.[0]?.message?.content ?? '';
-  let parsed: { intent?: string; title?: string; dayOffset?: number | null; time?: string; project?: string };
-  try { parsed = JSON.parse(raw); } catch { return Response.json(emptyResult()); }
+  let parsed: { tasks?: Array<{ title?: string; dayOffset?: number | null; time?: string; priority?: number }>; rest?: string };
+  try { parsed = JSON.parse(raw); } catch { return Response.json({ tasks: [], rest: text } as CommandResult); }
 
-  const intent: Intent = INTENTS.includes(parsed.intent as Intent) ? (parsed.intent as Intent) : 'none';
-  const title = (parsed.title ?? '').trim();
-  const time  = normalizeTime(parsed.time);
-  const project = (parsed.project ?? '').trim();
+  const tasks: ExtractedTask[] = Array.isArray(parsed.tasks)
+    ? parsed.tasks
+        .map(t => ({
+          title: (t?.title ?? '').trim(),
+          dueDate: offsetToDate(t?.dayOffset),
+          dueTime: normalizeTime(t?.time),
+          priority: [1, 2, 3].includes(Number(t?.priority)) ? Number(t?.priority) : 1,
+        }))
+        .filter(t => t.title.length > 0)
+    : [];
 
-  // La data la calcolo IO lato server, partendo da oggi + offset in giorni.
-  // Così "tra 2 giorni" è sempre giusto, qualunque cosa creda il modello.
-  const dueDate = offsetToDate(parsed.dayOffset);
-
-  const result: CommandResult = { intent, title, dueDate, dueTime: time, project };
+  const result: CommandResult = { tasks, rest: (parsed.rest ?? '').trim() };
   return Response.json(result);
 }
 
-// Calcola la data assoluta (YYYY-MM-DD) sommando un offset di giorni a oggi.
-// Uso il fuso italiano per "oggi" così la data combacia con quella di Aaron.
+// Data assoluta (YYYY-MM-DD) = oggi (fuso Europe/Rome) + offset giorni.
 function offsetToDate(dayOffset: number | null | undefined): string {
   if (dayOffset == null || !Number.isFinite(dayOffset)) return '';
   const off = Math.trunc(dayOffset);
-  // "Oggi" in Italia: prendo la data corrente nel fuso Europe/Rome.
-  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' }); // YYYY-MM-DD
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' });
   const [y, m, d] = todayStr.split('-').map(Number);
-  // Costruisco a mezzogiorno UTC per non sballare col cambio data del fuso.
   const base = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
   base.setUTCDate(base.getUTCDate() + off);
   const yy = base.getUTCFullYear();
@@ -115,7 +94,7 @@ function offsetToDate(dayOffset: number | null | undefined): string {
   return `${yy}-${mm}-${dd}`;
 }
 
-// Normalizza l'orario in HH:MM (24h). Accetta "9", "9:5", "21:00" ecc.
+// Normalizza l'orario in HH:MM (24h).
 function normalizeTime(time: string | undefined): string {
   const t = (time ?? '').trim();
   if (!t) return '';
@@ -125,9 +104,4 @@ function normalizeTime(time: string | undefined): string {
   const min = m[2] ? Number(m[2]) : 0;
   if (h > 23 || min > 59) return '';
   return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
-}
-
-// Risultato "vuoto" di fallback quando non c'è comando o il parsing fallisce.
-function emptyResult(): CommandResult {
-  return { intent: 'none', title: '', dueDate: '', dueTime: '', project: '' };
 }

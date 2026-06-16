@@ -5,7 +5,8 @@ import { p, SIDEBAR_W } from '@/lib/design';
 import { VITAL_URL } from '@/lib/links';
 import { MarkerPlus } from './markers';
 import { useAuth } from '@/lib/auth-context';
-import { useNotes, useShoppingList, useGifts, useTodos } from '@/lib/user-store';
+import { useNotes, useShoppingList, useGifts, useTodos, useXP, TodoPriority } from '@/lib/user-store';
+import { useLibrary } from '@/lib/library-store';
 
 type Screen = 'home' | 'cal' | 'brain' | 'me' | 'tasks' | 'routines' | 'library' | 'projects' | 'people' | 'domains';
 type MeTab = 'cibo' | 'fitness' | 'mood' | 'habits';
@@ -84,6 +85,8 @@ function CaptureOverlay({ open, onClose, autoVoice }: { open: boolean; onClose: 
   const { addItem }    = useShoppingList(uid);
   const { addTodo }    = useTodos(uid);
   const { gifts, saveGifts } = useGifts(uid);
+  const { addXP }      = useXP(uid);
+  const { addItem: addToLibrary } = useLibrary(uid); // note/idee → Library (ritrovabili)
 
   const [text, setText]   = useState('');
   const [saving, setSaving] = useState(false);
@@ -167,10 +170,10 @@ function CaptureOverlay({ open, onClose, autoVoice }: { open: boolean; onClose: 
       case 'spesa':    addItem(display);                                                                          break;
       case 'regalo':   saveGifts([...gifts, { id: Date.now().toString(), label: display, note: '', done: false }]); break;
       case 'persona':  await addNote(display, ['persona']);                                                       break;
-      case 'journal':  await addNote(display, ['journal']);                                                       break;
-      case 'brain':    await addNote(display, ['idea']);                                                          break;
-      case 'problema': await addNote(display, ['lavoro']);                                                        break;
-      case 'nota':     await addNote(display, []);                                                                break;
+      case 'journal':  await addToLibrary({ title:'', body: display, type:'journal', source:'own', tags:['journal'], needsReview:false, images:[] }); break;
+      case 'brain':    await addToLibrary({ title:'', body: display, type:'note', source:'own', tags:['idea'], needsReview:false, images:[] });       break;
+      case 'problema': await addToLibrary({ title:'', body: display, type:'note', source:'own', tags:['problema'], needsReview:false, images:[] });   break;
+      case 'nota':     await addToLibrary({ title:'', body: display, type:'note', source:'own', tags:[], needsReview:false, images:[] });             break;
     }
   };
 
@@ -197,7 +200,7 @@ function CaptureOverlay({ open, onClose, autoVoice }: { open: boolean; onClose: 
   // Comando IA: rileva richieste tipo "tra 2 giorni ho X, ricordamelo" e
   // restituisce un task/reminder già strutturato (data relativa calcolata
   // lato server). null se non è un comando o l'AI non risponde.
-  const commandWithAI = async (raw: string): Promise<{ intent: string; title: string; dueDate: string; dueTime: string; project: string } | null> => {
+  const commandWithAI = async (raw: string): Promise<{ tasks: { title: string; dueDate: string; dueTime: string; priority: number }[]; rest: string } | null> => {
     try {
       const token = user ? await user.getIdToken() : null;
       if (!token) return null;
@@ -208,7 +211,7 @@ function CaptureOverlay({ open, onClose, autoVoice }: { open: boolean; onClose: 
       });
       if (!res.ok) return null;
       const d = await res.json();
-      if (!d?.intent) return null;
+      if (!Array.isArray(d?.tasks)) return null;
       return d;
     } catch {
       return null;
@@ -230,11 +233,17 @@ function CaptureOverlay({ open, onClose, autoVoice }: { open: boolean; onClose: 
         // Prima: è un comando ("tra 2 giorni ricordami…")? → crea task/reminder
         // con data/ora già calcolate dal server.
         const cmd = await commandWithAI(text.trim());
-        if (cmd && (cmd.intent === 'create_task' || cmd.intent === 'create_reminder')) {
-          addTodo(cmd.title || text.trim(), 2, cmd.dueDate || undefined, { dueTime: cmd.dueTime || undefined, project: cmd.project || undefined });
-          setDone('TO-DO');
+        if (cmd && cmd.tasks.length > 0) {
+          // Crea TUTTI i task estratti dal dump + XP (5 a task).
+          cmd.tasks.forEach(t => addTodo(t.title, (t.priority ?? 1) as TodoPriority, t.dueDate || undefined, { dueTime: t.dueTime || undefined }));
+          addXP(cmd.tasks.length * 5);
+          // Il resto non azionabile → nota in Library (così è ritrovabile).
+          if (cmd.rest && cmd.rest.trim()) {
+            await addToLibrary({ title: '', body: cmd.rest.trim(), type: 'note', source: 'own', tags: ['dump'], needsReview: false, images: [] });
+          }
+          setDone(cmd.tasks.length > 1 ? `${cmd.tasks.length} TASK` : 'TO-DO');
           setText('');
-          setTimeout(() => { setDone(null); onClose(); }, 800);
+          setTimeout(() => { setDone(null); onClose(); }, 900);
           return;
         }
         // Altrimenti: smistamento normale (ricadi sulle parole-chiave se serve).
@@ -262,7 +271,7 @@ function CaptureOverlay({ open, onClose, autoVoice }: { open: boolean; onClose: 
       <div onClick={e => e.stopPropagation()} style={{ width: '100%', padding: '24px 20px 110px', background: p.captureBg, borderTop: `1px solid ${p.border}`, borderTopLeftRadius: 28, borderTopRightRadius: 28 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontFamily: p.monoFont, fontSize: 10, letterSpacing: 0.18, color: p.muted, textTransform: 'uppercase' }}>
           <MarkerPlus size={11} color={p.orange} />
-          <span>QUICK CAPTURE</span>
+          <span>BRAIN DUMP</span>
           <span style={{ flex: 1 }} />
           {done ? <span style={{ color: p.green, fontWeight: 700 }}>✓ SALVATO IN {done}</span>
             : <span style={{ color: badgeColor, fontWeight: 700 }}>→ {badgeLabel}{presetRoute ? ' (fix)' : ''}</span>}
@@ -582,7 +591,7 @@ export function BottomNav({ screen, setScreen, desktop = false }: { screen: Scre
                 <svg width={desktop ? 18 : 22} height={desktop ? 18 : 22} viewBox="0 0 24 24" fill="none" aria-hidden>
                   <path d="M12 4 V20 M4 12 H20" stroke={desktop ? p.orange : '#0a0a0a'} strokeWidth="3" strokeLinecap="round"/>
                 </svg>
-                {desktop && <span>Cattura</span>}
+                {desktop && <span>Brain dump</span>}
               </span>
             </button>
           );

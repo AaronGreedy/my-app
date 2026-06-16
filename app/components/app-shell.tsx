@@ -16,9 +16,9 @@ import { PeopleScreen } from '@/screens/people';
 import { RoutinesScreen } from '@/screens/routines';
 import { LibraryScreen } from '@/screens/library';
 import { ProjectsScreen } from '@/screens/projects';
+import { DomainsScreen } from '@/screens/domains';
 import { BottomNav } from './bottom-nav';
 import { HomePanel } from './home-panel';
-import { SoonScreen } from './soon-screen';
 import { GlobalSearch } from './global-search';
 import { TopRightButtons } from './top-right-buttons';
 import { MarkerDiamond } from './markers';
@@ -77,7 +77,7 @@ export function AppShell() {
     library:  <LibraryScreen />,
     projects: <ProjectsScreen />,
     people:   <PeopleScreen />,
-    domains:  <SoonScreen title="Domains" block="dopo" note="Le tue proprietà/dashboard. La colleghiamo più avanti." />,
+    domains:  <DomainsScreen />,
     focus:    <FocusScreen onBack={() => setScreen('home')} />,
     nova:     <NovaScreen  onBack={() => setScreen('home')} initialBriefing={novaBriefing} />,
     settings: <SettingsScreen onBack={() => setScreen('home')} />,
@@ -100,7 +100,7 @@ export function AppShell() {
   // destra. Home = due colonne (contenuto + pannello); le altre = colonna.
   const desktopArea: React.CSSProperties = { position: 'absolute', top: 0, bottom: 0, left: SIDEBAR_W, right: 0, display: 'flex', justifyContent: 'center', overflow: 'hidden' };
   return (
-    <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: p.bg }}>
+    <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: 'radial-gradient(1200px 820px at 16% 0%, rgba(255,106,0,0.13), transparent 55%), radial-gradient(1000px 720px at 96% 20%, rgba(0,240,255,0.11), transparent 52%), radial-gradient(1050px 950px at 58% 112%, rgba(255,20,184,0.10), transparent 58%), #050505' }}>
       {desktopHome ? (
         <div style={desktopArea}>
           <div style={{ display: 'flex', width: '100%', maxWidth: 1320, height: '100%', overflow: 'hidden' }}>

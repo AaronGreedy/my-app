@@ -11,6 +11,9 @@ import { db } from './firebase';
 export type LibraryType = 'note' | 'quote' | 'journal' | 'book' | 'inventory';
 export type LibrarySource = 'own' | 'reading' | 'meeting' | 'brainstorm' | 'observation';
 
+// Mood 1-5 per le voci di diario (1 = pessimo, 5 = ottimo). Mappa su MoodFace.
+export type JournalMood = 1 | 2 | 3 | 4 | 5;
+
 export interface LibraryItem {
   id: string;
   title: string;
@@ -21,10 +24,21 @@ export interface LibraryItem {
   needsReview: boolean;
   images: string[];   // data URL (già compresse lato client)
   createdAt: number;
+  // ── Campi opzionali del journal (non rompono gli altri type) ──
+  mood?: JournalMood; // umore 1-5, solo per type 'journal'
+  prompt?: string;    // spunto/domanda da cui è partita la voce, se presente
 }
 
 // Dati per creare/aggiornare una voce (senza id/createdAt, gestiti dallo store).
 export type LibraryInput = Omit<LibraryItem, 'id' | 'createdAt'>;
+
+// Firestore rifiuta i valori undefined: li togliamo prima di scrivere.
+// I campi opzionali (mood, prompt) restano fuori dal doc se non valorizzati.
+function stripUndefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  const out: Record<string, unknown> = {};
+  for (const k in obj) if (obj[k] !== undefined) out[k] = obj[k];
+  return out as Partial<T>;
+}
 
 export function useLibrary(uid: string | null) {
   const [items, setItems] = useState<LibraryItem[]>([]);
@@ -47,7 +61,7 @@ export function useLibrary(uid: string | null) {
     if (!uid || !db) return;
     const title = data.title.trim() || data.body.split('\n')[0].slice(0, 60) || 'Voce';
     const col = collection(db, 'users', uid, 'library');
-    await addDoc(col, { ...data, title, createdAt: Date.now() });
+    await addDoc(col, stripUndefined({ ...data, title, createdAt: Date.now() }));
   };
 
   // Aggiorna una voce esistente (titolo, corpo, tipo, source, tag, review, immagini).
@@ -58,7 +72,7 @@ export function useLibrary(uid: string | null) {
     if (patch.body !== undefined && (patch.title === undefined || patch.title.trim() === '')) {
       next.title = patch.body.split('\n')[0].slice(0, 60) || 'Voce';
     }
-    await updateDoc(doc(db, 'users', uid, 'library', id), next);
+    await updateDoc(doc(db, 'users', uid, 'library', id), stripUndefined(next));
   };
 
   const removeItem = async (id: string) => {

@@ -31,7 +31,7 @@ export function ProjectsScreen() {
   const filtered = projects.filter(pr => !areaFilter || areaName(pr) === areaFilter);
 
   return (
-    <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', overflowX: 'hidden', background: p.bg, color: p.fg, fontFamily: p.bodyFont }}>
+    <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', overflowX: 'hidden', background: 'transparent', color: p.fg, fontFamily: p.bodyFont }}>
       <div style={{ padding: 'calc(env(safe-area-inset-top, 0px) + 18px) 18px calc(env(safe-area-inset-bottom, 0px) + 130px)', maxWidth: 760, margin: '0 auto' }}>
 
         {/* Header */}
@@ -165,32 +165,32 @@ function ProjectCard({ pr, onEdit, onToggle, onResetRecurring }: {
         </div>
       </div>
 
-      {/* milestones */}
-      {pr.milestones.length > 0 && (
-        <CheckBlock title="Milestones" color={accent} items={pr.milestones} onToggle={id => onToggle('milestones', id)} />
+      {/* milestones — i ?? [] proteggono da doc senza il campo (vedi normalizeProject) */}
+      {(pr.milestones ?? []).length > 0 && (
+        <CheckBlock title="Milestones" color={accent} items={pr.milestones ?? []} onToggle={id => onToggle('milestones', id)} />
       )}
 
       {/* checklist interna */}
-      {pr.checklist.length > 0 && (
-        <CheckBlock title="Checklist" color={p.cyan} items={pr.checklist} onToggle={id => onToggle('checklist', id)} />
+      {(pr.checklist ?? []).length > 0 && (
+        <CheckBlock title="Checklist" color={p.cyan} items={pr.checklist ?? []} onToggle={id => onToggle('checklist', id)} />
       )}
 
       {/* blocchi retainer */}
       {isRetainer && (
         <>
-          {pr.recurringTasks.length > 0 && (
+          {(pr.recurringTasks ?? []).length > 0 && (
             <CheckBlock
               title="Task mensili"
               color={p.green}
-              items={pr.recurringTasks}
+              items={pr.recurringTasks ?? []}
               onToggle={id => onToggle('recurringTasks', id)}
               right={
                 <button onClick={(e) => { e.stopPropagation(); onResetRecurring(); }} style={{ padding: '4px 9px', borderRadius: 99, border: `1px solid ${p.border}`, background: 'transparent', color: p.dim, fontFamily: p.monoFont, fontSize: 8.5, letterSpacing: 0.1, textTransform: 'uppercase', cursor: 'pointer' }}>↻ nuovo mese</button>
               }
             />
           )}
-          {pr.recurringChecklist.length > 0 && (
-            <CheckBlock title="Checklist ricorrente" color={p.magenta} items={pr.recurringChecklist} onToggle={id => onToggle('recurringChecklist', id)} />
+          {(pr.recurringChecklist ?? []).length > 0 && (
+            <CheckBlock title="Checklist ricorrente" color={p.magenta} items={pr.recurringChecklist ?? []} onToggle={id => onToggle('recurringChecklist', id)} />
           )}
         </>
       )}

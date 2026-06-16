@@ -214,11 +214,6 @@ function computeMeHabitStreakHome(allDays: Record<string, Partial<{ meHabits: bo
 
 // 2 orb sole: uno caldo in alto-sinistra, uno freddo in basso-destra.
 // Bastano a dare profondità senza riempire lo schermo di colore.
-const ORBS = [
-  { t: -100, l: -80,  w: 380, c: '#ff6a00', o: 0.55 },
-  { b:   80, r: -60,  w: 320, c: '#a6ff00', o: 0.30 },
-] as const;
-
 // ─── HomeScreen ───────────────────────────────────────────────────────────────
 
 function computeTodayXP(meHabits: boolean[], moodM: MoodId|null, moodA: MoodId|null, moodE: MoodId|null): number {
@@ -393,17 +388,13 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
   const hasTodayTask = data.todayThing.trim().length > 0;
 
   return (
-    <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', overflowX: 'hidden', background: p.bg, color: p.fg, fontFamily: p.bodyFont }}>
+    <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', overflowX: 'hidden', background: 'transparent', color: p.fg, fontFamily: p.bodyFont }}>
 
       {/* I pulsanti top-right (NOVA, Settings, Refresh) sono montati da
           AppShell così appaiono su tutte le schermate principali. */}
 
-      {/* Sfondo: 2 orb morbidi + noise sottile. Niente scanlines, niente
-          testi verticali decorativi — il contenuto è il protagonista. */}
-      {ORBS.map((orb, i) => (
-        <div key={i} style={{ position: 'absolute', top: 't' in orb ? orb.t : undefined, bottom: 'b' in orb ? orb.b : undefined, left: 'l' in orb ? orb.l : undefined, right: 'r' in orb ? orb.r : undefined, width: orb.w, height: orb.w, borderRadius: '50%', background: `radial-gradient(circle, ${orb.c} 0%, transparent 65%)`, filter: 'blur(65px)', opacity: orb.o, zIndex: 0, pointerEvents: 'none' } as CSSProperties} />
-      ))}
-      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1, backgroundImage: `url("${NOISE_SVG}")`, opacity: 0.10, mixBlendMode: 'overlay' } as CSSProperties} />
+      {/* Sfondo ambient ora globale (app-shell); qui solo un velo di noise. */}
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1, backgroundImage: `url("${NOISE_SVG}")`, opacity: 0.08, mixBlendMode: 'overlay' } as CSSProperties} />
 
       <div style={{ position: 'relative', zIndex: 2, padding: 'calc(env(safe-area-inset-top, 0px) + 14px) 18px calc(env(safe-area-inset-bottom, 0px) + 130px)' }}>
 

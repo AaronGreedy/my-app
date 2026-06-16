@@ -1,9 +1,11 @@
 'use client';
 
+import { useState } from 'react';
 import { p, fmtItDate } from '@/lib/design';
 import { useAuth } from '@/lib/auth-context';
 import { useTodos, useCountdowns, useNotes, useWorkItems, daysUntil } from '@/lib/user-store';
 import { SlippingPanel, DaySummaryPanel, SlippingItem } from './today-panels';
+import { CountdownEditor } from '@/components/countdown-editor';
 
 // Pannello laterale destro della Home su desktop. Riempie lo spazio a destra
 // con DATI REALI già presenti nell'app: to-do aperti, countdown imminenti e
@@ -15,7 +17,8 @@ export function HomePanel({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brain
   const { user } = useAuth();
   const uid = user?.uid ?? null;
   const { todos, toggleTodo } = useTodos(uid);
-  const { countdowns } = useCountdowns(uid);
+  const { countdowns, saveCountdowns } = useCountdowns(uid);
+  const [cdOpen, setCdOpen] = useState(false);
   const { notes } = useNotes(uid);
   const { items: workItems } = useWorkItems(uid);
 
@@ -86,13 +89,13 @@ export function HomePanel({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brain
       )}
 
       {/* ── COUNTDOWN IMMINENTI ───────────────────────────────────────── */}
-      <Label count={next.length}>Countdown</Label>
+      <Label count={next.length} onAll={() => setCdOpen(true)}>Countdown</Label>
       {next.length === 0 ? (
-        <div style={{ ...card, fontFamily:p.monoFont, fontSize:11, color:p.dim, marginBottom:30 }}>Nessun countdown.</div>
+        <div onClick={() => setCdOpen(true)} style={{ ...card, fontFamily:p.monoFont, fontSize:11, color:p.dim, marginBottom:30, cursor:'pointer' }}>Nessun countdown · tap per aggiungere</div>
       ) : (
         <div style={{ ...grid, marginBottom:30 }}>
           {next.map(c => (
-            <div key={c.id} style={{ ...card, display:'flex', alignItems:'center', gap:12 }}>
+            <div key={c.id} onClick={() => setCdOpen(true)} style={{ ...card, display:'flex', alignItems:'center', gap:12, cursor:'pointer' }}>
               <div style={{ fontFamily:p.displayFont, fontSize:26, fontWeight:800, color:p.orange, lineHeight:1, minWidth:42 }}>
                 {c.days}<span style={{ fontSize:10, color:p.muted, fontFamily:p.monoFont }}>g</span>
               </div>
@@ -131,6 +134,11 @@ export function HomePanel({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brain
         <DaySummaryPanel />
       </div>
 
+      {/* Editor countdown: tap su un countdown (o "vedi tutto") lo apre per
+          aggiungere/modificare/eliminare a mano. */}
+      {cdOpen && (
+        <CountdownEditor countdowns={countdowns} saveCountdowns={saveCountdowns} onClose={() => setCdOpen(false)} />
+      )}
     </div>
   );
 }
