@@ -12,15 +12,20 @@ import { TasksScreen } from '@/screens/tasks';
 import { FocusScreen } from '@/screens/focus';
 import { NovaScreen } from '@/screens/nova';
 import { SettingsScreen } from '@/screens/settings';
+import { PeopleScreen } from '@/screens/people';
+import { RoutinesScreen } from '@/screens/routines';
+import { LibraryScreen } from '@/screens/library';
+import { ProjectsScreen } from '@/screens/projects';
 import { BottomNav } from './bottom-nav';
 import { HomePanel } from './home-panel';
 import { SoonScreen } from './soon-screen';
+import { GlobalSearch } from './global-search';
 import { TopRightButtons } from './top-right-buttons';
 import { MarkerDiamond } from './markers';
 import { LevelUpCelebration } from './level-up-celebration';
 
-type Screen = 'home' | 'cal' | 'brain' | 'me' | 'tasks' | 'projects' | 'people' | 'domains' | 'focus' | 'nova' | 'settings';
-type NavScreen = 'home' | 'cal' | 'brain' | 'me' | 'tasks' | 'projects' | 'people' | 'domains';
+type Screen = 'home' | 'cal' | 'brain' | 'me' | 'tasks' | 'routines' | 'library' | 'projects' | 'people' | 'domains' | 'focus' | 'nova' | 'settings';
+type NavScreen = 'home' | 'cal' | 'brain' | 'me' | 'tasks' | 'routines' | 'library' | 'projects' | 'people' | 'domains';
 
 // true quando lo schermo è abbastanza largo (PC): la nav diventa sidebar
 // a sinistra. Sotto la soglia resta tutto mobile (bottom-nav). SSR-safe:
@@ -68,8 +73,10 @@ export function AppShell() {
     brain:    <BrainScreen />,
     me:       <MeScreen initialTab={meTab} />,
     tasks:    <TasksScreen />,
-    projects: <SoonScreen title="Projects" block="Blocco 6" note="Progetti e aree con milestones, checklist, % completamento e retainer. In arrivo." />,
-    people:   <SoonScreen title="People" block="Blocco 5" note="CRM personale (privacy-safe, fuori da Groq): persone, compleanni, interazioni. In arrivo." />,
+    routines: <RoutinesScreen />,
+    library:  <LibraryScreen />,
+    projects: <ProjectsScreen />,
+    people:   <PeopleScreen />,
     domains:  <SoonScreen title="Domains" block="dopo" note="Le tue proprietà/dashboard. La colleghiamo più avanti." />,
     focus:    <FocusScreen onBack={() => setScreen('home')} />,
     nova:     <NovaScreen  onBack={() => setScreen('home')} initialBriefing={novaBriefing} />,
@@ -130,6 +137,8 @@ export function AppShell() {
         </>
       )}
       <LevelUpCelebration/>
+      {/* Ricerca globale: overlay, apre con Cmd/Ctrl+K o Cmd/Ctrl+J */}
+      <GlobalSearch onNavigate={(kind) => navigate(kind === 'todo' ? 'tasks' : 'brain')} />
     </div>
   );
 }

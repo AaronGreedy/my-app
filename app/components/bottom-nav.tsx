@@ -7,7 +7,7 @@ import { MarkerPlus } from './markers';
 import { useAuth } from '@/lib/auth-context';
 import { useNotes, useShoppingList, useGifts, useTodos } from '@/lib/user-store';
 
-type Screen = 'home' | 'cal' | 'brain' | 'me' | 'tasks' | 'projects' | 'people' | 'domains';
+type Screen = 'home' | 'cal' | 'brain' | 'me' | 'tasks' | 'routines' | 'library' | 'projects' | 'people' | 'domains';
 type MeTab = 'cibo' | 'fitness' | 'mood' | 'habits';
 type Route = 'todo' | 'brain' | 'spesa' | 'problema' | 'regalo' | 'nota' | 'persona' | 'journal';
 
@@ -274,14 +274,17 @@ function CaptureOverlay({ open, onClose, autoVoice }: { open: boolean; onClose: 
           <div style={{ marginTop: 6, fontFamily: p.monoFont, fontSize: 9, color: p.red }}>{voiceErr}</div>
         )}
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10 }}>
-          <button onClick={onClose} disabled={saving} style={{ padding: '12px 18px', borderRadius: 14, border: 0, cursor: saving ? 'not-allowed' : 'pointer', background: 'rgba(255,255,255,0.08)', color: p.fg, fontFamily: p.monoFont, fontSize: 11, letterSpacing: 0.1, textTransform: 'uppercase', opacity: saving ? 0.5 : 1 }}>Esc</button>
           <button
             onClick={toggleVoice}
             disabled={saving || !getSpeechRecognition()}
             title={getSpeechRecognition() ? (recording ? 'Stop voice' : 'Start voice') : 'Voice non supportata'}
             style={{ width: 44, height: 44, borderRadius: 14, border: 0, cursor: getSpeechRecognition() ? 'pointer' : 'not-allowed', background: recording ? p.red : 'rgba(255,255,255,0.08)', color: recording ? '#0a0a0a' : p.fg, fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: recording ? `0 0 18px ${p.red}aa` : 'none', opacity: getSpeechRecognition() ? 1 : 0.4 }}
           >
-            {recording ? '●' : 'voce'}
+            {recording ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
+            ) : (
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden><rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" strokeWidth="1.8"/><path d="M5 11 a7 7 0 0 0 14 0 M12 18 v3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
+            )}
           </button>
           <div style={{ flex: 1 }} />
           <button
@@ -309,10 +312,10 @@ type NavSection = { id: Screen; label: string; icon: string; primary: boolean };
 const NAV: NavSection[] = [
   { id: 'home',     label: 'Today',    icon: 'home',     primary: true  },
   { id: 'tasks',    label: 'Tasks',    icon: 'tasks',    primary: true  },
-  { id: 'me',       label: 'Routines', icon: 'me',       primary: true  },
+  { id: 'routines', label: 'Routines', icon: 'me',       primary: true  },
   { id: 'projects', label: 'Projects', icon: 'projects', primary: false },
   { id: 'people',   label: 'People',   icon: 'people',   primary: false },
-  { id: 'brain',    label: 'Library',  icon: 'brain',    primary: true  },
+  { id: 'library',  label: 'Library',  icon: 'brain',    primary: true  },
   { id: 'domains',  label: 'Domains',  icon: 'domains',  primary: false },
 ];
 
@@ -343,6 +346,19 @@ export function BottomNav({ screen, setScreen, desktop = false }: { screen: Scre
   }, []);
   // Quando cambi schermata, ripristina visibilità (la nuova non è scrollata)
   useEffect(() => { setNavHidden(false); lastScrollYRef.current = 0; }, [screen]);
+
+  // Scorciatoia desktop: Ctrl/Cmd+I apre il Quick Capture (prompter rapido).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'i' || e.key === 'I')) {
+        e.preventDefault();
+        setAutoVoice(false);
+        setCapture(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   // Hold-to-voice detection: tap = open normally, hold ≥250ms = open in voice mode
   const holdTimer = useRef<number | null>(null);
@@ -504,8 +520,8 @@ export function BottomNav({ screen, setScreen, desktop = false }: { screen: Scre
 
       <div style={navWrap}>
         {(desktop
-          ? ['home', 'tasks', 'capture', 'me', 'projects', 'people', 'brain', 'domains', 'spacer', 'salute']
-          : ['home', 'tasks', 'capture', 'brain', 'me', 'more']
+          ? ['home', 'tasks', 'capture', 'routines', 'projects', 'people', 'library', 'domains', 'spacer', 'salute']
+          : ['home', 'tasks', 'library', 'routines', 'more']
         ).map(slot => {
           if (slot === 'spacer') return <div key="sp" style={{ flex: 1 }} />;
           if (slot === 'more') return (
@@ -563,6 +579,24 @@ export function BottomNav({ screen, setScreen, desktop = false }: { screen: Scre
           );
         })}
       </div>
+
+      {/* Mobile: bottone Cattura FLOATING (stile Jerad), staccato dalla barra.
+          Tap = capture testo · tieni premuto = capture vocale. */}
+      {!desktop && (
+        <button
+          onPointerDown={startHold}
+          onPointerUp={endHold}
+          onPointerLeave={cancelHold}
+          onPointerCancel={cancelHold}
+          onContextMenu={e => e.preventDefault()}
+          aria-label="Quick capture"
+          style={{ position: 'fixed', right: 'calc(env(safe-area-inset-right,0px) + 18px)', bottom: 'calc(env(safe-area-inset-bottom,0px) + 92px)', width: 58, height: 58, borderRadius: '50%', border: 0, cursor: 'pointer', background: p.fabBg, color: '#0a0a0a', boxShadow: p.fabShadow, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 31, touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none', WebkitUserDrag: 'none' as never } as CSSProperties}
+        >
+          <span style={{ pointerEvents: 'none', display: 'flex' } as CSSProperties}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden><path d="M12 4 V20 M4 12 H20" stroke="#0a0a0a" strokeWidth="3" strokeLinecap="round"/></svg>
+          </span>
+        </button>
+      )}
     </>
   );
 }
