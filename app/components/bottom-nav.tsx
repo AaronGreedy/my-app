@@ -307,7 +307,7 @@ const TABS = [
   { id: 'salute', label: 'Salute', icon: 'salute' }, // link esterno a Vital
 ] as const;
 
-export function BottomNav({ screen, setScreen }: { screen: Screen; setScreen: (s: Screen, opts?: { meTab?: MeTab }) => void }) {
+export function BottomNav({ screen, setScreen, desktop = false }: { screen: Screen; setScreen: (s: Screen, opts?: { meTab?: MeTab }) => void; desktop?: boolean }) {
   const [capture, setCapture] = useState(false);
   const [autoVoice, setAutoVoice] = useState(false);
 
@@ -422,6 +422,14 @@ export function BottomNav({ screen, setScreen }: { screen: Screen; setScreen: (s
     if (!meHoldFiredRef.current) meHoldFiredRef.current = false;
   };
 
+  // ── Stili nav: bottom-bar orizzontale (mobile) o sidebar verticale (PC) ──
+  const navWrap: CSSProperties = desktop
+    ? { position:'absolute', left:14, top:14, bottom:14, width:72, zIndex:30, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:8, padding:'14px 8px', borderRadius:26, background:p.navBg, backdropFilter:'blur(24px) saturate(180%)', WebkitBackdropFilter:'blur(24px) saturate(180%)', border:p.navBorder, boxShadow:p.navShadow }
+    : { position:'absolute', left:12, right:12, bottom:'calc(env(safe-area-inset-bottom, 0px) + 14px)', zIndex:30, display:'flex', alignItems:'center', gap:6, padding:'6px', borderRadius:32, background:p.navBg, backdropFilter:'blur(24px) saturate(180%)', WebkitBackdropFilter:'blur(24px) saturate(180%)', border:p.navBorder, boxShadow:p.navShadow, transform: navHidden ? 'translateY(140%)' : 'translateY(0)', transition:'transform .28s cubic-bezier(.4,0,.2,1)' };
+  // I tab si allargano in riga (mobile) o restano ad altezza naturale (PC).
+  const tabFlex: CSSProperties['flex'] = desktop ? '0 0 auto' : 1;
+  const tabWidth: CSSProperties['width'] = desktop ? '100%' : undefined;
+
   return (
     <>
       <CaptureOverlay open={capture} onClose={() => { setCapture(false); setAutoVoice(false); }} autoVoice={autoVoice} />
@@ -430,7 +438,10 @@ export function BottomNav({ screen, setScreen }: { screen: Screen; setScreen: (s
       {meMenuOpen && (
         <>
           <div onClick={() => { setMeMenuOpen(false); setMeHover(null); }} style={{ position:'absolute', inset:0, zIndex:40, background:'rgba(0,0,0,0.55)', backdropFilter:'blur(8px)', WebkitBackdropFilter:'blur(8px)' } as CSSProperties}/>
-          <div style={{ position:'absolute', right:12, bottom:'calc(env(safe-area-inset-bottom, 0px) + 90px)', zIndex:41, display:'flex', flexDirection:'column', gap:6, padding:8, borderRadius:22, background:'rgba(20,16,12,0.95)', border:`1px solid rgba(255,20,184,0.35)`, boxShadow:'0 18px 50px rgba(255,20,184,0.45)', minWidth:160 }}>
+          <div style={(desktop
+            ? { position:'absolute', left:90, bottom:90, zIndex:41 }
+            : { position:'absolute', right:12, bottom:'calc(env(safe-area-inset-bottom, 0px) + 90px)', zIndex:41 }) as CSSProperties} >
+          <div style={{ display:'flex', flexDirection:'column', gap:6, padding:8, borderRadius:22, background:'rgba(20,16,12,0.95)', border:`1px solid rgba(255,20,184,0.35)`, boxShadow:'0 18px 50px rgba(255,20,184,0.45)', minWidth:160 }}>
             <div style={{ fontFamily:p.monoFont, fontSize:8.5, color:p.dim, padding:'2px 8px 4px', textTransform:'uppercase', letterSpacing:0.18 }}>vai a · me</div>
             {ME_TABS.map(t => {
               const hovered = meHover === t.id;
@@ -447,10 +458,11 @@ export function BottomNav({ screen, setScreen }: { screen: Screen; setScreen: (s
             })}
             <div style={{ fontFamily:p.monoFont, fontSize:8, color:p.dim, padding:'4px 8px 0', textAlign:'center' }}>tap o slide per saltare</div>
           </div>
+          </div>
         </>
       )}
 
-      <div style={{ position: 'absolute', left: 12, right: 12, bottom: 'calc(env(safe-area-inset-bottom, 0px) + 14px)', zIndex: 30, display: 'flex', alignItems: 'center', gap: 6, padding: '6px', borderRadius: 32, background: p.navBg, backdropFilter: 'blur(24px) saturate(180%)', WebkitBackdropFilter: 'blur(24px) saturate(180%)', border: p.navBorder, boxShadow: p.navShadow, transform: navHidden ? 'translateY(140%)' : 'translateY(0)', transition: 'transform .28s cubic-bezier(.4,0,.2,1)' } as CSSProperties}>
+      <div style={navWrap}>
         {TABS.map(tab => {
           const active = tab.id !== 'fab' && screen === (tab.id as Screen);
           if (tab.id === 'fab') return (
@@ -462,7 +474,7 @@ export function BottomNav({ screen, setScreen }: { screen: Screen; setScreen: (s
               onPointerCancel={cancelHold}
               onContextMenu={e => e.preventDefault()}
               aria-label="Quick capture"
-              style={{ width: 56, height: 56, borderRadius: '50%', border: 0, cursor: 'pointer', flexShrink: 0, background: p.fabBg, color: '#0a0a0a', boxShadow: p.fabShadow, marginTop: -22, display: 'flex', alignItems: 'center', justifyContent: 'center', touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none', WebkitUserDrag: 'none' as never } as CSSProperties}
+              style={{ width: 56, height: 56, borderRadius: '50%', border: 0, cursor: 'pointer', flexShrink: 0, background: p.fabBg, color: '#0a0a0a', boxShadow: p.fabShadow, marginTop: desktop ? 0 : -22, display: 'flex', alignItems: 'center', justifyContent: 'center', touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none', WebkitUserDrag: 'none' as never } as CSSProperties}
             >
               {/* SVG plus instead of "+" char so iOS long-press doesn't fire the paste/select menu */}
               <span style={{ pointerEvents: 'none', display: 'flex' } as CSSProperties}>
@@ -481,7 +493,7 @@ export function BottomNav({ screen, setScreen }: { screen: Screen; setScreen: (s
               onPointerCancel={meCancel}
               onPointerLeave={() => { /* keep menu open if dragging out, hover handled by elementFromPoint */ }}
               onContextMenu={e => e.preventDefault()}
-              style={{ flex: 1, padding: '10px 4px 8px', border: 0, cursor: 'pointer', borderRadius: 22, background: active ? p.navActive : 'transparent', color: active ? p.fg : p.muted, fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.12, textTransform: 'uppercase', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' } as CSSProperties}
+              style={{ flex: tabFlex, width: tabWidth, padding: '10px 4px 8px', border: 0, cursor: 'pointer', borderRadius: 22, background: active ? p.navActive : 'transparent', color: active ? p.fg : p.muted, fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.12, textTransform: 'uppercase', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' } as CSSProperties}
               title="Tap = Me · Tieni premuto per scegliere sezione"
             >
               <NavIcon kind="me" color={active ? p.fg : p.muted} />
@@ -490,13 +502,13 @@ export function BottomNav({ screen, setScreen }: { screen: Screen; setScreen: (s
           );
           if (tab.id === 'salute') return (
             // Link esterno: apre la PWA Vital in una nuova scheda
-            <button key="salute" onClick={() => { if (typeof window !== 'undefined') window.open(VITAL_URL, '_blank'); }} style={{ flex: 1, padding: '10px 4px 8px', border: 0, cursor: 'pointer', borderRadius: 22, background: 'transparent', color: p.muted, fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.12, textTransform: 'uppercase', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+            <button key="salute" onClick={() => { if (typeof window !== 'undefined') window.open(VITAL_URL, '_blank'); }} style={{ flex: tabFlex, width: tabWidth, padding: '10px 4px 8px', border: 0, cursor: 'pointer', borderRadius: 22, background: 'transparent', color: p.muted, fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.12, textTransform: 'uppercase', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
               <NavIcon kind="salute" color={p.cyan} />
               {tab.label}
             </button>
           );
           return (
-            <button key={tab.id} onClick={() => setScreen(tab.id as Screen)} style={{ flex: 1, padding: '10px 4px 8px', border: 0, cursor: 'pointer', borderRadius: 22, background: active ? p.navActive : 'transparent', color: active ? p.fg : p.muted, fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.12, textTransform: 'uppercase', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+            <button key={tab.id} onClick={() => setScreen(tab.id as Screen)} style={{ flex: tabFlex, width: tabWidth, padding: '10px 4px 8px', border: 0, cursor: 'pointer', borderRadius: 22, background: active ? p.navActive : 'transparent', color: active ? p.fg : p.muted, fontFamily: p.monoFont, fontSize: 9, letterSpacing: 0.12, textTransform: 'uppercase', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
               <NavIcon kind={tab.icon} color={active ? p.fg : p.muted} />
               {tab.label}
             </button>

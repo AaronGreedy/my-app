@@ -28,24 +28,9 @@ body > div {
   overflow: hidden;
 }
 
-@media (min-width: 600px) {
-  body {
-    position: static;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100vh;
-    inset: auto;
-  }
-  body > div {
-    position: relative;
-    inset: auto;
-    width: 402px;
-    height: 874px;
-    border-radius: 48px;
-    box-shadow: 0 40px 120px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.08);
-  }
-}
+/* Desktop: niente più "finto telefono" centrato con alone. Il contenuto
+   riempie tutta la finestra; la navigazione diventa una sidebar a sinistra
+   (gestita in React da AppShell + BottomNav). Vedi useIsDesktop. */
 
 /* Disabilita la selezione/callout nativi di iOS su tutta l'app.
    Su long-press la UI non evidenzia più nulla e non appare il menu copia/condividi.
