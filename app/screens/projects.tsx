@@ -7,6 +7,7 @@ import {
   useProjects, Project, ProjectArea, ProjectKind, AccentKey, CheckItem, RecurringTask,
   ACCENT_HEX, ACCENT_KEYS, AREA_LABEL, areaName, completion, newId,
 } from '@/lib/projects-store';
+import { PROJECT_PRESETS } from '@/lib/project-presets';
 
 // Etichetta tipo ingaggio per i badge.
 const KIND_LABEL: Record<ProjectKind, string> = { progetto: 'Progetto', retainer: 'Retainer' };
@@ -53,6 +54,27 @@ export function ProjectsScreen() {
             })}
           </div>
         )}
+
+        {/* Aggiungi dai progetti reali della dash (preset). Mostra solo quelli
+            non ancora presenti (match sul nome). Tap = crea il progetto. */}
+        {(() => {
+          const present = new Set(projects.map(pr => pr.name.toLowerCase()));
+          const toAdd = PROJECT_PRESETS.filter(pre => !present.has(pre.name.toLowerCase()));
+          if (toAdd.length === 0) return null;
+          return (
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ fontFamily: p.monoFont, fontSize: 9.5, letterSpacing: 0.22, color: p.dim, textTransform: 'uppercase', marginBottom: 8 }}>Aggiungi dai tuoi progetti · {toAdd.length}</div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {toAdd.map(pre => (
+                  <button key={pre.name} onClick={() => addProject(pre)} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 11px', borderRadius: 99, border: '1px solid rgba(255,255,255,0.14)', background: 'transparent', color: p.muted, fontFamily: p.monoFont, fontSize: 10, letterSpacing: 0.05, cursor: 'pointer' }}>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: ACCENT_HEX[pre.color], flexShrink: 0 }} />
+                    {pre.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Lista progetti */}
         {filtered.length === 0 ? (
