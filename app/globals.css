@@ -85,3 +85,15 @@ html {
 input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(1);
 }
+
+/* FIX glow/artefatti su hover desktop: il backdrop-filter blur, quando il
+   mouse si muove, fa ridisegnare l'area sotto il cursore e lascia scie di
+   luce (bug compositing di Chromium). Su dispositivi con mouse (pointer:fine)
+   lo disattiviamo del tutto — su sfondo quasi nero il blur aggiunge pochissimo.
+   Su touch (mobile) resta il vetro. !important per battere gli stili inline. */
+@media (pointer: fine) {
+  * {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
