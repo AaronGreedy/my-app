@@ -12,6 +12,7 @@ import { FocusScreen } from '@/screens/focus';
 import { NovaScreen } from '@/screens/nova';
 import { SettingsScreen } from '@/screens/settings';
 import { BottomNav } from './bottom-nav';
+import { HomePanel } from './home-panel';
 import { TopRightButtons } from './top-right-buttons';
 import { MarkerDiamond } from './markers';
 import { LevelUpCelebration } from './level-up-celebration';
@@ -79,16 +80,30 @@ export function AppShell() {
   // wrapper, quindi riempiono l'area giusta. La sidebar c'è solo sulle
   // schermate "main"; sulle schermate di profondità il contenuto è pieno.
   const onDesktopNav = desktop && isMainScreen;
-  // Su desktop il contenuto parte dopo la sidebar ed è incolonnato a
-  // CONTENT_MAX (non stirato). Su mobile/profondità riempie tutto.
+  // Home su desktop = due colonne: contenuto principale + pannello destro.
+  const desktopHome = desktop && screen === 'home';
+  // Per le altre schermate: contenuto incolonnato a CONTENT_MAX dopo la
+  // sidebar (non stirato). Su mobile/profondità riempie tutto.
   const contentWrap: React.CSSProperties = onDesktopNav
     ? { position: 'absolute', top: 0, bottom: 0, left: SIDEBAR_W, width: `min(${CONTENT_MAX}px, calc(100% - ${SIDEBAR_W}px))`, overflow: 'hidden' }
     : { position: 'absolute', inset: 0, overflow: 'hidden' };
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: p.bg }}>
-      <div style={contentWrap}>
-        {content[screen]}
-      </div>
+      {desktopHome ? (
+        // Due colonne: main (capped, riempie fino al pannello) + pannello dx.
+        <div style={{ position: 'absolute', top: 0, bottom: 0, left: SIDEBAR_W, right: 0, display: 'flex', overflow: 'hidden' }}>
+          <div style={{ position: 'relative', flexShrink: 0, width: `min(${CONTENT_MAX}px, 62%)`, height: '100%', overflow: 'hidden' }}>
+            {content.home}
+          </div>
+          <aside style={{ flex: 1, minWidth: 0, height: '100%', overflowY: 'auto', overflowX: 'hidden', borderLeft: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.015)' }}>
+            <HomePanel onNavigate={(s) => navigate(s)} />
+          </aside>
+        </div>
+      ) : (
+        <div style={contentWrap}>
+          {content[screen]}
+        </div>
+      )}
       {isMainScreen && (
         <>
           <TopRightButtons
