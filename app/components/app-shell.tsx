@@ -8,17 +8,19 @@ import { HomeScreen } from '@/screens/home';
 import { CalendarScreen } from '@/screens/calendar';
 import { BrainScreen } from '@/screens/brain';
 import { MeScreen, MeTab } from '@/screens/me';
+import { TasksScreen } from '@/screens/tasks';
 import { FocusScreen } from '@/screens/focus';
 import { NovaScreen } from '@/screens/nova';
 import { SettingsScreen } from '@/screens/settings';
 import { BottomNav } from './bottom-nav';
 import { HomePanel } from './home-panel';
+import { SoonScreen } from './soon-screen';
 import { TopRightButtons } from './top-right-buttons';
 import { MarkerDiamond } from './markers';
 import { LevelUpCelebration } from './level-up-celebration';
 
-type Screen = 'home' | 'cal' | 'brain' | 'me' | 'focus' | 'nova' | 'settings';
-type NavScreen = 'home' | 'cal' | 'brain' | 'me';
+type Screen = 'home' | 'cal' | 'brain' | 'me' | 'tasks' | 'projects' | 'people' | 'domains' | 'focus' | 'nova' | 'settings';
+type NavScreen = 'home' | 'cal' | 'brain' | 'me' | 'tasks' | 'projects' | 'people' | 'domains';
 
 // true quando lo schermo è abbastanza largo (PC): la nav diventa sidebar
 // a sinistra. Sotto la soglia resta tutto mobile (bottom-nav). SSR-safe:
@@ -65,6 +67,10 @@ export function AppShell() {
     cal:      <CalendarScreen />,
     brain:    <BrainScreen />,
     me:       <MeScreen initialTab={meTab} />,
+    tasks:    <TasksScreen />,
+    projects: <SoonScreen title="Projects" block="Blocco 6" note="Progetti e aree con milestones, checklist, % completamento e retainer. In arrivo." />,
+    people:   <SoonScreen title="People" block="Blocco 5" note="CRM personale (privacy-safe, fuori da Groq): persone, compleanni, interazioni. In arrivo." />,
+    domains:  <SoonScreen title="Domains" block="dopo" note="Le tue proprietà/dashboard. La colleghiamo più avanti." />,
     focus:    <FocusScreen onBack={() => setScreen('home')} />,
     nova:     <NovaScreen  onBack={() => setScreen('home')} initialBriefing={novaBriefing} />,
     settings: <SettingsScreen onBack={() => setScreen('home')} />,

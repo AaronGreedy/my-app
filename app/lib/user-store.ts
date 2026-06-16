@@ -113,6 +113,7 @@ export function useShoppingList(uid: string | null) {
 // ─── TODO con priorità ────────────────────────────────────────────────────────
 
 export type TodoPriority = 1 | 2 | 3; // 1 = !, 2 = !!, 3 = !!!
+export type TodoRepeat = 'none' | 'daily' | 'weekly' | 'monthly';
 
 export interface Todo {
   id: string;
@@ -121,7 +122,11 @@ export interface Todo {
   done: boolean;
   createdAt: number;
   doneAt?: number;
-  dueDate?: string; // YYYY-MM-DD opzionale
+  dueDate?: string;   // YYYY-MM-DD opzionale
+  dueTime?: string;   // HH:MM opzionale (scadenza oraria → reminder push)
+  note?: string;      // note libere
+  project?: string;   // nome progetto/area (es. "Black Diamond", "Home"); vuoto = nessuno
+  repeat?: TodoRepeat; // ripetizione
 }
 
 export function useTodos(uid: string | null) {
@@ -142,11 +147,12 @@ export function useTodos(uid: string | null) {
     setDoc(doc(db, 'users', uid, 'lists', 'todos'), { items: next }, { merge: true }).catch(console.error);
   };
 
-  const addTodo = (text: string, priority: TodoPriority = 2, dueDate?: string) => {
+  // extra: campi opzionali aggiuntivi (dueTime, project, note, repeat).
+  const addTodo = (text: string, priority: TodoPriority = 2, dueDate?: string, extra?: Partial<Todo>) => {
     const t = text.trim();
     if (!t) return;
     save([
-      { id: `${Date.now()}_${Math.random().toString(36).slice(2,6)}`, text: t, priority, done: false, createdAt: Date.now(), dueDate },
+      { id: `${Date.now()}_${Math.random().toString(36).slice(2,6)}`, text: t, priority, done: false, createdAt: Date.now(), dueDate, ...extra },
       ...todos,
     ]);
   };

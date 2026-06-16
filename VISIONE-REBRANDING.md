@@ -166,3 +166,54 @@ Contiene: **Notes · Quotes · Journal · Books · Inventory**.
   (subscribe+send) · scaffold AI `/api/ai/classify` · calendario.
 - Pattern push affidabile: **cron-job.org ogni 5 min** (Actions è inaffidabile).
 - Compressione foto journal: lato client prima dell'upload (canvas/resize).
+
+---
+
+## ✅ RISPOSTE QUINN ALLE DOMANDE (16/06)
+
+1. **Mini-app vocale su Amazfit Active 2 / Zepp** → **molto probabilmente NO.**
+   Zepp OS non dà accesso al microfono ad app di terze parti e non c'è un canale
+   pulito per spedire la voce alla dashboard. Active 2 è NFC/sensori. Il capture
+   vocale resta **sul telefono** (flow nostro tipo Wispr). Il watch al massimo:
+   notifiche + magari toggle/spunte rapide, non registrazione. (Verifico in dettaglio
+   se/quando serve.)
+2. **IA che costruisce/aggiunge roba su richiesta** → **SÌ.** Groq con structured
+   output/function-calling: "tra 2 giorni ho un appuntamento ricordamelo" → l'IA
+   estrae {tipo, titolo, data, ora} → crea task + reminder push. Gate: GROQ key.
+3. **Pushover** → **ridondante, lo evito.** Abbiamo già **Web Push nativo** (lo
+   stesso di Vital: gratis, niente app terza, niente abbonamento). Usiamo quello.
+4. **Fitness nel summary giornaliero** → i dati stanno in **Vital** (Firebase
+   separato) / Apple Health. Integrabile ma è un ponte tra app separate → **blocco
+   tardivo**, non blocca l'inizio.
+5. **Wispr** → non serve l'app letterale: replichiamo la stessa cosa con **Whisper
+   (Groq whisper-large-v3)** + pulizia "uhm" + smistamento IA. Tutto nostro.
+6. **Retainer** = contratti ricorrenti (task mensili + checklist per cliente) → lo
+   modelliamo dentro Projects.
+7. **Domains / Needs review** → li chiariamo guardando, non bloccano. Domains lo
+   linkiamo dopo.
+8. **Voce Paola (Quinn)** → è il filone **voce TTS dell'assistente**, tangenziale al
+   rebranding. Verifico i sample in `~/tts-prove/` quando ci arriviamo.
+
+## 🗺️ MAPPA: reference → my-app esistente
+- **Today** ← Home (evolve) · **Tasks** ← nuovo (todo già nello store) ·
+  **Routines** ← Me/habits (evolve) · **Projects** ← nuovo · **People** ← nuovo
+  (CRM, privacy) · **Library** ← Brain (evolve) · **Domains** ← dopo/link ·
+  **Settings** ← esiste · **IA integrata** ← Nova (evolve).
+
+## 🧱 PIANO DI COSTRUZIONE (ordine proposto)
+- **B0** (Quinn, ora): questo spec + decisione nav definitiva.
+- **B1 — TASKS** (no GROQ): screen dedicato, due date/time, status (aperte/fatte/
+  tutte), filtri (scadute/oggi/domani), per-progetto, priorità, ripetizione,
+  reminder push, badge (1). *Cuore dell'app, valore immediato.*
+- **B2 — ROUTINES** (no GROQ): routine custom a mano, mattina/pomeriggio/sera,
+  streak goal, notifiche, grafico trend settimanale/mensile a punti.
+- **B3 — CAPTURE VOCALE + IA** (richiede GROQ): voice flow + Whisper + cleanup +
+  smistamento automatico + comandi ("ricordamelo tra 2 giorni").
+- **B4 — LIBRARY/JOURNAL** (journal-spunti = GROQ): note/quotes/journal/books/
+  inventory, tag, source, needs-review, push sera/mattina, foto compresse.
+- **B5 — PEOPLE (CRM)** (NO Groq, privacy): membri, categorie, compleanni, interazioni.
+- **B6 — TODAY dashboard**: Google Calendar background, Up Next, Slipping, summary giornaliero.
+- **B7 — Settings/sync, import dati sparsi, ricerca globale, shortcut PC (Ctrl+J).**
+
+**Raccomandazione:** partire da **B1 (Tasks)** subito — non serve la GROQ key. In
+parallelo Aaron setta la **GROQ key** così a B3 l'IA è già sbloccata.

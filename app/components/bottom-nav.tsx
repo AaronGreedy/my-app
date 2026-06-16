@@ -7,7 +7,7 @@ import { MarkerPlus } from './markers';
 import { useAuth } from '@/lib/auth-context';
 import { useNotes, useShoppingList, useGifts, useTodos } from '@/lib/user-store';
 
-type Screen = 'home' | 'cal' | 'brain' | 'me';
+type Screen = 'home' | 'cal' | 'brain' | 'me' | 'tasks' | 'projects' | 'people' | 'domains';
 type MeTab = 'cibo' | 'fitness' | 'mood' | 'habits';
 type Route = 'todo' | 'brain' | 'spesa' | 'problema' | 'regalo' | 'nota' | 'persona' | 'journal';
 
@@ -52,6 +52,11 @@ function NavIcon({ kind, color, size = 18 }: { kind: string; color: string; size
   if (kind === 'brain') return <svg width={size} height={size} viewBox="0 0 24 24" fill="none"><circle cx="8" cy="8" r="2" stroke={color} strokeWidth={sw}/><circle cx="16" cy="8" r="2" stroke={color} strokeWidth={sw}/><circle cx="12" cy="16" r="2" stroke={color} strokeWidth={sw}/><path d="M9.5 9 L11 14.5 M14.5 9 L13 14.5 M10 8 H14" stroke={color} strokeWidth={sw}/></svg>;
   if (kind === 'me')   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none"><circle cx="12" cy="9" r="3.5" stroke={color} strokeWidth={sw}/><path d="M5 21 C5 17 8 15 12 15 C16 15 19 17 19 21" stroke={color} strokeWidth={sw} strokeLinecap="round"/></svg>;
   if (kind === 'salute') return <svg width={size} height={size} viewBox="0 0 24 24" fill="none"><path d="M3 12 H7 L9 7 L12 17 L15 11 L16.5 12 H21" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"/></svg>;
+  if (kind === 'tasks') return <svg width={size} height={size} viewBox="0 0 24 24" fill="none"><path d="M4 7 L7 10 L12 4 M4 17 L7 20 L12 14 M15 8 H21 M15 18 H21" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"/></svg>;
+  if (kind === 'projects') return <svg width={size} height={size} viewBox="0 0 24 24" fill="none"><path d="M3 7 a2 2 0 0 1 2-2 H9 L11 7 H19 a2 2 0 0 1 2 2 V18 a2 2 0 0 1-2 2 H5 a2 2 0 0 1-2-2 Z" stroke={color} strokeWidth={sw} strokeLinejoin="round"/></svg>;
+  if (kind === 'people') return <svg width={size} height={size} viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8" r="3" stroke={color} strokeWidth={sw}/><path d="M3 20 C3 16 6 14 9 14 C12 14 15 16 15 20 M16 5 a3 3 0 0 1 0 6 M17 14 c2 0.5 4 2 4 6" stroke={color} strokeWidth={sw} strokeLinecap="round"/></svg>;
+  if (kind === 'domains') return <svg width={size} height={size} viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke={color} strokeWidth={sw}/><path d="M3 12 H21 M12 3 C9 6 9 18 12 21 C15 18 15 6 12 3" stroke={color} strokeWidth={sw}/></svg>;
+  if (kind === 'more') return <svg width={size} height={size} viewBox="0 0 24 24" fill="none"><circle cx="5" cy="12" r="1.6" fill={color}/><circle cx="12" cy="12" r="1.6" fill={color}/><circle cx="19" cy="12" r="1.6" fill={color}/></svg>;
   return null;
 }
 
@@ -298,18 +303,23 @@ function CaptureOverlay({ open, onClose, autoVoice }: { open: boolean; onClose: 
   );
 }
 
-const TABS = [
-  { id: 'home',   label: 'Home',   icon: 'home'   },
-  { id: 'cal',    label: 'Cal',    icon: 'cal'    },
-  { id: 'fab',    label: '＋',     icon: 'fab'    },
-  { id: 'brain',  label: 'Brain',  icon: 'brain'  },
-  { id: 'me',     label: 'Me',     icon: 'me'     },
-  { id: 'salute', label: 'Salute', icon: 'salute' }, // link esterno a Vital
-] as const;
+// Sezioni nav, ordine reference "Operations". `primary` = mostrata nella
+// bottom-bar mobile; le altre finiscono nel menu "Altro".
+type NavSection = { id: Screen; label: string; icon: string; primary: boolean };
+const NAV: NavSection[] = [
+  { id: 'home',     label: 'Today',    icon: 'home',     primary: true  },
+  { id: 'tasks',    label: 'Tasks',    icon: 'tasks',    primary: true  },
+  { id: 'me',       label: 'Routines', icon: 'me',       primary: true  },
+  { id: 'projects', label: 'Projects', icon: 'projects', primary: false },
+  { id: 'people',   label: 'People',   icon: 'people',   primary: false },
+  { id: 'brain',    label: 'Library',  icon: 'brain',    primary: true  },
+  { id: 'domains',  label: 'Domains',  icon: 'domains',  primary: false },
+];
 
 export function BottomNav({ screen, setScreen, desktop = false }: { screen: Screen; setScreen: (s: Screen, opts?: { meTab?: MeTab }) => void; desktop?: boolean }) {
   const [capture, setCapture] = useState(false);
   const [autoVoice, setAutoVoice] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false); // sheet "Altro" su mobile
 
   // Auto-hide on scroll: si nasconde scrollando in basso, riappare scrollando
   // in su. Usa { capture: true } per intercettare gli scroll dei container
@@ -471,10 +481,44 @@ export function BottomNav({ screen, setScreen, desktop = false }: { screen: Scre
         </>
       )}
 
+      {/* Sheet "Altro" (mobile): sezioni non primarie + Salute */}
+      {moreOpen && (
+        <>
+          <div onClick={() => setMoreOpen(false)} style={{ position:'absolute', inset:0, zIndex:110, background:'rgba(0,0,0,0.6)', backdropFilter:'blur(14px)', WebkitBackdropFilter:'blur(14px)' } as CSSProperties}/>
+          <div style={{ position:'absolute', left:0, right:0, bottom:0, zIndex:111, padding:'18px 16px calc(env(safe-area-inset-bottom,0px) + 24px)', background:'rgba(10,8,6,0.96)', borderTop:`1px solid ${p.border}`, borderTopLeftRadius:24, borderTopRightRadius:24 }}>
+            <div style={{ fontFamily:p.monoFont, fontSize:9.5, color:p.dim, textTransform:'uppercase', letterSpacing:0.2, margin:'0 4px 10px' }}>Altro</div>
+            {NAV.filter(n => !n.primary).map(n => {
+              const a = screen === n.id;
+              return (
+                <button key={n.id} onClick={() => { setScreen(n.id); setMoreOpen(false); }} style={{ display:'flex', alignItems:'center', gap:12, width:'100%', padding:'13px 12px', borderRadius:12, border:0, background: a ? p.navActive : 'transparent', color: a ? p.fg : p.muted, fontFamily:p.monoFont, fontSize:13, letterSpacing:0.2, textAlign:'left', cursor:'pointer' } as CSSProperties}>
+                  <NavIcon kind={n.icon} color={a ? p.fg : p.muted} />{n.label}
+                </button>
+              );
+            })}
+            <button onClick={() => { if (typeof window !== 'undefined') window.open(VITAL_URL, '_blank'); setMoreOpen(false); }} style={{ display:'flex', alignItems:'center', gap:12, width:'100%', padding:'13px 12px', borderRadius:12, border:0, background:'transparent', color:p.muted, fontFamily:p.monoFont, fontSize:13, letterSpacing:0.2, textAlign:'left', cursor:'pointer' } as CSSProperties}>
+              <NavIcon kind="salute" color={p.cyan} />Salute · Vital
+            </button>
+          </div>
+        </>
+      )}
+
       <div style={navWrap}>
-        {TABS.map(tab => {
-          const active = tab.id !== 'fab' && screen === (tab.id as Screen);
-          if (tab.id === 'fab') return (
+        {(desktop
+          ? ['home', 'tasks', 'capture', 'me', 'projects', 'people', 'brain', 'domains', 'spacer', 'salute']
+          : ['home', 'tasks', 'capture', 'brain', 'me', 'more']
+        ).map(slot => {
+          if (slot === 'spacer') return <div key="sp" style={{ flex: 1 }} />;
+          if (slot === 'more') return (
+            <button key="more" onClick={() => setMoreOpen(true)} style={itemStyle({ active: moreOpen })}>
+              <NavIcon kind="more" color={moreOpen ? p.fg : p.muted} />Altro
+            </button>
+          );
+          if (slot === 'salute') return (
+            <button key="salute" onClick={() => { if (typeof window !== 'undefined') window.open(VITAL_URL, '_blank'); }} style={itemStyle({ bg: 'transparent', color: p.muted })}>
+              <NavIcon kind="salute" color={p.cyan} />Salute
+            </button>
+          );
+          if (slot === 'capture') return (
             <button
               key="fab"
               onPointerDown={startHold}
@@ -487,7 +531,6 @@ export function BottomNav({ screen, setScreen, desktop = false }: { screen: Scre
                 ? { display:'flex', flexDirection:'row', alignItems:'center', justifyContent:'flex-start', gap:12, width:'100%', padding:'11px 12px', border:0, borderRadius:12, cursor:'pointer', background:'rgba(255,106,0,0.16)', color:p.orange, fontFamily:p.monoFont, fontSize:12.5, letterSpacing:0.3, marginTop:4, marginBottom:4, touchAction:'none', userSelect:'none', WebkitUserSelect:'none', WebkitTouchCallout:'none', WebkitUserDrag:'none' as never } as CSSProperties
                 : { width:56, height:56, borderRadius:'50%', border:0, cursor:'pointer', flexShrink:0, background:p.fabBg, color:'#0a0a0a', boxShadow:p.fabShadow, marginTop:-22, display:'flex', alignItems:'center', justifyContent:'center', touchAction:'none', userSelect:'none', WebkitUserSelect:'none', WebkitTouchCallout:'none', WebkitUserDrag:'none' as never } as CSSProperties}
             >
-              {/* SVG plus invece del carattere "+" così su iOS il long-press non apre il menu copia/incolla */}
               <span style={{ pointerEvents: 'none', display: 'flex', alignItems: 'center', gap: desktop ? 12 : 0 } as CSSProperties}>
                 <svg width={desktop ? 18 : 22} height={desktop ? 18 : 22} viewBox="0 0 24 24" fill="none" aria-hidden>
                   <path d="M12 4 V20 M4 12 H20" stroke={desktop ? p.orange : '#0a0a0a'} strokeWidth="3" strokeLinecap="round"/>
@@ -496,33 +539,26 @@ export function BottomNav({ screen, setScreen, desktop = false }: { screen: Scre
               </span>
             </button>
           );
-          if (tab.id === 'me') return (
+          const item = NAV.find(n => n.id === slot);
+          if (!item) return null;
+          const active = screen === slot;
+          if (slot === 'me') return (
             <button
               key="me"
               onPointerDown={meStart}
               onPointerMove={meMove}
               onPointerUp={meEnd}
               onPointerCancel={meCancel}
-              onPointerLeave={() => { /* keep menu open if dragging out, hover handled by elementFromPoint */ }}
               onContextMenu={e => e.preventDefault()}
               style={{ ...itemStyle({ active }), touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' } as CSSProperties}
-              title="Tap = Me · Tieni premuto per scegliere sezione"
+              title="Tap = Routines · Tieni premuto per le sezioni"
             >
-              <NavIcon kind="me" color={active ? p.fg : p.muted} />
-              {tab.label}
-            </button>
-          );
-          if (tab.id === 'salute') return (
-            // Link esterno: apre la PWA Vital in una nuova scheda
-            <button key="salute" onClick={() => { if (typeof window !== 'undefined') window.open(VITAL_URL, '_blank'); }} style={itemStyle({ bg: 'transparent', color: p.muted })}>
-              <NavIcon kind="salute" color={p.cyan} />
-              {tab.label}
+              <NavIcon kind="me" color={active ? p.fg : p.muted} />{item.label}
             </button>
           );
           return (
-            <button key={tab.id} onClick={() => setScreen(tab.id as Screen)} style={itemStyle({ active })}>
-              <NavIcon kind={tab.icon} color={active ? p.fg : p.muted} />
-              {tab.label}
+            <button key={slot} onClick={() => setScreen(slot as Screen)} style={itemStyle({ active })}>
+              <NavIcon kind={item.icon} color={active ? p.fg : p.muted} />{item.label}
             </button>
           );
         })}
