@@ -12,7 +12,7 @@ interface NeonGlassProps {
 
 export function NeonGlass({ children, style = {}, tint, glow, radius = 24, edge, onClick }: NeonGlassProps) {
   return (
-    <div onClick={onClick} style={{ position: 'relative', borderRadius: radius, overflow: 'hidden', cursor: onClick ? 'pointer' : 'default', ...style }}>
+    <div onClick={onClick} style={{ position: 'relative', borderRadius: radius, overflow: 'hidden', cursor: onClick ? 'pointer' : 'default', isolation: 'isolate', ...style }}>
       <div style={{
         position: 'absolute', inset: 0, borderRadius: radius,
         background: tint || 'rgba(255,255,255,0.04)',
@@ -20,6 +20,9 @@ export function NeonGlass({ children, style = {}, tint, glow, radius = 24, edge,
         WebkitBackdropFilter: 'blur(28px) saturate(170%)',
         border: edge ? `1px solid ${edge}` : '1px solid rgba(244,241,235,0.14)',
         boxShadow: ['inset 1px 1px 0 rgba(255,255,255,0.18)', 'inset -1px -1px 0 rgba(255,255,255,0.04)', '0 16px 40px rgba(0,0,0,0.45)', glow ? `0 0 28px ${glow}55` : ''].filter(Boolean).join(', '),
+        // Promuove lo strato su un layer GPU: evita che il cursore del mouse
+        // ne ritriggeri il ridisegno (scie/ghosting di luce su desktop).
+        transform: 'translateZ(0)',
       } as CSSProperties} />
       <div style={{
         position: 'absolute', inset: 0, borderRadius: radius, pointerEvents: 'none',
