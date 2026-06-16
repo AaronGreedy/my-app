@@ -106,7 +106,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
-    align-items: start;
+    align-items: stretch; /* celle stessa altezza per riga → niente gap sotto */
   }
   .home-bento > * { margin-top: 0 !important; }
   .home-bento > .bento-wide { grid-column: 1 / -1; }

@@ -582,8 +582,7 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
 
         {/* Mood — ora SEMPRE disponibile in Today (deciso 16/06). */}
         <div className="bento-cell">
-            <SectionLabel num="01" title="MOOD CHECK" hint={moodSlot === 'evening' ? 'sera' : 'oggi'} />
-            <NeonGlass style={{ marginTop: 8 }} tint="linear-gradient(135deg, rgba(107,0,255,0.18), rgba(0,240,255,0.10))" radius={24}>
+            <NeonGlass style={{ marginTop: 0 }} tint="linear-gradient(135deg, rgba(107,0,255,0.18), rgba(0,240,255,0.10))" radius={24}>
               <div style={{ padding: '18px 14px 14px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                   {MOODS.map(m => {
@@ -596,11 +595,7 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
                     );
                   })}
                 </div>
-                {currentMood && (
-                  <div style={{ marginTop: 10, fontFamily: p.monoFont, fontSize: 9, color: p.dim, textAlign: 'center', textTransform: 'uppercase', letterSpacing: 0.15 }}>
-                    Per il journal completo · vai in Me → Mood
-                  </div>
-                )}
+                {/* dicitura "vai in Me → Mood" rimossa: il Mood è ora qui in Today */}
               </div>
             </NeonGlass>
         </div>
