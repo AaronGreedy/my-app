@@ -82,25 +82,31 @@ export function AppShell() {
   const onDesktopNav = desktop && isMainScreen;
   // Home su desktop = due colonne: contenuto principale + pannello destro.
   const desktopHome = desktop && screen === 'home';
-  // Per le altre schermate: contenuto incolonnato a CONTENT_MAX dopo la
-  // sidebar (non stirato). Su mobile/profondità riempie tutto.
-  const contentWrap: React.CSSProperties = onDesktopNav
-    ? { position: 'absolute', top: 0, bottom: 0, left: SIDEBAR_W, width: `min(${CONTENT_MAX}px, calc(100% - ${SIDEBAR_W}px))`, overflow: 'hidden' }
-    : { position: 'absolute', inset: 0, overflow: 'hidden' };
+  // Su desktop il contenuto è cappato e CENTRATO nello spazio dopo la
+  // sidebar: margini uguali ai due lati (intenzionali), niente buco nero a
+  // destra. Home = due colonne (contenuto + pannello); le altre = colonna.
+  const desktopArea: React.CSSProperties = { position: 'absolute', top: 0, bottom: 0, left: SIDEBAR_W, right: 0, display: 'flex', justifyContent: 'center', overflow: 'hidden' };
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: p.bg }}>
       {desktopHome ? (
-        // Due colonne: main (capped, riempie fino al pannello) + pannello dx.
-        <div style={{ position: 'absolute', top: 0, bottom: 0, left: SIDEBAR_W, right: 0, display: 'flex', overflow: 'hidden' }}>
-          <div style={{ position: 'relative', flexShrink: 0, width: `min(${CONTENT_MAX}px, 62%)`, height: '100%', overflow: 'hidden' }}>
-            {content.home}
+        <div style={desktopArea}>
+          <div style={{ display: 'flex', width: '100%', maxWidth: 1320, height: '100%', overflow: 'hidden' }}>
+            <div style={{ position: 'relative', flex: '1.6 1 0', minWidth: 0, height: '100%', overflow: 'hidden' }}>
+              {content.home}
+            </div>
+            <aside style={{ flex: '1 1 0', minWidth: 280, height: '100%', overflowY: 'auto', overflowX: 'hidden', borderLeft: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.02)' }}>
+              <HomePanel onNavigate={(s) => navigate(s)} />
+            </aside>
           </div>
-          <aside style={{ flex: 1, minWidth: 0, height: '100%', overflowY: 'auto', overflowX: 'hidden', borderLeft: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.015)' }}>
-            <HomePanel onNavigate={(s) => navigate(s)} />
-          </aside>
+        </div>
+      ) : onDesktopNav ? (
+        <div style={desktopArea}>
+          <div style={{ position: 'relative', width: '100%', maxWidth: CONTENT_MAX, height: '100%', overflow: 'hidden' }}>
+            {content[screen]}
+          </div>
         </div>
       ) : (
-        <div style={contentWrap}>
+        <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
           {content[screen]}
         </div>
       )}
