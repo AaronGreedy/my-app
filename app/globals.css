@@ -97,3 +97,17 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     -webkit-backdrop-filter: none !important;
   }
 }
+
+/* Bento Home (solo desktop largo): Sfida + Prompt + Meteo + Mood in griglia
+   2 colonne, Routine a tutta larghezza. Su mobile resta impilato. */
+.home-bento { margin-top: 18px; }
+@media (min-width: 900px) {
+  .home-bento {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    align-items: start;
+  }
+  .home-bento > * { margin-top: 0 !important; }
+  .home-bento > .bento-wide { grid-column: 1 / -1; }
+}

@@ -490,6 +490,10 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
           </NeonGlass>
         )}
 
+        {/* ── BENTO desktop: Sfida + Prompt + Meteo + Mood (2 col) + Routine (wide).
+              Su mobile resta impilato (vedi .home-bento in globals.css). ── */}
+        <div className="home-bento">
+
         {/* Weekly challenge — supporta counter quando target > 1 */}
         <NeonGlass style={{ marginTop: 12 }} tint={weekly.completed ? 'linear-gradient(135deg,rgba(166,255,0,0.22),rgba(0,240,255,0.12))' : 'linear-gradient(135deg,rgba(255,212,0,0.22),rgba(255,106,0,0.14))'} edge={weekly.completed ? 'rgba(166,255,0,0.5)' : 'rgba(255,212,0,0.5)'} radius={20}>
           <div style={{ padding:'12px 14px', display:'flex', alignItems:'center', gap:12 }}>
@@ -576,12 +580,9 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
         {/* Weather Bolzano */}
         <WeatherCard/>
 
-        {/* Mood — appare SOLO la sera (>= 19), 1 check al giorno. Decisione
-            2026-05-23: ridotto da 3 slot a 1 perché overwhelming + dimentica
-            quando segnare. Mattina/pomeriggio si segnano da Me → Mood. */}
-        {moodSlot === 'evening' && (
-          <>
-            <SectionLabel num="01" title="MOOD CHECK" hint="sera" />
+        {/* Mood — ora SEMPRE disponibile in Today (deciso 16/06). */}
+        <div className="bento-cell">
+            <SectionLabel num="01" title="MOOD CHECK" hint={moodSlot === 'evening' ? 'sera' : 'oggi'} />
             <NeonGlass style={{ marginTop: 8 }} tint="linear-gradient(135deg, rgba(107,0,255,0.18), rgba(0,240,255,0.10))" radius={24}>
               <div style={{ padding: '18px 14px 14px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
@@ -602,10 +603,10 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
                 )}
               </div>
             </NeonGlass>
-          </>
-        )}
+        </div>
 
         {/* Routine — habit di disciplina (cibo/acqua/fit sono in Vital) */}
+        <div className="bento-wide">
         <SectionLabel num="02" title="ROUTINE" hint="oggi" />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
 
@@ -654,6 +655,8 @@ export function HomeScreen({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brai
             </div>
           </NeonGlass>
         </div>
+        </div>{/* /bento-wide routine */}
+        </div>{/* /home-bento */}
 
         {/* TODO ATTIVI — visibili in home solo se ce ne sono.
             Sono i todo creati via Quick Capture ("ricordami X") + FASE 7.

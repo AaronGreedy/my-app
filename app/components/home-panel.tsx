@@ -2,7 +2,8 @@
 
 import { p, fmtItDate } from '@/lib/design';
 import { useAuth } from '@/lib/auth-context';
-import { useTodos, useCountdowns, useNotes, daysUntil } from '@/lib/user-store';
+import { useTodos, useCountdowns, useNotes, useWorkItems, daysUntil } from '@/lib/user-store';
+import { SlippingPanel, DaySummaryPanel, SlippingItem } from './today-panels';
 
 // Pannello laterale destro della Home su desktop. Riempie lo spazio a destra
 // con DATI REALI già presenti nell'app: to-do aperti, countdown imminenti e
@@ -10,12 +11,19 @@ import { useTodos, useCountdowns, useNotes, daysUntil } from '@/lib/user-store';
 //
 // Le liste usano una griglia auto-fill: le card riempiono tutta la larghezza
 // del pannello (1 colonna se stretto, 2+ se largo) → niente spazio vuoto.
-export function HomePanel({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brain'|'me'|'focus'|'nova'|'settings') => void }) {
+export function HomePanel({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brain'|'me'|'tasks'|'routines'|'library'|'projects'|'people'|'domains'|'focus'|'nova'|'settings') => void }) {
   const { user } = useAuth();
   const uid = user?.uid ?? null;
   const { todos, toggleTodo } = useTodos(uid);
   const { countdowns } = useCountdowns(uid);
   const { notes } = useNotes(uid);
+  const { items: workItems } = useWorkItems(uid);
+
+  // Progetti/lavori fermi da >= 4 giorni (Slipping): "stai dimenticando?".
+  const fermi: SlippingItem[] = workItems
+    .filter(w => w.status !== 'done')
+    .filter(w => (Date.now() - w.lastTouchedAt) / 86400000 >= 4)
+    .map(w => ({ id: w.id, title: w.title, lastTouchedAt: w.lastTouchedAt, note: w.notes }));
 
   // To-do ancora aperti, priorità alta prima, poi più vecchi prima.
   const open = todos
@@ -48,6 +56,11 @@ export function HomePanel({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brain
 
   return (
     <div style={{ padding: '24px 20px 60px', width: '100%' }}>
+
+      {/* ── SLIPPING (progetti fermi) ─────────────────────────────────── */}
+      <div style={{ marginBottom: 28 }}>
+        <SlippingPanel items={fermi} onOpen={() => onNavigate?.('projects')} />
+      </div>
 
       {/* ── TO-DO APERTI ──────────────────────────────────────────────── */}
       <Label count={open.length} onAll={() => onNavigate?.('brain')}>Da fare</Label>
@@ -112,6 +125,11 @@ export function HomePanel({ onNavigate }: { onNavigate?: (s: 'home'|'cal'|'brain
           ))}
         </div>
       )}
+
+      {/* ── SUMMARY DI OGGI ───────────────────────────────────────────── */}
+      <div style={{ marginTop: 28 }}>
+        <DaySummaryPanel />
+      </div>
 
     </div>
   );
